@@ -1,0 +1,22 @@
+name: Task / Bug Report
+description: Create a task for the NexusFlow project
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for adding a new task to the flow!
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: What needs to be done?
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Provide more context about the task.
+    validations:
+      required: false
