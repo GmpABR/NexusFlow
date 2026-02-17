@@ -25,7 +25,7 @@ A premium, real-time Kanban board application built for modern agile teams.
 
 ### 1. Setup Database
 
-Create a PostgreSQL database called `scrumtrello` (or update the connection string).
+Create a PostgreSQL database called `nexusflow` (or update the connection string).
 
 ### 2. Configure Backend
 
