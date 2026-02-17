@@ -1,0 +1,158 @@
+import React from 'react';
+import { Paper, Title, Group, Text, Box, ScrollArea, SimpleGrid, RingProgress, Stack, ThemeIcon } from '@mantine/core';
+import { type BoardDetail } from '../api/boards';
+import { IconChartBar, IconAlertCircle, IconCheck, IconTarget } from '@tabler/icons-react';
+
+interface BoardDashboardViewProps {
+    board: BoardDetail;
+}
+
+export default function BoardDashboardView({ board }: BoardDashboardViewProps) {
+    if (!board || !board.columns) return null;
+    const allTasks = board.columns.flatMap(col => col.taskCards);
+    const totalTasks = allTasks.length;
+
+    const highPriorityCount = allTasks.filter(t => t.priority === 'High').length;
+    const completedTasks = board.columns.find(c => c.name.toLowerCase().includes('done') || c.name.toLowerCase().includes('concluido'))?.taskCards.length || 0;
+
+    const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+
+    const columnStats = board.columns.map(col => ({
+        name: col.name,
+        count: col.taskCards.length,
+        color: col.name.toLowerCase().includes('done') ? 'teal' : col.name.toLowerCase().includes('doing') ? 'blue' : 'gray'
+    }));
+
+    return (
+        <ScrollArea h="100%" offsetScrollbars>
+            <Stack gap="lg" p="lg">
+                <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="lg">
+                    <StatCard
+                        title="Total de Tarefas"
+                        value={totalTasks.toString()}
+                        icon={<IconChartBar size={24} color="#7c3aed" />}
+                    />
+                    <StatCard
+                        title="Alta Prioridade"
+                        value={highPriorityCount.toString()}
+                        icon={<IconAlertCircle size={24} color="#ef4444" />}
+                    />
+                    <StatCard
+                        title="Concluídas"
+                        value={completedTasks.toString()}
+                        icon={<IconCheck size={24} color="#10b981" />}
+                    />
+                    <Paper
+                        p="md"
+                        radius="lg"
+                        style={{
+                            background: 'rgba(20, 21, 23, 0.75)',
+                            backdropFilter: 'blur(16px)',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}
+                    >
+                        <Box>
+                            <Text size="xs" c="dimmed" fw={700} tt="uppercase">Progresso Geral</Text>
+                            <Text size="xl" fw={800} c="white">{Math.round(progress)}%</Text>
+                        </Box>
+                        <RingProgress
+                            size={60}
+                            thickness={6}
+                            roundCaps
+                            sections={[{ value: progress, color: 'violet' }]}
+                        />
+                    </Paper>
+                </SimpleGrid>
+
+                <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
+                    <Paper
+                        p="lg"
+                        radius="lg"
+                        style={{
+                            background: 'rgba(20, 21, 23, 0.75)',
+                            backdropFilter: 'blur(16px)',
+                            border: '1px solid rgba(255, 255, 255, 0.08)'
+                        }}
+                    >
+                        <Title order={4} c="white" mb="xl">Distribuição por Status</Title>
+                        <Stack gap="md">
+                            {columnStats.map(stat => (
+                                <Box key={stat.name}>
+                                    <Group justify="space-between" mb={4}>
+                                        <Text size="sm" c="white">{stat.name}</Text>
+                                        <Text size="sm" fw={700} c="dimmed">{stat.count}</Text>
+                                    </Group>
+                                    <Box
+                                        style={{
+                                            height: 8,
+                                            background: 'rgba(255,255,255,0.05)',
+                                            borderRadius: 4,
+                                            overflow: 'hidden'
+                                        }}
+                                    >
+                                        <Box
+                                            style={{
+                                                height: '100%',
+                                                width: `${totalTasks > 0 ? (stat.count / totalTasks) * 100 : 0}%`,
+                                                background: stat.color === 'teal' ? '#10b981' : stat.color === 'blue' ? '#3b82f6' : '#6b7280'
+                                            }}
+                                        />
+                                    </Box>
+                                </Box>
+                            ))}
+                        </Stack>
+                    </Paper>
+
+                    <Paper
+                        p="lg"
+                        radius="lg"
+                        style={{
+                            background: 'rgba(20, 21, 23, 0.75)',
+                            backdropFilter: 'blur(16px)',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            textAlign: 'center'
+                        }}
+                    >
+                        <IconTarget size={64} color="rgba(255,255,255,0.1)" />
+                        <Title order={3} c="white" mt="md" fw={800}>Painel Operacional</Title>
+                        <Text c="dimmed" size="sm" maw={300} mt="xs">
+                            Visualize a saúde do seu projeto em tempo real com métricas detalhadas.
+                        </Text>
+                    </Paper>
+                </SimpleGrid>
+            </Stack>
+        </ScrollArea>
+    );
+}
+
+function StatCard({ title, value, icon }: { title: string, value: string, icon: React.ReactNode }) {
+    return (
+        <Paper
+            p="md"
+            radius="lg"
+            style={{
+                background: 'rgba(20, 21, 23, 0.75)',
+                backdropFilter: 'blur(16px)',
+                border: '1px solid rgba(255, 255, 255, 0.08)'
+            }}
+        >
+            <Group justify="space-between">
+                <Box>
+                    <Text size="xs" c="dimmed" fw={700} tt="uppercase">{title}</Text>
+                    <Text size="xl" fw={800} c="white">{value}</Text>
+                </Box>
+                <ThemeIcon variant="light" size="xl" radius="md">
+                    {icon}
+                </ThemeIcon>
+            </Group>
+        </Paper>
+    );
+}
+

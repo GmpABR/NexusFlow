@@ -1,0 +1,56 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  min-height: 100vh;
+  background-color: #000000;
+  color: #c1c2c5;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background-color: rgba(124, 58, 237, 0.4);
+  color: #fff;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #141517;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #373a40;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #5c5f66;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+.task-card {
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.task-card:hover {
+  border-color: rgba(124, 58, 237, 0.4) !important;
+  /* omitted transform to avoid dnd conflicts */
+}
