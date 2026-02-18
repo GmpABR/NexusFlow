@@ -119,7 +119,8 @@ public class BoardService : IBoardService
                 Email = m.User.Email,
                 Role = m.Role,
                 JoinedAt = m.JoinedAt
-            }).ToList()
+            }).ToList(),
+            UserRole = board.OwnerId == userId ? "Owner" : (board.Members.FirstOrDefault(m => m.UserId == userId)?.Role ?? "Member")
         };
     }
 

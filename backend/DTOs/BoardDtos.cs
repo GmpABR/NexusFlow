@@ -38,6 +38,7 @@ public class BoardDetailDto
     public int? WorkspaceId { get; set; }
     public List<ColumnDto> Columns { get; set; } = new();
     public List<BoardMemberDto> Members { get; set; } = new();
+    public string UserRole { get; set; } = "Member";
 }
 public class UpdateBoardDto
 {

@@ -46,6 +46,17 @@ a {
   color: inherit;
 }
 
+.nexus-card {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nexus-card:hover {
+  background: rgba(255, 255, 255, 0.07) !important;
+  border-color: rgba(124, 58, 237, 0.5) !important;
+  box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.6);
+  transform: translateY(-2px);
+}
+
 .task-card {
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }

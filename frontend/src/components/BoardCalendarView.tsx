@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Paper, Title, Group, Text, Badge, Box, ScrollArea, SimpleGrid, Card, Divider, Stack } from '@mantine/core';
 import { DatePicker } from '@mantine/dates';
 import { type BoardDetail } from '../api/boards';

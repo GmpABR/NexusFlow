@@ -16,15 +16,14 @@ import {
     Paper,
     ThemeIcon,
     Menu,
+    Autocomplete,
 } from '@mantine/core';
 import {
     IconUserPlus,
-    IconUsers,
     IconTrash,
     IconCheck,
     IconBriefcase,
     IconLogout,
-    IconMail,
     IconCalendar,
     IconLayoutDashboard,
     IconExchange,
@@ -32,7 +31,6 @@ import {
     IconChevronDown,
     IconRotate,
     IconList,
-    IconLocation,
 } from '@tabler/icons-react';
 import {
     DragDropContext,
@@ -40,6 +38,7 @@ import {
     Droppable
 } from '@hello-pangea/dnd';
 import { notifications } from '@mantine/notifications';
+import { useDebouncedValue } from '@mantine/hooks';
 import {
     getBoardDetail,
     getBoards,
@@ -51,6 +50,7 @@ import {
     type TaskCard as TaskCardType,
     type BoardMember,
 } from '../api/boards';
+import { searchUsers, type UserSummary } from '../api/users';
 import { createTask, moveTask, deleteTask } from '../api/tasks';
 import { useSignalR } from '../hooks/useSignalR';
 import BoardColumn from '../components/BoardColumn';
@@ -72,7 +72,6 @@ export default function BoardPage() {
     const [board, setBoard] = useState<BoardDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [membersModalOpen, setMembersModalOpen] = useState(false);
-    const [inviteUsername, setInviteUsername] = useState('');
     const [inviting, setInviting] = useState(false);
 
     // Task Detail Modal State
@@ -84,13 +83,19 @@ export default function BoardPage() {
     const [allBoards, setAllBoards] = useState<BoardSummary[]>([]);
     const [fetchingBoards, setFetchingBoards] = useState(false);
 
+    // Invite Search State
+    const [searchValue, setSearchValue] = useState('');
+    const [debouncedSearch] = useDebouncedValue(searchValue, 300);
+    const [searchResults, setSearchResults] = useState<UserSummary[]>([]);
+    const [searchLoading, setSearchLoading] = useState(false);
+
     // Layout State
     const [viewMode, setViewMode] = useState<ViewMode>('board');
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [editedTitle, setEditedTitle] = useState('');
 
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const isOwner = board ? (board as any).ownerId === user.id || board.members?.some(m => m.userId === user.id && m.role === 'Owner') : false;
+
+    const isOwner = board?.userRole === 'Owner' || board?.userRole === 'Admin';
 
     const fetchBoard = useCallback(async () => {
         if (!boardId) return;
@@ -157,6 +162,26 @@ export default function BoardPage() {
     useEffect(() => {
         fetchBoard();
     }, [fetchBoard]);
+
+    useEffect(() => {
+        if (debouncedSearch) {
+            handleSearch(debouncedSearch);
+        } else {
+            setSearchResults([]);
+        }
+    }, [debouncedSearch]);
+
+    const handleSearch = async (query: string) => {
+        setSearchLoading(true);
+        try {
+            const results = await searchUsers(query);
+            setSearchResults(results);
+        } catch (error) {
+            console.error("Search failed", error);
+        } finally {
+            setSearchLoading(false);
+        }
+    };
 
     // ── SignalR real-time callbacks ──
     useSignalR(boardId, {
@@ -391,12 +416,13 @@ export default function BoardPage() {
 
     // ── Invite Member ──
     const handleInvite = async () => {
-        if (!inviteUsername.trim() || !boardId) return;
+        if (!searchValue.trim() || !boardId) return;
         setInviting(true);
         try {
-            await inviteMember(boardId, inviteUsername.trim());
-            setInviteUsername('');
-            notifications.show({ title: 'Invited!', message: `${inviteUsername} has been added to the board.`, color: 'green' });
+            await inviteMember(boardId, searchValue.trim());
+            setSearchValue('');
+            setSearchResults([]);
+            notifications.show({ title: 'Invited!', message: `${searchValue} has been added to the board.`, color: 'green' });
             fetchBoard();
         } catch {
             notifications.show({ title: 'Error', message: 'Could not invite user. Check the username or permissions.', color: 'red' });
@@ -498,10 +524,39 @@ export default function BoardPage() {
             }}
         >
             {/* Header Area */}
-            <Box px="lg" py="md" style={{ background: 'rgba(0,0,0,0.15)', backdropFilter: 'blur(8px)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <Box px="xl" py="lg" style={{ background: 'rgba(0,0,0,0.2)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                 <Group justify="space-between">
-                    <Group gap="xl">
+                    <Group gap="xl" align="center">
                         <Box>
+                            <Group gap="sm" mb={4}>
+                                <Text c="white" size="sm" opacity={0.5} fw={600} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <IconBriefcase size={14} />
+                                    Workspace
+                                </Text>
+                                <Text c="white" size="sm" opacity={0.3}>/</Text>
+                                <Menu shadow="md" width={220} radius="md" styles={{ dropdown: { background: '#1a1b1e', border: '1px solid rgba(255,255,255,0.1)' } }}>
+                                    <Menu.Target>
+                                        <Button
+                                            variant="subtle"
+                                            color="white"
+                                            size="compact-sm"
+                                            radius="sm"
+                                            leftSection={<IconLayoutDashboard size={18} />}
+                                            rightSection={<IconChevronDown size={14} />}
+                                            style={{ height: 28, fontSize: 13, opacity: 0.8 }}
+                                        >
+                                            {viewMode.charAt(0).toUpperCase() + viewMode.slice(1)}
+                                        </Button>
+                                    </Menu.Target>
+                                    <Menu.Dropdown>
+                                        <Menu.Item leftSection={<IconLayoutDashboard size={18} />} onClick={() => setViewMode('board')}>Quadro</Menu.Item>
+                                        <Menu.Item leftSection={<IconTable size={18} />} onClick={() => setViewMode('table')}>Tabela</Menu.Item>
+                                        <Menu.Item leftSection={<IconCalendar size={18} />} onClick={() => setViewMode('calendar')}>Calendário</Menu.Item>
+                                        <Menu.Item leftSection={<IconRotate size={18} />} onClick={() => setViewMode('dashboard')}>Painel</Menu.Item>
+                                        <Menu.Item leftSection={<IconList size={18} />} onClick={() => setViewMode('timeline')}>Cronograma</Menu.Item>
+                                    </Menu.Dropdown>
+                                </Menu>
+                            </Group>
                             {isEditingTitle ? (
                                 <TextInput
                                     autoFocus
@@ -509,17 +564,16 @@ export default function BoardPage() {
                                     onChange={(e) => setEditedTitle(e.currentTarget.value)}
                                     onBlur={handleTitleUpdate}
                                     onKeyDown={(e) => e.key === 'Enter' && handleTitleUpdate()}
-                                    size="xs"
+                                    size="md"
                                     styles={{
                                         input: {
                                             fontWeight: 800,
-                                            fontSize: 'var(--mantine-font-size-xl)',
+                                            fontSize: 'var(--mantine-font-size-2xl)',
                                             background: 'rgba(255,255,255,0.1)',
                                             color: 'white',
                                             border: 'none',
-                                            paddingLeft: 0,
+                                            paddingLeft: 8,
                                             height: 'auto',
-                                            minHeight: 0
                                         }
                                     }}
                                 />
@@ -527,8 +581,8 @@ export default function BoardPage() {
                                 <Text
                                     c="white"
                                     fw={800}
-                                    size="xl"
-                                    style={{ letterSpacing: '-0.5px', cursor: 'pointer' }}
+                                    size="2rem"
+                                    style={{ letterSpacing: '-1px', cursor: 'pointer', lineHeight: 1.1 }}
                                     onDoubleClick={() => {
                                         setEditedTitle(board.name);
                                         setIsEditingTitle(true);
@@ -538,110 +592,36 @@ export default function BoardPage() {
                                     {board.name}
                                 </Text>
                             )}
-                            <Group gap={4}>
-                                <Text c="white" size="xs" opacity={0.6} fw={500} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <IconBriefcase size={12} />
-                                    {board.workspaceId ? 'Workspace Board' : 'Personal Board'}
-                                </Text>
-                                <Menu shadow="md" width={200} radius="md" styles={{ dropdown: { background: '#1a1b1e', border: '1px solid rgba(255,255,255,0.1)' } }}>
-                                    <Menu.Target>
-                                        <Button
-                                            variant="subtle"
-                                            color="white"
-                                            size="compact-xs"
-                                            radius="xs"
-                                            leftSection={<IconLayoutDashboard size={14} />}
-                                            rightSection={<IconChevronDown size={12} />}
-                                            style={{ height: 20, fontSize: 10, opacity: 0.8 }}
-                                        >
-                                            {viewMode.charAt(0).toUpperCase() + viewMode.slice(1)}
-                                        </Button>
-                                    </Menu.Target>
-                                    <Menu.Dropdown>
-                                        <Menu.Item
-                                            leftSection={<IconLayoutDashboard size={16} />}
-                                            onClick={() => setViewMode('board')}
-                                            style={{ color: viewMode === 'board' ? '#7c3aed' : 'white' }}
-                                        >
-                                            Quadro
-                                        </Menu.Item>
-                                        <Menu.Item
-                                            leftSection={<IconTable size={16} />}
-                                            onClick={() => setViewMode('table')}
-                                            style={{ color: viewMode === 'table' ? '#7c3aed' : 'white' }}
-                                        >
-                                            Tabela
-                                        </Menu.Item>
-                                        <Menu.Item
-                                            leftSection={<IconCalendar size={16} />}
-                                            onClick={() => setViewMode('calendar')}
-                                            style={{ color: viewMode === 'calendar' ? '#7c3aed' : 'white' }}
-                                        >
-                                            Calendário
-                                        </Menu.Item>
-                                        <Menu.Item
-                                            leftSection={<IconRotate size={16} />}
-                                            onClick={() => setViewMode('dashboard')}
-                                            style={{ color: viewMode === 'dashboard' ? '#7c3aed' : 'white' }}
-                                        >
-                                            Painel
-                                        </Menu.Item>
-                                        <Menu.Item
-                                            leftSection={<IconList size={16} />}
-                                            onClick={() => setViewMode('timeline')}
-                                            style={{ color: viewMode === 'timeline' ? '#7c3aed' : 'white' }}
-                                        >
-                                            Cronograma
-                                        </Menu.Item>
-                                        <Menu.Item
-                                            leftSection={<IconLocation size={16} />}
-                                            onClick={() => setViewMode('map')}
-                                            style={{ color: viewMode === 'map' ? '#7c3aed' : 'white' }}
-                                        >
-                                            Mapa
-                                        </Menu.Item>
-                                    </Menu.Dropdown>
-                                </Menu>
-                            </Group>
                         </Box>
 
-                        <Group gap="xs">
-                            <Avatar.Group spacing="sm">
-                                {members.slice(0, 3).map(m => (
-                                    <Avatar key={m.userId} radius="xl" size="sm" title={m.username || 'User'} color="violet">
+                        <Group gap="md">
+                            <Avatar.Group spacing="md">
+                                {members.slice(0, 4).map(m => (
+                                    <Avatar key={m.userId} radius="xl" size="md" title={m.username || 'User'} color="indigo">
                                         {(m.username || '?').slice(0, 2).toUpperCase()}
                                     </Avatar>
                                 ))}
-                                {members.length > 3 && (
-                                    <Avatar radius="xl" size="sm">+{members.length - 3}</Avatar>
+                                {members.length > 4 && (
+                                    <Avatar radius="xl" size="md">+{members.length - 4}</Avatar>
                                 )}
                             </Avatar.Group>
-                            <ActionIcon
-                                variant="subtle"
-                                color="white"
-                                size="sm"
-                                onClick={() => setMembersModalOpen(true)}
-                                style={{ borderRadius: '50%', opacity: 0.7 }}
-                            >
-                                <IconUsers size={16} />
-                            </ActionIcon>
                         </Group>
                     </Group>
 
-                    <Group gap="sm">
+                    <Group gap="md">
                         <Button
                             variant="white"
                             color="dark"
-                            size="xs"
+                            size="md"
                             radius="md"
-                            leftSection={<IconUserPlus size={16} />}
+                            leftSection={<IconUserPlus size={20} />}
                             onClick={() => setMembersModalOpen(true)}
-                            style={{ fontWeight: 600 }}
+                            fw={700}
                         >
                             Compartilhar
                         </Button>
-                        <ActionIcon variant="subtle" color="white" onClick={() => navigate('/boards')}>
-                            <IconLogout size={20} />
+                        <ActionIcon variant="subtle" color="white" size="xl" onClick={() => navigate('/boards')}>
+                            <IconLogout size={24} />
                         </ActionIcon>
                     </Group>
                 </Group>
@@ -767,15 +747,13 @@ export default function BoardPage() {
                     boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
                 }}
             >
-                <Group gap="lg" px="md">
-                    <Button variant="subtle" color="blue" size="xs" leftSection={<IconMail size={16} />}>Caixa de entrada</Button>
-                    <Button variant="subtle" color="gray" size="xs" leftSection={<IconCalendar size={16} />}>Planejador</Button>
-                    <Button variant="light" color="blue" size="xs" leftSection={<IconLayoutDashboard size={16} />}>Quadro</Button>
+                <Group gap="lg" px="md" py={4}>
+                    <Button variant="light" color="blue" size="sm" leftSection={<IconLayoutDashboard size={18} />}>Quadro</Button>
                     <Button
                         variant="subtle"
                         color="gray"
-                        size="xs"
-                        leftSection={<IconExchange size={16} />}
+                        size="sm"
+                        leftSection={<IconExchange size={18} />}
                         onClick={handleOpenSwitchModal}
                     >
                         Mudar de quadros
@@ -921,16 +899,22 @@ export default function BoardPage() {
                 <Stack gap="md">
                     {/* Invite form (owner only) */}
                     {isOwner && (
-                        <Paper p="md" radius="md" style={{ background: 'rgba(124, 58, 237, 0.08)', border: '1px solid rgba(124, 58, 237, 0.2)' }}>
+                        <Box mb="md">
                             <Text size="sm" fw={500} mb="xs" c="dimmed">Invite a collaborator</Text>
-                            <Group gap="xs">
-                                <TextInput
-                                    placeholder="Enter username..."
-                                    value={inviteUsername}
-                                    onChange={(e) => setInviteUsername(e.currentTarget.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
+                            <Group gap="xs" align="flex-start">
+                                <Autocomplete
+                                    placeholder="Search by username..."
+                                    value={searchValue}
+                                    onChange={setSearchValue}
+                                    data={searchResults.map(u => u.username)}
+                                    onOptionSubmit={(val) => {
+                                        setSearchValue(val);
+                                        // Optional: Auto-invite on selection? Better to let user click Invite to confirm.
+                                    }}
+                                    rightSection={searchLoading ? <Loader size="xs" /> : null}
                                     style={{ flex: 1 }}
                                     styles={{ input: { background: 'rgba(0,0,0,0.4)' } }}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
                                 />
                                 <Button
                                     leftSection={<IconUserPlus size={16} />}
@@ -942,7 +926,7 @@ export default function BoardPage() {
                                     Invite
                                 </Button>
                             </Group>
-                        </Paper>
+                        </Box>
                     )}
 
                     {/* Members List */}
@@ -999,30 +983,7 @@ export default function BoardPage() {
                         )}
                     </Stack>
 
-                    {/* Theme Selector (Owner Only) */}
-                    {isOwner && (
-                        <Box mt="xl">
-                            <Text fw={600} mb="sm">Board Theme</Text>
-                            <Group gap="xs">
-                                {Object.entries(BOARD_THEMES).map(([key, value]) => (
-                                    <ThemeIcon
-                                        key={key}
-                                        size="lg"
-                                        radius="xl"
-                                        style={{
-                                            cursor: 'pointer',
-                                            backgroundColor: value.background,
-                                            border: (board as any).themeColor === key ? '2px solid white' : 'none',
-                                            boxShadow: (board as any).themeColor === key ? '0 0 0 2px #000' : 'none'
-                                        }}
-                                        onClick={() => handleUpdateTheme(key as ThemeColor)}
-                                    >
-                                        {(board as any).themeColor === key && <IconCheck size={14} />}
-                                    </ThemeIcon>
-                                ))}
-                            </Group>
-                        </Box>
-                    )}
+
 
                 </Stack>
             </Modal>

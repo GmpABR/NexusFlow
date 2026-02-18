@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Paper, Title, Group, Text, Badge, Stack, Box, ScrollArea, ThemeIcon } from '@mantine/core';
 import { type BoardDetail } from '../api/boards';
 import { IconClock, IconCalendarCheck } from '@tabler/icons-react';

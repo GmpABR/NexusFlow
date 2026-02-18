@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { Table, Paper, Text, Badge, ScrollArea } from '@mantine/core';
 import { type BoardDetail } from '../api/boards';
 

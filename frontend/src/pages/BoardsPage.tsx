@@ -17,10 +17,10 @@ import {
     Paper,
     Divider,
 } from '@mantine/core';
-import { IconPlus, IconLayoutBoard, IconLogout, IconCheck, IconBriefcase, IconMail } from '@tabler/icons-react';
+import { IconPlus, IconLogout, IconCheck, IconBriefcase, IconMail } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { notifications } from '@mantine/notifications';
-import { getBoards, createBoard, respondToInvitation, type BoardSummary } from '../api/boards';
+import { getBoards, createBoard, type BoardSummary } from '../api/boards';
 import { getMyWorkspaces, createWorkspace, getWorkspaceInvitations, respondToWorkspaceInvitation, type Workspace } from '../api/workspaces';
 import { BOARD_THEMES, type ThemeColor } from '../constants/themes';
 
@@ -77,19 +77,7 @@ export default function BoardsPage() {
         }
     };
 
-    const handleRespondToBoardInvitation = async (boardId: number, accept: boolean) => {
-        try {
-            await respondToInvitation(boardId, accept);
-            notifications.show({
-                title: accept ? 'Joined Board' : 'Declined',
-                message: accept ? 'You have joined the board.' : 'Invitation declined.',
-                color: accept ? 'green' : 'blue'
-            });
-            fetchData(); // Refresh lists
-        } catch {
-            notifications.show({ title: 'Error', message: 'Failed to respond to invitation.', color: 'red' });
-        }
-    };
+
 
     const handleCreate = async () => {
         if (!newBoardName.trim()) return;
@@ -140,7 +128,7 @@ export default function BoardsPage() {
         <Box
             style={{
                 minHeight: '100vh',
-                background: 'linear-gradient(180deg, #0a0010 0%, #000 100%)',
+                background: '#141517', // Professional dark gray (Mantine dark.7/8ish)
             }}
         >
             <Container size="lg" py="xl">
@@ -154,12 +142,11 @@ export default function BoardsPage() {
                                     key={inv.id}
                                     shadow="sm"
                                     padding="lg"
-                                    radius="lg"
+                                    radius="md"
                                     withBorder
                                     style={{
-                                        background: 'rgba(26, 27, 30, 0.6)',
-                                        backdropFilter: 'blur(12px)',
-                                        borderColor: 'rgba(255, 193, 7, 0.3)',
+                                        background: '#25262b', // Lighter dark gray
+                                        borderColor: '#373A40',
                                     }}
                                 >
                                     <Group mb="xs">
@@ -198,11 +185,7 @@ export default function BoardsPage() {
                         <Title
                             order={1}
                             fw={800}
-                            style={{
-                                background: 'linear-gradient(135deg, #a855f7, #6366f1)',
-                                WebkitBackgroundClip: 'text',
-                                WebkitTextFillColor: 'transparent',
-                            }}
+                            c="white"
                         >
                             Workspaces
                         </Title>
@@ -213,8 +196,7 @@ export default function BoardsPage() {
                     <Group>
                         <Button
                             leftSection={<IconPlus size={18} />}
-                            variant="outline"
-                            color="gray"
+                            variant="default"
                             onClick={() => {
                                 setSelectedWorkspaceId(null);
                                 setModalOpen(true);
@@ -225,8 +207,7 @@ export default function BoardsPage() {
                         </Button>
                         <Button
                             leftSection={<IconBriefcase size={18} />}
-                            variant="gradient"
-                            gradient={{ from: 'violet', to: 'indigo' }}
+                            color="violet"
                             onClick={() => setOpenedWorkspaceModal(true)}
                             radius="md"
                         >
@@ -245,52 +226,7 @@ export default function BoardsPage() {
                 </Group>
 
                 {/* Invitations Section */}
-                {invitations.length > 0 && (
-                    <Box mb="xl">
-                        <Title order={3} c="white" mb="md">Pending Workspace Invitations</Title>
-                        <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="lg">
-                            {invitations.map((inv) => (
-                                <Card
-                                    key={inv.id}
-                                    shadow="sm"
-                                    padding="lg"
-                                    radius="lg"
-                                    withBorder
-                                    style={{
-                                        background: 'rgba(26, 27, 30, 0.6)',
-                                        backdropFilter: 'blur(12px)',
-                                        borderColor: 'rgba(255, 193, 7, 0.3)',
-                                    }}
-                                >
-                                    <Group mb="xs">
-                                        <IconMail size={20} color="orange" />
-                                        <Text fw={600} size="lg" c="white">{inv.name}</Text>
-                                    </Group>
-                                    <Text size="sm" c="dimmed" mb="md">
-                                        Invited by {inv.ownerName}
-                                    </Text>
-                                    <Group grow>
-                                        <Button
-                                            variant="light"
-                                            color="green"
-                                            onClick={() => handleRespondToBoardInvitation(inv.id, true)}
-                                        >
-                                            Accept
-                                        </Button>
-                                        <Button
-                                            variant="light"
-                                            color="red"
-                                            onClick={() => handleRespondToBoardInvitation(inv.id, false)}
-                                        >
-                                            Decline
-                                        </Button>
-                                    </Group>
-                                </Card>
-                            ))}
-                        </SimpleGrid>
-                        <Divider my="xl" color="rgba(255,255,255,0.1)" />
-                    </Box>
-                )}
+
 
                 {loading ? (
                     <Text c="dimmed" ta="center" mt={60}>Loading...</Text>
@@ -357,7 +293,7 @@ export default function BoardsPage() {
 
                                             {workspaceBoards.length === 0 ? (
                                                 <Paper p="xl" withBorder style={{
-                                                    background: 'rgba(255,255,255,0.02)',
+                                                    background: 'transparent',
                                                     borderColor: 'rgba(255,255,255,0.05)',
                                                     borderStyle: 'dashed'
                                                 }}>
@@ -373,24 +309,23 @@ export default function BoardsPage() {
                                                     {workspaceBoards.map((board) => (
                                                         <Card
                                                             key={board.id}
-                                                            shadow="md"
+                                                            shadow="sm"
                                                             padding="lg"
                                                             radius="md"
                                                             withBorder
                                                             onClick={() => navigate(`/boards/${board.id}`)}
                                                             style={{
                                                                 cursor: 'pointer',
-                                                                background: 'rgba(26, 27, 30, 0.6)',
-                                                                backdropFilter: 'blur(12px)',
-                                                                borderColor: 'rgba(124, 58, 237, 0.15)',
+                                                                background: '#25262b',
+                                                                borderColor: '#373A40',
                                                                 transition: 'all 0.2s ease',
                                                             }}
                                                             onMouseEnter={(e) => {
-                                                                e.currentTarget.style.borderColor = 'rgba(124, 58, 237, 0.5)';
+                                                                e.currentTarget.style.borderColor = '#5c5f66';
                                                                 e.currentTarget.style.transform = 'translateY(-2px)';
                                                             }}
                                                             onMouseLeave={(e) => {
-                                                                e.currentTarget.style.borderColor = 'rgba(124, 58, 237, 0.15)';
+                                                                e.currentTarget.style.borderColor = '#373A40';
                                                                 e.currentTarget.style.transform = 'translateY(0)';
                                                             }}
                                                         >
@@ -402,7 +337,7 @@ export default function BoardsPage() {
                                                             }} />
                                                             <Text fw={600} size="md" c="white" mb={4}>{board.name}</Text>
                                                             <Group gap={6}>
-                                                                <Badge variant="dot" color={board.role === 'Owner' ? 'violet' : 'teal'} size="xs">
+                                                                <Badge variant="light" color={board.role === 'Owner' ? 'violet' : 'teal'} size="xs">
                                                                     {board.role}
                                                                 </Badge>
                                                             </Group>
@@ -422,16 +357,24 @@ export default function BoardsPage() {
                                             {boards.filter(b => !b.workspaceId).map((board) => (
                                                 <Card
                                                     key={board.id}
-                                                    shadow="md"
+                                                    shadow="sm"
                                                     padding="lg"
                                                     radius="md"
                                                     withBorder
                                                     onClick={() => navigate(`/boards/${board.id}`)}
                                                     style={{
                                                         cursor: 'pointer',
-                                                        background: 'rgba(26, 27, 30, 0.4)',
-                                                        borderColor: 'rgba(255, 255, 255, 0.1)',
+                                                        background: '#25262b',
+                                                        borderColor: '#373A40',
                                                         transition: 'all 0.2s ease',
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        e.currentTarget.style.borderColor = '#5c5f66';
+                                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.currentTarget.style.borderColor = '#373A40';
+                                                        e.currentTarget.style.transform = 'translateY(0)';
                                                     }}
                                                 >
                                                     <Group justify="space-between" mb="xs">

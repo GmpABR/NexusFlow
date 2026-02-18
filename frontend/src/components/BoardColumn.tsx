@@ -33,12 +33,12 @@ const BoardColumn = memo(function BoardColumn({ column, onAddTask, onDeleteTask,
     return (
         <Box
             style={{
-                minWidth: 300,
-                maxWidth: 340,
+                minWidth: 320,
+                maxWidth: 360,
                 width: '100%',
                 display: 'flex',
                 flexDirection: 'column',
-                maxHeight: 'calc(100vh - 160px)',
+                maxHeight: 'calc(100vh - 180px)',
                 position: 'relative',
             }}
         >
@@ -47,18 +47,18 @@ const BoardColumn = memo(function BoardColumn({ column, onAddTask, onDeleteTask,
                 style={{
                     position: 'absolute',
                     inset: 0,
-                    background: 'rgba(20, 21, 23, 0.75)',
-                    backdropFilter: 'blur(16px)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    borderRadius: 16,
+                    background: 'rgba(20, 21, 23, 0.85)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: 20,
                     zIndex: 0,
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
+                    boxShadow: '0 12px 48px rgba(0,0,0,0.4)',
                 }}
             />
 
             {/* Content Layer */}
             <Box
-                p="md"
+                p="lg"
                 style={{
                     position: 'relative',
                     zIndex: 1,
@@ -68,22 +68,22 @@ const BoardColumn = memo(function BoardColumn({ column, onAddTask, onDeleteTask,
                 }}
             >
                 {/* Column Header */}
-                <Group justify="space-between" mb="sm">
-                    <Group gap="xs">
+                <Group justify="space-between" mb="md">
+                    <Group gap="sm">
                         <Box
                             style={{
-                                width: 8,
-                                height: 8,
+                                width: 10,
+                                height: 10,
                                 borderRadius: '50%',
                                 background: accentColor,
-                                boxShadow: `0 0 8px ${accentColor}60`,
+                                boxShadow: `0 0 12px ${accentColor}80`,
                             }}
                         />
-                        <Text fw={600} size="sm" c="white">
+                        <Text fw={700} size="md" c="white" style={{ letterSpacing: '0.2px' }}>
                             {column.name}
                         </Text>
                     </Group>
-                    <Badge variant="light" color="gray" size="sm" radius="md">
+                    <Badge variant="filled" color="dark" size="md" radius="sm" styles={{ root: { background: 'rgba(255,255,255,0.1)' } }}>
                         {column.taskCards.length}
                     </Badge>
                 </Group>
@@ -146,24 +146,27 @@ const BoardColumn = memo(function BoardColumn({ column, onAddTask, onDeleteTask,
                     </Box>
                 ) : (
                     <Group
-                        mt="sm"
-                        gap="xs"
+                        mt="md"
+                        gap="sm"
                         onClick={() => setShowInput(true)}
                         style={{
                             cursor: 'pointer',
-                            padding: '6px 8px',
-                            borderRadius: 8,
-                            transition: 'background 0.15s ease',
+                            padding: '10px 12px',
+                            borderRadius: 10,
+                            transition: 'all 0.15s ease',
+                            border: '1px solid transparent',
                         }}
                         onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLElement).style.background = 'rgba(55, 58, 64, 0.3)';
+                            (e.currentTarget as HTMLElement).style.background = 'rgba(255, 255, 255, 0.05)';
+                            (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255, 255, 255, 0.1)';
                         }}
                         onMouseLeave={(e) => {
                             (e.currentTarget as HTMLElement).style.background = 'transparent';
+                            (e.currentTarget as HTMLElement).style.borderColor = 'transparent';
                         }}
                     >
-                        <IconPlus size={14} color="#909296" />
-                        <Text size="xs" c="dimmed">Add task</Text>
+                        <IconPlus size={18} color="white" style={{ opacity: 0.8 }} />
+                        <Text size="sm" fw={600} c="white" opacity={0.7}>Add task</Text>
                     </Group>
                 )}
             </Box>

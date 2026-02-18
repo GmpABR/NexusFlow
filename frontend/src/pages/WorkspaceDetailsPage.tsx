@@ -18,13 +18,17 @@ import {
     Tabs,
     Modal,
     Autocomplete,
+    Menu,
+    ActionIcon,
+    ThemeIcon,
 } from '@mantine/core';
-import { IconLayoutBoard, IconUsers, IconPlus, IconArrowLeft, IconCheck } from '@tabler/icons-react';
+import { IconLayoutBoard, IconUsers, IconPlus, IconArrowLeft, IconCheck, IconPalette } from '@tabler/icons-react';
 import { useDebouncedValue } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { getWorkspace, getWorkspaceBoards, addWorkspaceMember, removeWorkspaceMember, type Workspace, type WorkspaceMember } from '../api/workspaces';
-import { type BoardSummary } from '../api/boards';
+import { getWorkspace, getWorkspaceBoards, addWorkspaceMember, removeWorkspaceMember, type Workspace } from '../api/workspaces';
+import { updateBoard, type BoardSummary } from '../api/boards';
 import { searchUsers, type UserSummary } from '../api/users';
+import { BOARD_THEMES, type ThemeColor } from '../constants/themes';
 
 export default function WorkspaceDetailsPage() {
     const { id } = useParams<{ id: string }>();
@@ -134,11 +138,23 @@ export default function WorkspaceDetailsPage() {
         }
     };
 
+    const handleUpdateTheme = async (boardId: number, color: ThemeColor) => {
+        try {
+            await updateBoard(boardId, { themeColor: color });
+            setBoards(current => current.map(b =>
+                b.id === boardId ? { ...b, themeColor: color } : b
+            ));
+            notifications.show({ title: 'Theme updated', message: 'Board theme changed.', color: 'green' });
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to update theme.', color: 'red' });
+        }
+    };
+
     if (loading) return <Center h="100vh"><Loader color="violet" /></Center>;
     if (!workspace) return null;
 
     return (
-        <Box style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #0a0010 0%, #000 100%)' }}>
+        <Box style={{ minHeight: '100vh', background: '#141517' }}>
             <Container size="lg" py="xl">
                 <Button
                     variant="subtle"
@@ -155,14 +171,12 @@ export default function WorkspaceDetailsPage() {
                         <Title c="white">{workspace.name}</Title>
                         <Text c="dimmed">{workspace.description}</Text>
                     </div>
-                    {/* Add Settings/Invite buttons here later */}
                 </Group>
 
                 <Tabs defaultValue="boards" variant="pills" radius="md" color="violet">
-                    <Tabs.List mb="lg">
+                    <Tabs.List mb="lg" style={{ background: '#25262b', padding: 4, borderRadius: 8, border: '1px solid #373A40' }}>
                         <Tabs.Tab value="boards" leftSection={<IconLayoutBoard size={16} />}>Boards</Tabs.Tab>
                         <Tabs.Tab value="members" leftSection={<IconUsers size={16} />}>Members</Tabs.Tab>
-                        {/* <Tabs.Tab value="settings" leftSection={<IconSettings size={16} />}>Settings</Tabs.Tab> */}
                     </Tabs.List>
 
                     <Tabs.Panel value="boards">
@@ -173,28 +187,76 @@ export default function WorkspaceDetailsPage() {
                                 {boards.map((board) => (
                                     <Card
                                         key={board.id}
-                                        shadow="md"
+                                        shadow="sm"
                                         padding="lg"
-                                        radius="lg"
+                                        radius="md"
                                         withBorder
                                         onClick={() => navigate(`/boards/${board.id}`)}
                                         style={{
                                             cursor: 'pointer',
-                                            background: 'rgba(26, 27, 30, 0.6)',
-                                            backdropFilter: 'blur(12px)',
-                                            borderColor: 'rgba(124, 58, 237, 0.15)',
+                                            background: '#25262b',
+                                            borderColor: '#373A40',
                                             transition: 'all 0.2s ease',
                                         }}
                                         onMouseEnter={(e) => {
-                                            e.currentTarget.style.borderColor = 'rgba(124, 58, 237, 0.5)';
+                                            e.currentTarget.style.borderColor = '#5c5f66';
                                             e.currentTarget.style.transform = 'translateY(-2px)';
                                         }}
                                         onMouseLeave={(e) => {
-                                            e.currentTarget.style.borderColor = 'rgba(124, 58, 237, 0.15)';
+                                            e.currentTarget.style.borderColor = '#373A40';
                                             e.currentTarget.style.transform = 'translateY(0)';
                                         }}
                                     >
-                                        <Text fw={600} size="lg" c="white" mb="xs">{board.name}</Text>
+                                        <div style={{
+                                            height: 6,
+                                            background: BOARD_THEMES[board.themeColor as ThemeColor]?.background || 'gray',
+                                            borderRadius: 4,
+                                            marginBottom: 12
+                                        }} />
+                                        <Group justify="space-between" mb="xs" align="flex-start">
+                                            <Text fw={600} size="lg" c="white" style={{ flex: 1 }}>{board.name}</Text>
+
+                                            {/* Theme Switcher - stopPropagation to prevent navigation */}
+                                            {(board.role === 'Owner') && (
+                                                <Menu shadow="md" width={200} position="bottom-end">
+                                                    <Menu.Target>
+                                                        <ActionIcon
+                                                            variant="subtle"
+                                                            color="gray"
+                                                            size="sm"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <IconPalette size={16} />
+                                                        </ActionIcon>
+                                                    </Menu.Target>
+                                                    <Menu.Dropdown>
+                                                        <Menu.Label>Change Theme</Menu.Label>
+                                                        <Group gap="xs" p="xs">
+                                                            {Object.entries(BOARD_THEMES).map(([key, value]) => (
+                                                                <ThemeIcon
+                                                                    key={key}
+                                                                    size="md"
+                                                                    radius="xl"
+                                                                    style={{
+                                                                        cursor: 'pointer',
+                                                                        backgroundColor: value.background,
+                                                                        border: board.themeColor === key ? '2px solid white' : 'none',
+                                                                        boxShadow: board.themeColor === key ? '0 0 0 2px #000' : 'none'
+                                                                    }}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleUpdateTheme(board.id, key as ThemeColor);
+                                                                    }}
+                                                                >
+                                                                    {board.themeColor === key && <IconCheck size={12} />}
+                                                                </ThemeIcon>
+                                                            ))}
+                                                        </Group>
+                                                    </Menu.Dropdown>
+                                                </Menu>
+                                            )}
+                                        </Group>
+
                                         <Text size="xs" c="dimmed">
                                             Created {new Date(board.createdAt).toLocaleDateString()}
                                         </Text>
@@ -209,7 +271,7 @@ export default function WorkspaceDetailsPage() {
                             <Title order={4} c="white">Workspace Members</Title>
                             <Button
                                 leftSection={<IconPlus size={16} />}
-                                variant="light"
+                                color="violet"
                                 onClick={() => setInviteModalOpen(true)}
                             >
                                 Add Member
@@ -221,7 +283,12 @@ export default function WorkspaceDetailsPage() {
                                     key={member.userId}
                                     p="md"
                                     radius="md"
-                                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)' }}
+                                    shadow="sm"
+                                    withBorder
+                                    style={{
+                                        background: '#25262b',
+                                        borderColor: '#373A40'
+                                    }}
                                 >
                                     <Group justify="space-between">
                                         <Group>
@@ -237,8 +304,7 @@ export default function WorkspaceDetailsPage() {
                                             ) : (
                                                 <Badge color={member.role === 'Admin' ? 'violet' : 'gray'}>{member.role}</Badge>
                                             )}
-                                            {/* Only Admin/Owner can remove. For now assume user can seeing this logic is enough, API protects it too */}
-                                            {member.role !== 'Admin' && ( // Prevent removing Admins/Owners for safety in this simple UI
+                                            {member.role !== 'Admin' && (
                                                 <Button
                                                     variant="subtle"
                                                     color="red"
@@ -253,7 +319,6 @@ export default function WorkspaceDetailsPage() {
                                 </Paper>
                             ))}
                         </Stack>
-
                     </Tabs.Panel>
                 </Tabs>
 
@@ -261,6 +326,10 @@ export default function WorkspaceDetailsPage() {
                     opened={inviteModalOpen}
                     onClose={() => setInviteModalOpen(false)}
                     title="Add Member to Workspace"
+                    styles={{
+                        content: { background: '#25262b', color: 'white' },
+                        header: { background: '#25262b', color: 'white' },
+                    }}
                 >
                     <Stack>
                         <Autocomplete
@@ -270,10 +339,11 @@ export default function WorkspaceDetailsPage() {
                             value={searchValue}
                             onChange={setSearchValue}
                             rightSection={searchLoading ? <Loader size="xs" /> : null}
+                            mb="md"
                         />
                         <Group justify="flex-end">
-                            <Button variant="subtle" onClick={() => setInviteModalOpen(false)}>Cancel</Button>
-                            <Button onClick={handleInvite} loading={inviting}>Add</Button>
+                            <Button variant="default" onClick={() => setInviteModalOpen(false)}>Cancel</Button>
+                            <Button color="violet" onClick={handleInvite} loading={inviting}>Add</Button>
                         </Group>
                     </Stack>
                 </Modal>
@@ -283,12 +353,16 @@ export default function WorkspaceDetailsPage() {
                     onClose={() => setRemoveModalOpen(false)}
                     title="Remove Member"
                     centered
+                    styles={{
+                        content: { background: '#25262b', color: 'white' },
+                        header: { background: '#25262b', color: 'white' },
+                    }}
                 >
                     <Text size="sm" mb="lg">
                         Are you sure you want to remove this member from the workspace?
                     </Text>
                     <Group justify="flex-end">
-                        <Button variant="subtle" color="gray" onClick={() => setRemoveModalOpen(false)}>
+                        <Button variant="default" onClick={() => setRemoveModalOpen(false)}>
                             Cancel
                         </Button>
                         <Button color="red" onClick={handleRemoveMember} loading={removing}>

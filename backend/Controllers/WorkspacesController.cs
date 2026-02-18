@@ -110,7 +110,8 @@ public class WorkspacesController : ControllerBase
         workspace.Members.Add(new WorkspaceMember
         {
             UserId = userId,
-            Role = "Admin"
+            Role = "Admin",
+            Status = "Accepted"
         });
 
         _context.Workspaces.Add(workspace);

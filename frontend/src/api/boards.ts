@@ -50,6 +50,7 @@ export interface BoardDetail {
     workspaceId: number | null;
     columns: Column[];
     members: BoardMember[];
+    userRole: string;
 }
 
 export const getBoards = async (): Promise<BoardSummary[]> => {

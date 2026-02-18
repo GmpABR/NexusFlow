@@ -42,7 +42,7 @@ export default function RegisterPage() {
         <Box
             style={{
                 minHeight: '100vh',
-                background: 'radial-gradient(ellipse at top, #1a0030 0%, #000 60%)',
+                background: '#141517', // Professional dark gray
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -52,18 +52,14 @@ export default function RegisterPage() {
                 <Title
                     ta="center"
                     fw={800}
-                    style={{
-                        fontSize: '2rem',
-                        background: 'linear-gradient(135deg, #a855f7, #6366f1)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                    }}
+                    c="white"
+                    style={{ fontSize: '2rem' }}
                 >
                     Create Account
                 </Title>
                 <Text c="dimmed" size="sm" ta="center" mt={5} mb={30}>
                     Already have an account?{' '}
-                    <Anchor component={Link} to="/login" size="sm">
+                    <Anchor component={Link} to="/login" size="sm" c="violet">
                         Sign In
                     </Anchor>
                 </Text>
@@ -72,13 +68,12 @@ export default function RegisterPage() {
                     component="form"
                     onSubmit={handleSubmit}
                     withBorder
-                    shadow="xl"
+                    shadow="sm"
                     p={30}
-                    radius="lg"
+                    radius="md"
                     style={{
-                        background: 'rgba(26, 27, 30, 0.8)',
-                        backdropFilter: 'blur(20px)',
-                        borderColor: 'rgba(124, 58, 237, 0.2)',
+                        background: '#25262b', // Lighter dark gray
+                        borderColor: '#373A40',
                     }}
                 >
                     <Stack>
@@ -88,7 +83,6 @@ export default function RegisterPage() {
                             required
                             value={username}
                             onChange={(e) => setUsername(e.currentTarget.value)}
-                            styles={{ input: { background: 'rgba(0,0,0,0.4)' } }}
                         />
                         <TextInput
                             label="Email"
@@ -97,7 +91,6 @@ export default function RegisterPage() {
                             type="email"
                             value={email}
                             onChange={(e) => setEmail(e.currentTarget.value)}
-                            styles={{ input: { background: 'rgba(0,0,0,0.4)' } }}
                         />
                         <PasswordInput
                             label="Password"
@@ -105,15 +98,13 @@ export default function RegisterPage() {
                             required
                             value={password}
                             onChange={(e) => setPassword(e.currentTarget.value)}
-                            styles={{ input: { background: 'rgba(0,0,0,0.4)' } }}
                         />
                         <Button
                             type="submit"
                             loading={loading}
                             fullWidth
                             mt="md"
-                            variant="gradient"
-                            gradient={{ from: 'violet', to: 'indigo' }}
+                            color="violet"
                             size="md"
                             radius="md"
                         >
