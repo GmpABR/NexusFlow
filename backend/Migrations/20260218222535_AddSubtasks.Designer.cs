@@ -3,6 +3,7 @@ using System;
 using Backend.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Backend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260218222535_AddSubtasks")]
+    partial class AddSubtasks
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -145,40 +148,6 @@ namespace Backend.Migrations
                     b.HasIndex("TaskCardId");
 
                     b.ToTable("Subtasks");
-                });
-
-            modelBuilder.Entity("Backend.Models.TaskActivity", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Details")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("TaskCardId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("Timestamp")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TaskCardId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("TaskActivities");
                 });
 
             modelBuilder.Entity("Backend.Models.TaskCard", b =>
@@ -390,25 +359,6 @@ namespace Backend.Migrations
                         .IsRequired();
 
                     b.Navigation("TaskCard");
-                });
-
-            modelBuilder.Entity("Backend.Models.TaskActivity", b =>
-                {
-                    b.HasOne("Backend.Models.TaskCard", "TaskCard")
-                        .WithMany()
-                        .HasForeignKey("TaskCardId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Backend.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("TaskCard");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Backend.Models.TaskCard", b =>

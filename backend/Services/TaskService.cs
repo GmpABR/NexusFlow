@@ -14,7 +14,7 @@ public class TaskService : ITaskService
         _db = db;
     }
 
-    public async Task<TaskCardDto> CreateTaskAsync(CreateTaskDto dto)
+    public async Task<TaskCardDto> CreateTaskAsync(CreateTaskDto dto, int userId)
     {
         var maxOrder = await _db.TaskCards
             .Where(t => t.ColumnId == dto.ColumnId)
@@ -36,10 +36,12 @@ public class TaskService : ITaskService
         _db.TaskCards.Add(task);
         await _db.SaveChangesAsync();
 
+        await LogActivity(task.Id, userId, "Created", $"Task created in column {task.ColumnId}");
+
         return await MapToDto(task);
     }
 
-    public async Task<TaskCardDto?> UpdateTaskAsync(int taskId, UpdateTaskDto dto)
+    public async Task<TaskCardDto?> UpdateTaskAsync(int taskId, UpdateTaskDto dto, int userId)
     {
         var task = await _db.TaskCards
             .Include(t => t.Assignee)
@@ -47,19 +49,19 @@ public class TaskService : ITaskService
             
         if (task == null) return null;
 
+        var changes = new List<string>();
+        if (task.Title != dto.Title) changes.Add($"Title changed to '{dto.Title}'");
+        if (task.Priority != dto.Priority) changes.Add($"Priority changed to '{dto.Priority}'");
+        if (task.Description != dto.Description) changes.Add("Description updated");
+
         task.Title = dto.Title;
         task.Description = dto.Description;
         task.Priority = dto.Priority;
         
-        // PostgreSQL requires UTC for 'timestamp with time zone' columns
         if (dto.DueDate.HasValue)
-        {
             task.DueDate = DateTime.SpecifyKind(dto.DueDate.Value, DateTimeKind.Utc);
-        }
         else
-        {
             task.DueDate = null;
-        }
 
         task.StoryPoints = dto.StoryPoints;
         task.AssigneeId = (dto.AssigneeId == 0) ? null : dto.AssigneeId;
@@ -67,6 +69,11 @@ public class TaskService : ITaskService
 
         await _db.SaveChangesAsync();
         
+        if (changes.Any())
+        {
+             await LogActivity(taskId, userId, "Updated", string.Join(", ", changes));
+        }
+
         // Reload to get assignee info if changed
         if (task.AssigneeId.HasValue && task.Assignee == null)
         {
@@ -76,12 +83,14 @@ public class TaskService : ITaskService
         return await MapToDto(task);
     }
 
-    public async Task<TaskCardDto?> MoveTaskAsync(int taskId, MoveTaskDto dto)
+    public async Task<TaskCardDto?> MoveTaskAsync(int taskId, MoveTaskDto dto, int userId)
     {
         Console.WriteLine($"[MoveTask] Moving Task {taskId} to Column {dto.TargetColumnId} at Order {dto.NewOrder}");
         var task = await _db.TaskCards.FindAsync(taskId);
         if (task == null) return null;
 
+        int oldColumnId = task.ColumnId;
+        
         // 1. Get all tasks in the target column (excluding the moved task)
         var targetColumnTasks = await _db.TaskCards
             .Where(t => t.ColumnId == dto.TargetColumnId && t.Id != taskId)
@@ -89,7 +98,6 @@ public class TaskService : ITaskService
             .ToListAsync();
 
         // 2. Insert the moved task at the new position
-        // Clamp index to be safe
         int newIndex = Math.Max(0, Math.Min(dto.NewOrder, targetColumnTasks.Count));
         
         task.ColumnId = dto.TargetColumnId;
@@ -102,17 +110,21 @@ public class TaskService : ITaskService
             targetColumnTasks[i].Order = i;
         }
 
-        // 4. (Optional) If moved between columns, we might want to re-normalize the source column too, 
-        // but typically that's not strictly required for visual consistency as long as the target is correct.
-        // However, it's good practice to avoid "holes" in the source column eventually. 
-        // For now, focusing on target consistency is enough to fix the "jump" and persistence.
-
         await _db.SaveChangesAsync();
+
+        if (oldColumnId != dto.TargetColumnId)
+        {
+             await LogActivity(taskId, userId, "Moved", $"Moved to column {dto.TargetColumnId}");
+        }
+        else
+        {
+             await LogActivity(taskId, userId, "Reordered", "Reordered within same column");
+        }
 
         return await MapToDto(task);
     }
 
-    public async Task<int?> DeleteTaskAsync(int taskId)
+    public async Task<int?> DeleteTaskAsync(int taskId, int userId)
     {
         var task = await _db.TaskCards
             .Include(t => t.Column)
@@ -121,10 +133,111 @@ public class TaskService : ITaskService
         if (task == null) return null;
 
         int boardId = task.Column.BoardId;
+        
+        // Log before delete? Or just delete. 
+        // If we delete the task, cascade deletes activities. 
+        // So logging a delete on a deleted task is pointless unless we have a BoardActivity log.
+        // For now, just delete.
 
         _db.TaskCards.Remove(task);
         await _db.SaveChangesAsync();
         return boardId;
+    }
+
+    // Subtask Methods
+    public async Task<SubtaskDto> CreateSubtaskAsync(int taskId, CreateSubtaskDto dto, int userId)
+    {
+        var subtask = new Subtask
+        {
+            TaskCardId = taskId,
+            Title = dto.Title,
+            IsCompleted = false
+        };
+
+        _db.Subtasks.Add(subtask);
+        await _db.SaveChangesAsync();
+        
+        await LogActivity(taskId, userId, "Subtask Added", $"Added subtask: {dto.Title}");
+
+        return new SubtaskDto { Id = subtask.Id, Title = subtask.Title, IsCompleted = subtask.IsCompleted, TaskCardId = subtask.TaskCardId };
+    }
+
+    public async Task<SubtaskDto?> UpdateSubtaskAsync(int subtaskId, UpdateSubtaskDto dto, int userId)
+    {
+        var subtask = await _db.Subtasks.FindAsync(subtaskId);
+        if (subtask == null) return null;
+
+        if (dto.Title != null) subtask.Title = dto.Title;
+        
+        bool statusChanged = false;
+        if (dto.IsCompleted.HasValue && dto.IsCompleted != subtask.IsCompleted)
+        {
+            subtask.IsCompleted = dto.IsCompleted.Value;
+            statusChanged = true;
+        }
+
+        await _db.SaveChangesAsync();
+        
+        if (statusChanged)
+        {
+            string status = subtask.IsCompleted ? "completed" : "uncompleted";
+            await LogActivity(subtask.TaskCardId, userId, "Subtask Updated", $"Marked subtask '{subtask.Title}' as {status}");
+        }
+
+        return new SubtaskDto { Id = subtask.Id, Title = subtask.Title, IsCompleted = subtask.IsCompleted, TaskCardId = subtask.TaskCardId };
+    }
+
+    public async Task<bool> DeleteSubtaskAsync(int subtaskId, int userId)
+    {
+        var subtask = await _db.Subtasks.FindAsync(subtaskId);
+        if (subtask == null) return false;
+        
+        int taskId = subtask.TaskCardId;
+        string title = subtask.Title;
+
+        _db.Subtasks.Remove(subtask);
+        await _db.SaveChangesAsync();
+        
+        await LogActivity(taskId, userId, "Subtask Deleted", $"Deleted subtask: {title}");
+        
+        return true;
+    }
+
+    public async Task<TaskCardDto?> GetTaskByIdAsync(int taskId)
+    {
+        var task = await _db.TaskCards
+            .Include(t => t.Assignee)
+            .Include(t => t.Subtasks)
+            .FirstOrDefaultAsync(t => t.Id == taskId);
+
+        if (task == null) return null;
+        return await MapToDto(task);
+    }
+    
+    public async Task<List<TaskActivity>> GetTaskActivitiesAsync(int taskId)
+    {
+        return await _db.TaskActivities
+            .Where(a => a.TaskCardId == taskId)
+            .Include(a => a.User)
+            .OrderByDescending(a => a.Timestamp)
+            .ToListAsync();
+    }
+    
+    private async Task LogActivity(int taskId, int userId, string action, string details)
+    {
+        if (userId == 0) return; // System action or unauthenticated?
+
+        var activity = new TaskActivity
+        {
+            TaskCardId = taskId,
+            UserId = userId,
+            Action = action,
+            Details = details,
+            Timestamp = DateTime.UtcNow
+        };
+        
+        _db.TaskActivities.Add(activity);
+        await _db.SaveChangesAsync();
     }
 
     private async Task<TaskCardDto> MapToDto(TaskCard task)
@@ -135,10 +248,16 @@ public class TaskService : ITaskService
              await _db.Entry(task).Reference(t => t.Assignee).LoadAsync();
         }
 
-        // Ensure Column is loaded to get BoardId
+        // Ensure Column is loaded to get BoardId (if not already loaded)
         if (task.Column == null)
         {
             await _db.Entry(task).Reference(t => t.Column).LoadAsync();
+        }
+
+        // Ensure Subtasks are loaded if they weren't included in the query
+        if (task.Subtasks == null) 
+        {
+            await _db.Entry(task).Collection(t => t.Subtasks).LoadAsync();
         }
 
         return new TaskCardDto
@@ -156,7 +275,14 @@ public class TaskService : ITaskService
             AssigneeId = task.AssigneeId,
             AssigneeName = task.Assignee?.Username,
             AssigneeAvatar = null, // Placeholder
-            Tags = task.Tags
+            Tags = task.Tags,
+            Subtasks = task.Subtasks.Select(s => new SubtaskDto 
+            { 
+                Id = s.Id, 
+                Title = s.Title, 
+                IsCompleted = s.IsCompleted,
+                TaskCardId = s.TaskCardId
+            }).OrderBy(s => s.Id).ToList()
         };
     }
 }

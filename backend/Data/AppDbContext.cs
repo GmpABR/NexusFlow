@@ -7,13 +7,15 @@ public class AppDbContext : DbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
-    public DbSet<User> Users => Set<User>();
-    public DbSet<Board> Boards => Set<Board>();
-    public DbSet<Column> Columns => Set<Column>();
-    public DbSet<TaskCard> TaskCards => Set<TaskCard>();
-    public DbSet<BoardMember> BoardMembers => Set<BoardMember>();
-    public DbSet<Workspace> Workspaces => Set<Workspace>();
-    public DbSet<WorkspaceMember> WorkspaceMembers => Set<WorkspaceMember>();
+    public DbSet<User> Users { get; set; }
+    public DbSet<Board> Boards { get; set; }
+    public DbSet<Column> Columns { get; set; }
+    public DbSet<TaskCard> TaskCards { get; set; }
+    public DbSet<BoardMember> BoardMembers { get; set; }
+    public DbSet<Workspace> Workspaces { get; set; }
+    public DbSet<WorkspaceMember> WorkspaceMembers { get; set; }
+    public DbSet<Subtask> Subtasks { get; set; }
+    public DbSet<TaskActivity> TaskActivities { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -50,6 +52,20 @@ public class AppDbContext : DbContext
             entity.HasOne(t => t.Column)
                   .WithMany(c => c.TaskCards)
                   .HasForeignKey(t => t.ColumnId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // TaskActivity -> TaskCard
+        modelBuilder.Entity<TaskActivity>(entity =>
+        {
+            entity.HasOne(a => a.TaskCard)
+                  .WithMany() // TaskCard doesn't need explicit list of activities for now, can query by ID
+                  .HasForeignKey(a => a.TaskCardId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(a => a.User)
+                  .WithMany()
+                  .HasForeignKey(a => a.UserId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
 

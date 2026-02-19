@@ -61,7 +61,80 @@ a {
   transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
-.task-card:hover {
-  border-color: rgba(124, 58, 237, 0.4) !important;
-  /* omitted transform to avoid dnd conflicts */
+/* Premium RichTextEditor Styles */
+.mantine-RichTextEditor-root {
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+  background-color: #1a1b1e !important;
+  overflow: hidden;
+}
+
+.mantine-RichTextEditor-toolbar {
+  padding: 6px 10px !important;
+  gap: 8px !important;
+  background-color: #1a1b1e !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.mantine-RichTextEditor-controlsGroup {
+  border: none !important;
+  background: transparent !important;
+  gap: 4px !important;
+  padding: 0 8px !important;
+  position: relative;
+}
+
+.mantine-RichTextEditor-controlsGroup:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.mantine-RichTextEditor-control {
+  border: none !important;
+  background: transparent !important;
+  color: #d1d1d1 !important;
+  /* Lighter color */
+  width: 34px !important;
+  /* Larger button */
+  height: 34px !important;
+  min-width: 34px !important;
+  border-radius: 6px !important;
+  transition: all 0.15s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.mantine-RichTextEditor-control:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+.mantine-RichTextEditor-control[data-active] {
+  background-color: rgba(124, 58, 237, 0.2) !important;
+  color: #ffffff !important;
+}
+
+.mantine-RichTextEditor-control svg {
+  width: 20px !important;
+  /* Larger icons */
+  height: 20px !important;
+}
+
+.mantine-RichTextEditor-content .ProseMirror {
+  min-height: 200px;
+  padding: 20px;
+  outline: none;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #e0e0e0;
+}
+
+.mantine-RichTextEditor-content {
+  background-color: transparent !important;
 }

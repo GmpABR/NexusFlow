@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Backend.DTOs;
 using Backend.Hubs;
 using Backend.Services;
@@ -21,10 +22,12 @@ public class TasksController : ControllerBase
         _hubContext = hubContext;
     }
 
+
+
     [HttpPost]
     public async Task<IActionResult> CreateTask([FromBody] CreateTaskDto dto)
     {
-        var task = await _taskService.CreateTaskAsync(dto);
+        var task = await _taskService.CreateTaskAsync(dto, GetUserId());
 
         // Notify all clients viewing the board
         await _hubContext.Clients.Group($"board_{task.BoardId}")
@@ -38,7 +41,7 @@ public class TasksController : ControllerBase
     {
         try
         {
-            var task = await _taskService.UpdateTaskAsync(id, dto);
+            var task = await _taskService.UpdateTaskAsync(id, dto, GetUserId());
             if (task == null) return NotFound();
 
             await _hubContext.Clients.Group($"board_{task.BoardId}")
@@ -49,10 +52,6 @@ public class TasksController : ControllerBase
         catch (Exception ex)
         {
             Console.WriteLine($"[TasksController] Error updating task {id}: {ex.Message}");
-            if (ex.InnerException != null)
-            {
-                Console.WriteLine($"[TasksController] Inner Exception: {ex.InnerException.Message}");
-            }
             return BadRequest(new { message = "Failed to update task", details = ex.Message });
         }
     }
@@ -60,7 +59,7 @@ public class TasksController : ControllerBase
     [HttpPut("{id}/move")]
     public async Task<IActionResult> MoveTask(int id, [FromBody] MoveTaskDto dto)
     {
-        var task = await _taskService.MoveTaskAsync(id, dto);
+        var task = await _taskService.MoveTaskAsync(id, dto, GetUserId());
         if (task == null) return NotFound();
 
         // Notify all clients on the board
@@ -74,12 +73,75 @@ public class TasksController : ControllerBase
     public async Task<IActionResult> DeleteTask(int id)
     {
         // DeleteTaskAsync now returns the BoardId if successful
-        var boardId = await _taskService.DeleteTaskAsync(id);
+        var boardId = await _taskService.DeleteTaskAsync(id, GetUserId());
         if (boardId == null) return NotFound();
 
         await _hubContext.Clients.Group($"board_{boardId}")
             .SendAsync("TaskDeleted", id);
 
         return NoContent();
+    }
+
+    [HttpPost("{taskId}/subtasks")]
+    public async Task<IActionResult> CreateSubtask(int taskId, [FromBody] CreateSubtaskDto dto)
+    {
+        var subtask = await _taskService.CreateSubtaskAsync(taskId, dto, GetUserId());
+        if (subtask == null) return NotFound();
+
+        // Hack: We need the boardId to notify the group. 
+        var task = await _taskService.GetTaskByIdAsync(taskId);
+        if (task != null)
+        {
+             await _hubContext.Clients.Group($"board_{task.BoardId}")
+            .SendAsync("TaskUpdated", task); 
+        }
+
+        return Ok(subtask);
+    }
+
+    [HttpPut("subtasks/{subtaskId}")]
+    public async Task<IActionResult> UpdateSubtask(int subtaskId, [FromBody] UpdateSubtaskDto dto)
+    {
+        var subtask = await _taskService.UpdateSubtaskAsync(subtaskId, dto, GetUserId());
+        if (subtask == null) return NotFound();
+
+        // Get Task to notify
+        var task = await _taskService.GetTaskByIdAsync(subtask.TaskCardId);
+        if (task != null)
+        {
+             await _hubContext.Clients.Group($"board_{task.BoardId}")
+                .SendAsync("TaskUpdated", task);
+        }
+
+        return Ok(subtask);
+    }
+
+    [HttpDelete("subtasks/{subtaskId}")]
+    public async Task<IActionResult> DeleteSubtask(int subtaskId)
+    {
+        var result = await _taskService.DeleteSubtaskAsync(subtaskId, GetUserId());
+        if (!result) return NotFound();
+
+        return NoContent();
+    }
+
+    [HttpGet("{taskId}/activities")]
+    public async Task<IActionResult> GetTaskActivities(int taskId)
+    {
+        var activities = await _taskService.GetTaskActivitiesAsync(taskId);
+        return Ok(activities);
+    }
+
+    private int GetUserId()
+    {
+        var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+                      ?? User.FindFirst("sub")?.Value 
+                      ?? User.FindFirst("id")?.Value;
+                      
+        if (int.TryParse(idClaim, out int userId))
+        {
+            return userId;
+        }
+        return 0;
     }
 }

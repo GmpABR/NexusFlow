@@ -65,6 +65,7 @@ public class BoardService : IBoardService
          var boardWithWorkspace = await _db.Boards
             .Include(b => b.Columns.OrderBy(c => c.Order))
                 .ThenInclude(c => c.TaskCards.OrderBy(t => t.Order))
+                    .ThenInclude(t => t.Subtasks.OrderBy(s => s.Id))
             .Include(b => b.Members.Where(m => m.Status == "Accepted"))
                 .ThenInclude(m => m.User) // For Board Members list
             .Include(b => b.Workspace)
@@ -108,7 +109,14 @@ public class BoardService : IBoardService
                     StoryPoints = t.StoryPoints,
                     AssigneeId = t.AssigneeId,
                     AssigneeName = t.Assignee != null ? t.Assignee.Username : null,
-                    Tags = t.Tags
+                    Tags = t.Tags,
+                    Subtasks = t.Subtasks.Select(s => new SubtaskDto
+                    {
+                        Id = s.Id,
+                        Title = s.Title,
+                        IsCompleted = s.IsCompleted,
+                        TaskCardId = s.TaskCardId
+                    }).OrderBy(s => s.Id).ToList()
                 }).ToList()
             }).ToList(),
             Members = board.Members.Select(m => new BoardMemberDto

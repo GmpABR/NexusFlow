@@ -20,4 +20,6 @@ public class TaskCard
     // Foreign Key
     public int ColumnId { get; set; }
     public Column Column { get; set; } = null!;
+
+    public ICollection<Subtask> Subtasks { get; set; } = new List<Subtask>();
 }

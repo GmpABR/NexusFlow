@@ -29,3 +29,43 @@ export const updateTask = async (taskId: number, dto: UpdateTaskDto): Promise<Ta
 export const deleteTask = async (taskId: number): Promise<void> => {
     await api.delete(`/tasks/${taskId}`);
 };
+
+export interface Subtask {
+    id: number;
+    title: string;
+    isCompleted: boolean;
+}
+
+export const createSubtask = async (taskId: number, title: string): Promise<Subtask> => {
+    const { data } = await api.post<Subtask>(`/tasks/${taskId}/subtasks`, { title });
+    return data;
+};
+
+export const updateSubtask = async (subtaskId: number, updates: { title?: string; isCompleted?: boolean }): Promise<Subtask> => {
+    const { data } = await api.put<Subtask>(`/tasks/subtasks/${subtaskId}`, updates);
+    return data;
+};
+
+export const deleteSubtask = async (subtaskId: number): Promise<void> => {
+    await api.delete(`/tasks/subtasks/${subtaskId}`);
+};
+
+export interface TaskActivity {
+    id: number;
+    taskCardId: number;
+    userId: number;
+    user?: {
+        id: number;
+        username: string;
+        email: string;
+        avatarUrl?: string;
+    };
+    action: string;
+    details: string;
+    timestamp: string;
+}
+
+export const getTaskActivities = async (taskId: number): Promise<TaskActivity[]> => {
+    const { data } = await api.get<TaskActivity[]>(`/tasks/${taskId}/activities`);
+    return data;
+};

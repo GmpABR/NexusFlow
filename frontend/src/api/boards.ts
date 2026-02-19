@@ -1,4 +1,5 @@
 import api from './axios';
+import type { Subtask } from './tasks';
 
 export interface BoardSummary {
     id: number;
@@ -22,6 +23,7 @@ export interface TaskCard {
     assigneeId: number | null;
     assigneeName: string | null;
     tags: string | null;
+    subtasks?: Subtask[];
 }
 
 export interface Column {

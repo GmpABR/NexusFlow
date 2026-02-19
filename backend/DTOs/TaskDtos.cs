@@ -47,6 +47,27 @@ public class TaskCardDto
     public string? AssigneeName { get; set; }
     public string? AssigneeAvatar { get; set; }
     public string? Tags { get; set; }
+    public ICollection<SubtaskDto> Subtasks { get; set; } = new List<SubtaskDto>();
+}
+
+public class SubtaskDto
+{
+    public int Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public bool IsCompleted { get; set; }
+    public int TaskCardId { get; set; }
+}
+
+public class CreateSubtaskDto
+{
+    [Required, MinLength(1)]
+    public string Title { get; set; } = string.Empty;
+}
+
+public class UpdateSubtaskDto
+{
+    public string? Title { get; set; }
+    public bool? IsCompleted { get; set; }
 }
 
 public class MoveTaskDto
