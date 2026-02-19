@@ -124,6 +124,72 @@ public class BoardsController : ControllerBase
 
         return Ok(updatedBoard);
     }
+
+    [HttpPost("{id}/columns")]
+    public async Task<IActionResult> CreateColumn(int id, [FromBody] CreateColumnDto dto)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        try 
+        {
+            var column = await _boardService.CreateColumnAsync(id, dto, userId);
+            
+            // Broadcast to other users
+            await _hubContext.Clients.Group($"board_{id}")
+                .SendAsync("ColumnCreated", column);
+
+            return CreatedAtAction(nameof(GetBoardDetail), new { id = id }, column);
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+    }
+
+    [HttpPut("{id}/columns/{columnId}/move")]
+    public async Task<IActionResult> MoveColumn(int id, int columnId, [FromBody] MoveColumnDto dto)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var result = await _boardService.MoveColumnAsync(id, columnId, dto.NewOrder, userId);
+        
+        if (!result) return BadRequest("Could not move column");
+
+        await _hubContext.Clients.Group($"board_{id}")
+            .SendAsync("ColumnMoved", new { ColumnId = columnId, NewOrder = dto.NewOrder });
+
+        return Ok();
+    }
+
+    [HttpDelete("{id}/columns/{columnId}")]
+    public async Task<IActionResult> DeleteColumn(int id, int columnId)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var result = await _boardService.DeleteColumnAsync(id, columnId, userId);
+
+        if (!result) return BadRequest("Could not delete column");
+
+        await _hubContext.Clients.Group($"board_{id}")
+            .SendAsync("ColumnDeleted", columnId);
+
+        return Ok();
+    }
+
+    [HttpPut("{id}/columns/{columnId}")]
+    public async Task<IActionResult> UpdateColumn(int id, int columnId, [FromBody] UpdateColumnDto dto)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var column = await _boardService.UpdateColumnAsync(id, columnId, dto, userId);
+
+        if (column == null) return BadRequest("Could not update column");
+
+        await _hubContext.Clients.Group($"board_{id}")
+            .SendAsync("ColumnUpdated", column);
+
+        return Ok(column);
+    }
 }
 
 

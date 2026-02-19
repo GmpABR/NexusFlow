@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     Box,
@@ -21,7 +21,6 @@ import {
 import {
     IconUserPlus,
     IconTrash,
-    IconCheck,
     IconBriefcase,
     IconLogout,
     IconCalendar,
@@ -31,11 +30,14 @@ import {
     IconChevronDown,
     IconRotate,
     IconList,
+    IconPlus,
+    IconX,
 } from '@tabler/icons-react';
 import {
     DragDropContext,
     type DropResult,
-    Droppable
+    Droppable,
+    Draggable,
 } from '@hello-pangea/dnd';
 import { notifications } from '@mantine/notifications';
 import { useDebouncedValue } from '@mantine/hooks';
@@ -45,6 +47,10 @@ import {
     inviteMember,
     removeMember,
     updateBoard,
+    createColumn,
+    moveColumn,
+    deleteColumn,
+    updateColumn,
     type BoardDetail,
     type BoardSummary,
     type TaskCard as TaskCardType,
@@ -53,7 +59,11 @@ import {
 import { searchUsers, type UserSummary } from '../api/users';
 import { createTask, moveTask, deleteTask } from '../api/tasks';
 import { useSignalR } from '../hooks/useSignalR';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import BoardColumn from '../components/BoardColumn';
+
+
+
 import TaskDetailModal from '../components/TaskDetailModal';
 import BoardTableView from '../components/BoardTableView';
 import BoardCalendarView from '../components/BoardCalendarView';
@@ -93,6 +103,23 @@ export default function BoardPage() {
     const [viewMode, setViewMode] = useState<ViewMode>('board');
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [editedTitle, setEditedTitle] = useState('');
+    const [isAddingList, setIsAddingList] = useState(false);
+    const [newListTitle, setNewListTitle] = useState('');
+
+    const addTaskInputRef = useRef<HTMLInputElement>(null);
+    const visibleTaskIds = null;
+
+    // Keyboard shortcuts
+    const shortcuts = useMemo(() => ({
+        'n': () => {
+            // Programmatically click the first column's "Add Task" button
+            addTaskInputRef.current?.closest('[data-add-trigger]')?.dispatchEvent(
+                new MouseEvent('click', { bubbles: true })
+            );
+        },
+    }), []);
+
+    useKeyboardShortcuts(shortcuts);
 
 
     const isOwner = board?.userRole === 'Owner' || board?.userRole === 'Admin';
@@ -108,6 +135,53 @@ export default function BoardPage() {
             setLoading(false);
         }
     }, [boardId]);
+
+    // ── Delete Column ──
+    const handleDeleteColumn = useCallback(async (columnId: number) => {
+        if (!boardId) return;
+        const previousColumns = board?.columns;
+
+        // Optimistic
+        setBoard((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                columns: prev.columns.filter(c => c.id !== columnId)
+            };
+        });
+
+        try {
+            await deleteColumn(boardId, columnId);
+            notifications.show({ title: 'Success', message: 'List deleted', color: 'blue' });
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to delete list', color: 'red' });
+            // Revert
+            setBoard((prev) => prev && previousColumns ? { ...prev, columns: previousColumns } : prev);
+        }
+    }, [boardId, board]);
+
+    // ── Update Column (Rename) ──
+    const handleUpdateColumn = useCallback(async (columnId: number, name: string) => {
+        if (!boardId) return;
+        const previousColumns = board?.columns;
+
+        // Optimistic
+        setBoard((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                columns: prev.columns.map(c => c.id === columnId ? { ...c, name } : c)
+            };
+        });
+
+        try {
+            await updateColumn(boardId, columnId, name);
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to rename list', color: 'red' });
+            // Revert
+            setBoard((prev) => prev && previousColumns ? { ...prev, columns: previousColumns } : prev);
+        }
+    }, [boardId, board]);
 
     const handleTaskMoveInternal = (task: TaskCardType) => {
         setBoard((prev) => {
@@ -267,6 +341,19 @@ export default function BoardPage() {
         }
     };
 
+    const handleAddList = async () => {
+        if (!newListTitle.trim() || !boardId) return;
+        try {
+            const newCol = await createColumn(boardId, newListTitle.trim());
+            setBoard(prev => prev ? { ...prev, columns: [...prev.columns, newCol] } : prev);
+            setNewListTitle('');
+            setIsAddingList(false);
+            notifications.show({ title: 'Success', message: 'List added', color: 'green' });
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to create list', color: 'red' });
+        }
+    };
+
     const handleTaskClick = useCallback((task: TaskCardType) => {
         setSelectedTask(task);
         setTaskModalOpen(true);
@@ -301,6 +388,27 @@ export default function BoardPage() {
             return;
         }
         if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+
+        if (result.type === 'COLUMN') {
+            const { source, destination } = result;
+            if (!destination || source.index === destination.index) return;
+
+            const newColumns = Array.from(board?.columns || []);
+            const [movedCol] = newColumns.splice(source.index, 1);
+            newColumns.splice(destination.index, 0, movedCol);
+
+            // Optimistic
+            setBoard(prev => prev ? { ...prev, columns: newColumns } : prev);
+
+            try {
+                const colId = parseInt(result.draggableId.replace('column-', ''));
+                await moveColumn(board!.id, colId, destination.index);
+            } catch {
+                notifications.show({ title: 'Error', message: 'Failed to reorder columns', color: 'red' });
+                fetchBoard();
+            }
+            return;
+        }
 
         const taskId = parseInt(draggableId.replace('task-', ''));
 
@@ -516,7 +624,7 @@ export default function BoardPage() {
     return (
         <Box
             style={{
-                minHeight: '100vh',
+                height: 'calc(100vh - 64px)',
                 background: activeTheme.gradient,
                 overflow: 'hidden',
                 display: 'flex',
@@ -627,6 +735,8 @@ export default function BoardPage() {
                 </Group>
             </Box>
 
+
+
             {/* Main Content Area */}
             <Box style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
                 {viewMode === 'board' ? (
@@ -635,28 +745,89 @@ export default function BoardPage() {
                         onDragUpdate={handleDragUpdate}
                         onDragEnd={handleDragEnd}
                     >
-                        <Group
-                            align="flex-start"
-                            gap="md"
-                            wrap="nowrap"
-                            px="lg"
-                            py="lg"
-                            style={{
-                                overflowX: 'auto',
-                                height: '100%',
-                                alignItems: 'flex-start',
-                            }}
-                        >
-                            {board?.columns.map((col) => (
-                                <BoardColumn
-                                    key={col.id}
-                                    column={col}
-                                    onAddTask={handleAddTask}
-                                    onDeleteTask={handleDeleteTask}
-                                    onTaskClick={handleTaskClick}
-                                />
-                            ))}
-                        </Group>
+                        <Droppable droppableId="board-columns" type="COLUMN" direction="horizontal">
+                            {(provided) => (
+                                <Group
+                                    ref={provided.innerRef}
+                                    {...provided.droppableProps}
+                                    align="flex-start"
+                                    gap="md"
+                                    wrap="nowrap"
+                                    px="lg"
+                                    py="lg"
+                                    style={{
+                                        overflowX: 'auto',
+                                        height: '100%',
+                                        alignItems: 'flex-start',
+                                    }}
+                                >
+                                    {board?.columns.map((col, idx) => (
+                                        <Draggable key={col.id} draggableId={`column-${col.id}`} index={idx}>
+                                            {(provided) => (
+                                                <BoardColumn
+                                                    column={col}
+                                                    onAddTask={handleAddTask}
+                                                    onDeleteTask={handleDeleteTask}
+                                                    onTaskClick={handleTaskClick}
+                                                    onDeleteColumn={handleDeleteColumn}
+                                                    onUpdateColumn={handleUpdateColumn}
+                                                    visibleTaskIds={visibleTaskIds}
+                                                    addTaskInputRef={idx === 0 ? addTaskInputRef : undefined}
+                                                    innerRef={provided.innerRef}
+                                                    draggableProps={provided.draggableProps}
+                                                    dragHandleProps={provided.dragHandleProps}
+                                                />
+                                            )}
+                                        </Draggable>
+                                    ))}
+                                    {provided.placeholder}
+
+                                    {/* Add List Button */}
+                                    <Box style={{ minWidth: 320, maxWidth: 360 }}>
+                                        {isAddingList ? (
+                                            <Paper p="sm" style={{ background: 'rgba(20, 21, 23, 0.85)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: 12 }}>
+                                                <TextInput
+                                                    placeholder="Enter list title..."
+                                                    value={newListTitle}
+                                                    onChange={(e) => setNewListTitle(e.currentTarget.value)}
+                                                    autoFocus
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') handleAddList();
+                                                        if (e.key === 'Escape') setIsAddingList(false);
+                                                    }}
+                                                    mb="sm"
+                                                    styles={{ input: { background: 'rgba(0,0,0,0.5)', color: 'white' } }}
+                                                />
+                                                <Group gap="xs">
+                                                    <Button size="xs" color="violet" onClick={handleAddList}>Add List</Button>
+                                                    <ActionIcon variant="subtle" color="gray" onClick={() => setIsAddingList(false)}>
+                                                        <IconX size={18} />
+                                                    </ActionIcon>
+                                                </Group>
+                                            </Paper>
+                                        ) : (
+                                            <Button
+                                                fullWidth
+                                                variant="subtle"
+                                                color="gray"
+                                                leftSection={<IconPlus size={18} />}
+                                                style={{
+                                                    height: 56,
+                                                    background: 'rgba(255, 255, 255, 0.05)',
+                                                    backdropFilter: 'blur(4px)',
+                                                    justifyContent: 'flex-start',
+                                                    color: 'white',
+                                                    border: '1px solid rgba(255,255,255,0.1)'
+                                                }}
+                                                onClick={() => setIsAddingList(true)}
+                                            >
+                                                Add another list
+                                            </Button>
+                                        )}
+                                    </Box>
+                                </Group>
+                            )}
+                        </Droppable>
 
                         {/* Trash Zone */}
                         <Box
@@ -728,11 +899,12 @@ export default function BoardPage() {
                             <Button variant="subtle" color="violet" onClick={() => setViewMode('board')}>Back to Board</Button>
                         </Stack>
                     </Center>
-                )}
-            </Box>
+                )
+                }
+            </Box >
 
             {/* Floating Bottom Bar */}
-            <Box
+            < Box
                 p="xs"
                 style={{
                     position: 'fixed',
@@ -759,17 +931,17 @@ export default function BoardPage() {
                         Mudar de quadros
                     </Button>
                 </Group>
-            </Box>
+            </Box >
 
             {/* Board Switcher Modal */}
-            <Modal
+            < Modal
                 opened={switchModalOpen}
                 onClose={() => setSwitchModalOpen(false)}
                 title={
-                    <Group gap="xs">
+                    < Group gap="xs" >
                         <IconExchange size={20} />
                         <Text fw={600}>Mudar de Quadro</Text>
-                    </Group>
+                    </Group >
                 }
                 centered
                 radius="lg"
@@ -779,21 +951,69 @@ export default function BoardPage() {
                     header: { background: '#1a1b1e' },
                 }}
             >
-                {fetchingBoards ? (
-                    <Center py="xl">
-                        <Loader size="sm" color="violet" />
-                    </Center>
-                ) : (
-                    <Stack gap="md">
-                        {/* Current Workspace Boards */}
-                        {board?.workspaceId && (
-                            <Box>
+                {
+                    fetchingBoards ? (
+                        <Center py="xl" >
+                            <Loader size="sm" color="violet" />
+                        </Center>
+                    ) : (
+                        <Stack gap="md">
+                            {/* Current Workspace Boards */}
+                            {board?.workspaceId && (
+                                <Box>
+                                    <Text size="xs" fw={700} c="dimmed" mb="xs" style={{ textTransform: 'uppercase' }}>
+                                        Quadros deste Workspace
+                                    </Text>
+                                    <Stack gap="xs">
+                                        {allBoards
+                                            .filter(b => b.workspaceId === board.workspaceId && b.id !== board.id)
+                                            .map(b => (
+                                                <Paper
+                                                    key={b.id}
+                                                    p="sm"
+                                                    radius="md"
+                                                    style={{
+                                                        background: 'rgba(255,255,255,0.03)',
+                                                        border: '1px solid rgba(255,255,255,0.05)',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                    onClick={() => {
+                                                        setSwitchModalOpen(false);
+                                                        navigate(`/boards/${b.id}`);
+                                                    }}
+                                                >
+                                                    <Group justify="space-between">
+                                                        <Group gap="sm">
+                                                            <Box
+                                                                style={{
+                                                                    width: 12,
+                                                                    height: 12,
+                                                                    borderRadius: 4,
+                                                                    background: BOARD_THEMES[b.themeColor as ThemeColor]?.background || '#3b82f6'
+                                                                }}
+                                                            />
+                                                            <Text size="sm" fw={500}>{b.name}</Text>
+                                                        </Group>
+                                                        <Badge size="xs" variant="dot" color="violet">{b.role}</Badge>
+                                                    </Group>
+                                                </Paper>
+                                            ))
+                                        }
+                                        {allBoards.filter(b => b.workspaceId === board.workspaceId && b.id !== board.id).length === 0 && (
+                                            <Text size="xs" c="dimmed" ta="center">Não há outros quadros neste workspace.</Text>
+                                        )}
+                                    </Stack>
+                                </Box>
+                            )}
+
+                            {/* Other Boards */}
+                            <Box mt={board?.workspaceId ? 'sm' : 0}>
                                 <Text size="xs" fw={700} c="dimmed" mb="xs" style={{ textTransform: 'uppercase' }}>
-                                    Quadros deste Workspace
+                                    Outros Quadros
                                 </Text>
-                                <Stack gap="xs">
+                                <Stack gap="xs" style={{ maxHeight: 300, overflowY: 'auto' }}>
                                     {allBoards
-                                        .filter(b => b.workspaceId === board.workspaceId && b.id !== board.id)
+                                        .filter(b => b.workspaceId !== board?.workspaceId || (board?.workspaceId === null && b.workspaceId === null && b.id !== board.id))
                                         .map(b => (
                                             <Paper
                                                 key={b.id}
@@ -821,76 +1041,29 @@ export default function BoardPage() {
                                                         />
                                                         <Text size="sm" fw={500}>{b.name}</Text>
                                                     </Group>
-                                                    <Badge size="xs" variant="dot" color="violet">{b.role}</Badge>
+                                                    <Badge size="xs" variant="dot" color="teal">{b.role}</Badge>
                                                 </Group>
                                             </Paper>
                                         ))
                                     }
-                                    {allBoards.filter(b => b.workspaceId === board.workspaceId && b.id !== board.id).length === 0 && (
-                                        <Text size="xs" c="dimmed" ta="center">Não há outros quadros neste workspace.</Text>
+                                    {allBoards.length === 0 && (
+                                        <Text size="xs" c="dimmed" ta="center">Você ainda não tem outros quadros.</Text>
                                     )}
                                 </Stack>
                             </Box>
-                        )}
-
-                        {/* Other Boards */}
-                        <Box mt={board?.workspaceId ? 'sm' : 0}>
-                            <Text size="xs" fw={700} c="dimmed" mb="xs" style={{ textTransform: 'uppercase' }}>
-                                Outros Quadros
-                            </Text>
-                            <Stack gap="xs" style={{ maxHeight: 300, overflowY: 'auto' }}>
-                                {allBoards
-                                    .filter(b => b.workspaceId !== board?.workspaceId || (board?.workspaceId === null && b.workspaceId === null && b.id !== board.id))
-                                    .map(b => (
-                                        <Paper
-                                            key={b.id}
-                                            p="sm"
-                                            radius="md"
-                                            style={{
-                                                background: 'rgba(255,255,255,0.03)',
-                                                border: '1px solid rgba(255,255,255,0.05)',
-                                                cursor: 'pointer'
-                                            }}
-                                            onClick={() => {
-                                                setSwitchModalOpen(false);
-                                                navigate(`/boards/${b.id}`);
-                                            }}
-                                        >
-                                            <Group justify="space-between">
-                                                <Group gap="sm">
-                                                    <Box
-                                                        style={{
-                                                            width: 12,
-                                                            height: 12,
-                                                            borderRadius: 4,
-                                                            background: BOARD_THEMES[b.themeColor as ThemeColor]?.background || '#3b82f6'
-                                                        }}
-                                                    />
-                                                    <Text size="sm" fw={500}>{b.name}</Text>
-                                                </Group>
-                                                <Badge size="xs" variant="dot" color="teal">{b.role}</Badge>
-                                            </Group>
-                                        </Paper>
-                                    ))
-                                }
-                                {allBoards.length === 0 && (
-                                    <Text size="xs" c="dimmed" ta="center">Você ainda não tem outros quadros.</Text>
-                                )}
-                            </Stack>
-                        </Box>
-                    </Stack>
-                )}
-            </Modal>
+                        </Stack>
+                    )}
+            </Modal >
 
             {/* Members Modal */}
-            <Modal
+            < Modal
                 opened={membersModalOpen}
                 onClose={() => setMembersModalOpen(false)}
                 title={
-                    <Box>
+                    < Box >
                         <Text fw={700} size="lg">Invite to "{board.name}"</Text>
                         <Text size="xs" c="dimmed">Invited members will only have access to this specific board.</Text>
-                    </Box>
+                    </Box >
                 }
                 size="md"
                 centered
@@ -986,16 +1159,16 @@ export default function BoardPage() {
 
 
                 </Stack>
-            </Modal>
+            </Modal >
 
             {/* Task Detail Modal */}
-            <TaskDetailModal
+            < TaskDetailModal
                 opened={taskModalOpen}
                 onClose={() => setTaskModalOpen(false)}
                 task={selectedTask}
                 members={members}
                 onTaskUpdated={handleTaskUpdated}
             />
-        </Box>
+        </Box >
     );
 }

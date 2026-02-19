@@ -205,13 +205,34 @@ public class TaskService : ITaskService
 
     public async Task<TaskCardDto?> GetTaskByIdAsync(int taskId)
     {
-        var task = await _db.TaskCards
-            .Include(t => t.Assignee)
-            .Include(t => t.Subtasks)
-            .FirstOrDefaultAsync(t => t.Id == taskId);
-
-        if (task == null) return null;
-        return await MapToDto(task);
+        return await _db.TaskCards
+            .AsNoTracking()
+            .Where(t => t.Id == taskId)
+            .Select(t => new TaskCardDto
+            {
+                Id = t.Id,
+                Title = t.Title,
+                Description = t.Description,
+                Order = t.Order,
+                ColumnId = t.ColumnId,
+                BoardId = t.Column.BoardId,
+                CreatedAt = t.CreatedAt,
+                Priority = t.Priority,
+                DueDate = t.DueDate,
+                StoryPoints = t.StoryPoints,
+                AssigneeId = t.AssigneeId,
+                AssigneeName = t.Assignee != null ? t.Assignee.Username : null,
+                AssigneeAvatar = null,
+                Tags = t.Tags,
+                Subtasks = t.Subtasks.OrderBy(s => s.Id).Select(s => new SubtaskDto 
+                { 
+                    Id = s.Id, 
+                    Title = s.Title, 
+                    IsCompleted = s.IsCompleted,
+                    TaskCardId = s.TaskCardId
+                }).ToList()
+            })
+            .FirstOrDefaultAsync();
     }
     
     public async Task<List<TaskActivity>> GetTaskActivitiesAsync(int taskId)

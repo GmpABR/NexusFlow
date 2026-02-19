@@ -4,11 +4,22 @@ import RegisterPage from './pages/RegisterPage';
 import BoardsPage from './pages/BoardsPage';
 import BoardPage from './pages/BoardPage';
 import WorkspaceDetailsPage from './pages/WorkspaceDetailsPage';
+import MyTasksPage from './pages/MyTasksPage';
+import ProfilePage from './pages/ProfilePage';
+import AppNavbar from './components/AppNavbar';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('token');
   if (!token) return <Navigate to="/login" replace />;
-  return <>{children}</>;
+  return (
+    <>
+      <AppNavbar />
+      {/* 76px top padding = navbar height */}
+      <div style={{ paddingTop: 76 }}>
+        {children}
+      </div>
+    </>
+  );
 }
 
 export default function App() {
@@ -38,6 +49,22 @@ export default function App() {
           element={
             <ProtectedRoute>
               <BoardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/my-tasks"
+          element={
+            <ProtectedRoute>
+              <MyTasksPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
             </ProtectedRoute>
           }
         />

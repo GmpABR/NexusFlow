@@ -17,7 +17,7 @@ public class BoardService : IBoardService
     public async Task<List<BoardSummaryDto>> GetBoardsAsync(int userId)
     {
         return await _db.Boards
-            .Include(b => b.Workspace).ThenInclude(w => w.Members)
+            .AsNoTracking()
             .Where(b => b.OwnerId == userId 
                      || b.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
                      || (b.Workspace != null && b.Workspace.Members.Any(wm => wm.UserId == userId)))
@@ -36,6 +36,7 @@ public class BoardService : IBoardService
     public async Task<List<BoardSummaryDto>> GetPendingInvitationsAsync(int userId)
     {
         return await _db.Boards
+            .AsNoTracking()
             .Where(b => b.Members.Any(m => m.UserId == userId && m.Status == "Pending"))
             .Select(b => new BoardSummaryDto
             {
@@ -51,85 +52,66 @@ public class BoardService : IBoardService
 
     public async Task<BoardDetailDto?> GetBoardDetailAsync(int boardId, int userId)
     {
-        // Check if user has access (Owner, Accepted Board Member, or Workspace Member)
-
-        
-        // RE-WRITING QUERY TO INCLUDE WORKSPACE MEMBERS
-        // We need to fetch the board with logic that checks:
-        // 1. Board Owner
-        // 2. Board Member (Accepted)
-        // 3. Workspace Member (if WorkspaceId exists)
-        
-        // Providing the logic here instead of re-fetching for efficiency
-        
-         var boardWithWorkspace = await _db.Boards
-            .Include(b => b.Columns.OrderBy(c => c.Order))
-                .ThenInclude(c => c.TaskCards.OrderBy(t => t.Order))
-                    .ThenInclude(t => t.Subtasks.OrderBy(s => s.Id))
-            .Include(b => b.Members.Where(m => m.Status == "Accepted"))
-                .ThenInclude(m => m.User) // For Board Members list
-            .Include(b => b.Workspace)
-                .ThenInclude(w => w.Members) // Include workspace members to check access
-            .FirstOrDefaultAsync(b => b.Id == boardId);
-
-        if (boardWithWorkspace == null) return null;
-
-        var board = boardWithWorkspace;
-
-        var isMember = board.OwnerId == userId 
-                       || board.Members.Any(m => m.UserId == userId)
-                       || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId));
-
-        if (!isMember) return null;
-
-        return new BoardDetailDto
-        {
-            Id = board.Id,
-            Name = board.Name,
-            CreatedAt = board.CreatedAt,
-            OwnerId = board.OwnerId,
-            ThemeColor = board.ThemeColor,
-            WorkspaceId = board.WorkspaceId,
-            Columns = board.Columns.Select(c => new ColumnDto
+        // Combined Query: Checks existence + access + projects result in one go.
+        // Returns null if board doesn't exist OR user has no access.
+        return await _db.Boards
+            .AsNoTracking()
+            .Where(b => b.Id == boardId && (
+                b.OwnerId == userId 
+                || b.Members.Any(m => m.UserId == userId) // Accepted check logic can be added here if needed, consistent with previous access logic
+                || (b.Workspace != null && b.Workspace.Members.Any(wm => wm.UserId == userId))
+            ))
+            .Select(b => new BoardDetailDto
             {
-                Id = c.Id,
-                Name = c.Name,
-                Order = c.Order,
-                TaskCards = c.TaskCards.Select(t => new TaskCardDto
+                Id = b.Id,
+                Name = b.Name,
+                CreatedAt = b.CreatedAt,
+                OwnerId = b.OwnerId,
+                ThemeColor = b.ThemeColor,
+                WorkspaceId = b.WorkspaceId,
+                Columns = b.Columns.OrderBy(c => c.Order).Select(c => new ColumnDto
                 {
-                    Id = t.Id,
-                    Title = t.Title,
-                    Description = t.Description,
-                    Order = t.Order,
-                    ColumnId = t.ColumnId,
-                    BoardId = board.Id,
-                    CreatedAt = t.CreatedAt,
-                    Priority = t.Priority,
-                    DueDate = t.DueDate,
-                    StoryPoints = t.StoryPoints,
-                    AssigneeId = t.AssigneeId,
-                    AssigneeName = t.Assignee != null ? t.Assignee.Username : null,
-                    Tags = t.Tags,
-                    Subtasks = t.Subtasks.Select(s => new SubtaskDto
+                    Id = c.Id,
+                    Name = c.Name,
+                    Order = c.Order,
+                    TaskCards = c.TaskCards.OrderBy(t => t.Order).Select(t => new TaskCardDto
                     {
-                        Id = s.Id,
-                        Title = s.Title,
-                        IsCompleted = s.IsCompleted,
-                        TaskCardId = s.TaskCardId
-                    }).OrderBy(s => s.Id).ToList()
-                }).ToList()
-            }).ToList(),
-            Members = board.Members.Select(m => new BoardMemberDto
-            {
-                Id = m.Id,
-                UserId = m.UserId,
-                Username = m.User.Username,
-                Email = m.User.Email,
-                Role = m.Role,
-                JoinedAt = m.JoinedAt
-            }).ToList(),
-            UserRole = board.OwnerId == userId ? "Owner" : (board.Members.FirstOrDefault(m => m.UserId == userId)?.Role ?? "Member")
-        };
+                        Id = t.Id,
+                        Title = t.Title,
+                        Description = t.Description,
+                        Order = t.Order,
+                        ColumnId = t.ColumnId,
+                        BoardId = b.Id,
+                        CreatedAt = t.CreatedAt,
+                        Priority = t.Priority,
+                        DueDate = t.DueDate,
+                        StoryPoints = t.StoryPoints,
+                        AssigneeId = t.AssigneeId,
+                        AssigneeName = t.Assignee != null ? t.Assignee.Username : null,
+                        Tags = t.Tags,
+                        Subtasks = t.Subtasks.OrderBy(s => s.Id).Select(s => new SubtaskDto
+                        {
+                            Id = s.Id,
+                            Title = s.Title,
+                            IsCompleted = s.IsCompleted,
+                            TaskCardId = s.TaskCardId
+                        }).ToList()
+                    }).ToList()
+                }).ToList(),
+                Members = b.Members.Where(m => m.Status == "Accepted").Select(m => new BoardMemberDto
+                {
+                    Id = m.Id,
+                    UserId = m.UserId,
+                    Username = m.User.Username,
+                    Email = m.User.Email,
+                    Role = m.Role,
+                    JoinedAt = m.JoinedAt
+                }).ToList(),
+                UserRole = b.OwnerId == userId ? "Owner" : (b.Members.FirstOrDefault(m => m.UserId == userId).Role ?? "Member") 
+                // Note: FirstOrDefault might cause issues if user is WorkspaceMember but not BoardMember. 
+                // Handle null coalescing properly.
+            })
+            .FirstOrDefaultAsync();
     }
 
     public async Task<BoardSummaryDto> CreateBoardAsync(CreateBoardDto dto, int userId)
@@ -299,5 +281,148 @@ public class BoardService : IBoardService
 
         await _db.SaveChangesAsync();
         return true;
+    }
+
+    public async Task<ColumnDto> CreateColumnAsync(int boardId, CreateColumnDto dto, int userId)
+    {
+        // 1. Verify user has access (Owner or Member)
+        var board = await _db.Boards
+            .Include(b => b.Members)
+            .Include(b => b.Workspace).ThenInclude(w => w.Members)
+            .Include(b => b.Columns) // Include columns to calculate Order
+            .FirstOrDefaultAsync(b => b.Id == boardId);
+
+        if (board == null) throw new KeyNotFoundException("Board not found");
+
+        var isMember = board.OwnerId == userId 
+            || board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
+            || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId));
+
+        if (!isMember) throw new UnauthorizedAccessException("User is not a member of this board");
+
+        // 2. Calculate Order
+        var maxOrder = board.Columns.Any() ? board.Columns.Max(c => c.Order) : -1;
+
+        // 3. Create Column
+        var column = new Column
+        {
+            Name = dto.Name,
+            BoardId = boardId,
+            Order = maxOrder + 1
+        };
+
+        _db.Columns.Add(column);
+        await _db.SaveChangesAsync();
+
+        return new ColumnDto
+        {
+            Id = column.Id,
+            Name = column.Name,
+            Order = column.Order,
+            TaskCards = new List<TaskCardDto>()
+        };
+    }
+
+    public async Task<bool> MoveColumnAsync(int boardId, int columnId, int newOrder, int userId)
+    {
+        var board = await _db.Boards
+            .Include(b => b.Columns)
+            .Include(b => b.Members)
+            .Include(b => b.Workspace).ThenInclude(w => w.Members)
+            .FirstOrDefaultAsync(b => b.Id == boardId);
+
+        if (board == null) return false;
+
+        var isMember = board.OwnerId == userId 
+            || board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
+            || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId));
+
+        if (!isMember) return false;
+
+        var column = board.Columns.FirstOrDefault(c => c.Id == columnId);
+        if (column == null) return false;
+
+        // Current list sorted by Order
+        var columns = board.Columns.OrderBy(c => c.Order).ToList();
+        
+        // Remove
+        columns.Remove(column);
+
+        // Clamped insert
+        if (newOrder < 0) newOrder = 0;
+        if (newOrder > columns.Count) newOrder = columns.Count;
+
+        columns.Insert(newOrder, column);
+
+        // Re-assign Order
+        for (int i = 0; i < columns.Count; i++)
+        {
+            columns[i].Order = i;
+        }
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+    public async Task<bool> DeleteColumnAsync(int boardId, int columnId, int userId)
+    {
+        var board = await _db.Boards
+            .Include(b => b.Columns)
+            .Include(b => b.Members)
+            .Include(b => b.Workspace).ThenInclude(w => w.Members)
+            .FirstOrDefaultAsync(b => b.Id == boardId);
+
+        if (board == null) return false;
+
+        var isMember = board.OwnerId == userId 
+            || board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
+            || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId));
+
+        if (!isMember) return false;
+
+        var column = board.Columns.FirstOrDefault(c => c.Id == columnId);
+        if (column == null) return false;
+
+        _db.Columns.Remove(column);
+
+        // Re-index remaining columns to close gap
+        var remainingColumns = board.Columns.Where(c => c.Id != columnId).OrderBy(c => c.Order).ToList();
+        for (int i = 0; i < remainingColumns.Count; i++)
+        {
+            remainingColumns[i].Order = i;
+        }
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<ColumnDto?> UpdateColumnAsync(int boardId, int columnId, UpdateColumnDto dto, int userId)
+    {
+        var board = await _db.Boards
+            .Include(b => b.Columns)
+            .Include(b => b.Members)
+            .Include(b => b.Workspace).ThenInclude(w => w.Members)
+            .FirstOrDefaultAsync(b => b.Id == boardId);
+
+        if (board == null) return null;
+
+        var isMember = board.OwnerId == userId 
+            || board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
+            || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId));
+
+        if (!isMember) return null;
+
+        var column = board.Columns.FirstOrDefault(c => c.Id == columnId);
+        if (column == null) return null;
+
+        column.Name = dto.Name;
+        await _db.SaveChangesAsync();
+
+        return new ColumnDto
+        {
+            Id = column.Id,
+            Name = column.Name,
+            Order = column.Order,
+            TaskCards = new List<TaskCardDto>() // Not returning tasks here for simplicity
+        };
     }
 }

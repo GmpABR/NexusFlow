@@ -41,6 +41,7 @@ export interface BoardMember {
     role: string;
     status: 'Pending' | 'Accepted' | 'Rejected';
     joinedAt: string;
+    avatarUrl?: string | null;
 }
 
 export interface BoardDetail {
@@ -96,4 +97,22 @@ export const removeMember = async (boardId: number, userId: number): Promise<voi
 export const updateBoard = async (boardId: number, data: { name?: string; themeColor?: string; backgroundImageUrl?: string }): Promise<BoardDetail> => {
     const { data: updatedBoard } = await api.put<BoardDetail>(`/boards/${boardId}`, data);
     return updatedBoard;
+};
+
+export const createColumn = async (boardId: number, name: string): Promise<Column> => {
+    const { data } = await api.post<Column>(`/boards/${boardId}/columns`, { name });
+    return data;
+};
+
+export const moveColumn = async (boardId: number, columnId: number, newOrder: number): Promise<void> => {
+    await api.put(`/boards/${boardId}/columns/${columnId}/move`, { newOrder });
+};
+
+export const deleteColumn = async (boardId: number, columnId: number): Promise<void> => {
+    await api.delete(`/boards/${boardId}/columns/${columnId}`);
+};
+
+export const updateColumn = async (boardId: number, columnId: number, name: string): Promise<Column> => {
+    const { data } = await api.put<Column>(`/boards/${boardId}/columns/${columnId}`, { name });
+    return data;
 };

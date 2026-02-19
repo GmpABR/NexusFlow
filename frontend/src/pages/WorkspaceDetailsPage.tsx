@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Container,
     Title,
@@ -33,6 +33,9 @@ import { BOARD_THEMES, type ThemeColor } from '../constants/themes';
 export default function WorkspaceDetailsPage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const activeTab = searchParams.get('tab') || 'boards';
+
     const [workspace, setWorkspace] = useState<Workspace | null>(null);
     const [boards, setBoards] = useState<BoardSummary[]>([]);
     const [loading, setLoading] = useState(true);
@@ -173,7 +176,13 @@ export default function WorkspaceDetailsPage() {
                     </div>
                 </Group>
 
-                <Tabs defaultValue="boards" variant="pills" radius="md" color="violet">
+                <Tabs
+                    value={activeTab}
+                    onChange={(val) => setSearchParams({ tab: val || 'boards' })}
+                    variant="pills"
+                    radius="md"
+                    color="violet"
+                >
                     <Tabs.List mb="lg" style={{ background: '#25262b', padding: 4, borderRadius: 8, border: '1px solid #373A40' }}>
                         <Tabs.Tab value="boards" leftSection={<IconLayoutBoard size={16} />}>Boards</Tabs.Tab>
                         <Tabs.Tab value="members" leftSection={<IconUsers size={16} />}>Members</Tabs.Tab>

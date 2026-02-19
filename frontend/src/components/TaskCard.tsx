@@ -1,6 +1,6 @@
 import { memo } from 'react';
-import { Paper, Text, Group, ActionIcon, Badge, Avatar, Stack } from '@mantine/core';
-import { IconTrash, IconClock, IconStar, IconGripVertical } from '@tabler/icons-react';
+import { Paper, Text, Group, ActionIcon, Badge, Avatar, Stack, Menu } from '@mantine/core';
+import { IconClock, IconStar, IconGripVertical, IconDots, IconTrash } from '@tabler/icons-react';
 import { Draggable } from '@hello-pangea/dnd';
 import type { TaskCard as TaskCardType } from '../api/boards';
 
@@ -38,19 +38,44 @@ const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick }: Prop
                     }}
                 >
                     <Stack gap={8}>
-                        {/* Row 1: Handle, Title and Assignee */}
-                        <Group justify="space-between" align="center" wrap="nowrap">
+                        {/* Row 1: Handle, Title and Assignee/Menu */}
+                        <Group justify="space-between" align="start" wrap="nowrap">
                             <Group gap={8} style={{ flex: 1, minWidth: 0 }}>
-                                <IconGripVertical size={14} color="rgba(255,255,255,0.2)" />
-                                <Text size="sm" fw={700} c="white" truncate style={{ flex: 1 }}>
+                                <IconGripVertical size={14} color="rgba(255,255,255,0.2)" style={{ flexShrink: 0 }} />
+                                <Text size="sm" fw={700} c="white" style={{ flex: 1, lineHeight: 1.3 }}>
                                     {task.title}
                                 </Text>
                             </Group>
-                            {task.assigneeName && (
-                                <Avatar size={20} radius="xl" color="indigo" styles={{ root: { border: '1px solid rgba(255,255,255,0.1)' } }}>
-                                    {task.assigneeName.slice(0, 2).toUpperCase()}
-                                </Avatar>
-                            )}
+
+                            <Group gap={4} wrap="nowrap" style={{ alignItems: 'flex-start' }}>
+                                {task.assigneeName && (
+                                    <Avatar size={20} radius="xl" color="indigo" styles={{ root: { border: '1px solid rgba(255,255,255,0.1)' } }}>
+                                        {task.assigneeName.slice(0, 2).toUpperCase()}
+                                    </Avatar>
+                                )}
+
+                                <Menu position="bottom-end" shadow="md" withinPortal>
+                                    <Menu.Target>
+                                        <ActionIcon
+                                            variant="subtle"
+                                            size="xs"
+                                            color="gray"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            <IconDots size={14} />
+                                        </ActionIcon>
+                                    </Menu.Target>
+                                    <Menu.Dropdown>
+                                        <Menu.Item
+                                            leftSection={<IconTrash size={14} />}
+                                            color="red"
+                                            onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
+                                        >
+                                            Delete Task
+                                        </Menu.Item>
+                                    </Menu.Dropdown>
+                                </Menu>
+                            </Group>
                         </Group>
 
                         {/* Row 2: Metadata */}
@@ -80,17 +105,6 @@ const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick }: Prop
                                     </Group>
                                 )}
                             </Group>
-
-                            <ActionIcon
-                                variant="subtle"
-                                color="gray"
-                                size="xs"
-                                onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
-                                styles={{ root: { opacity: 0, transition: 'opacity 0.2s ease' } }}
-                                className="delete-btn"
-                            >
-                                <IconTrash size={14} />
-                            </ActionIcon>
                         </Group>
                     </Stack>
                 </Paper>

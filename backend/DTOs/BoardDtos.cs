@@ -46,3 +46,20 @@ public class UpdateBoardDto
     public string? Name { get; set; }
     public string? ThemeColor { get; set; }
 }
+
+public class CreateColumnDto
+{
+    [Required, MinLength(1)]
+    public string Name { get; set; } = string.Empty;
+}
+
+public class MoveColumnDto
+{
+    public int NewOrder { get; set; }
+}
+
+public class UpdateColumnDto
+{
+    [Required, MinLength(1)]
+    public string Name { get; set; } = string.Empty;
+}

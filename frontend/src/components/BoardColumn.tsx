@@ -1,6 +1,6 @@
-import { useState, memo } from 'react';
-import { Text, Group, Badge, TextInput, ActionIcon, Box } from '@mantine/core';
-import { IconPlus } from '@tabler/icons-react';
+import { useState, memo, useRef, useEffect } from 'react';
+import { Text, Group, Badge, TextInput, ActionIcon, Box, Menu, Button } from '@mantine/core';
+import { IconPlus, IconDots, IconTrash, IconPencil } from '@tabler/icons-react';
 import { Droppable } from '@hello-pangea/dnd';
 import TaskCard from './TaskCard';
 import type { Column, TaskCard as TaskCardType } from '../api/boards';
@@ -16,12 +16,44 @@ interface Props {
     onAddTask: (columnId: number, title: string) => void;
     onDeleteTask: (taskId: number) => void;
     onTaskClick: (task: TaskCardType) => void;
+    onDeleteColumn: (columnId: number) => void;
+    onUpdateColumn: (columnId: number, name: string) => void;
+    visibleTaskIds?: Set<number> | null;
+    addTaskInputRef?: React.RefObject<HTMLInputElement | null>;
+    innerRef?: (element: HTMLElement | null) => void;
+    draggableProps?: any;
+    dragHandleProps?: any;
 }
 
-const BoardColumn = memo(function BoardColumn({ column, onAddTask, onDeleteTask, onTaskClick }: Props) {
+const BoardColumn = memo(function BoardColumn({
+    column,
+    onAddTask,
+    onDeleteTask,
+    onTaskClick,
+    onDeleteColumn,
+    onUpdateColumn,
+    visibleTaskIds,
+    addTaskInputRef,
+    innerRef,
+    draggableProps,
+    dragHandleProps
+}: Props) {
     const [newTaskTitle, setNewTaskTitle] = useState('');
     const [showInput, setShowInput] = useState(false);
+
+    // Rename state
+    const [isRenaming, setIsRenaming] = useState(false);
+    const [renameValue, setRenameValue] = useState(column.name);
+    const renameInputRef = useRef<HTMLInputElement>(null);
+
     const accentColor = COLUMN_COLORS[column.name] || '#a855f7';
+
+    useEffect(() => {
+        if (isRenaming && renameInputRef.current) {
+            renameInputRef.current.focus();
+            renameInputRef.current.select();
+        }
+    }, [isRenaming]);
 
     const handleAdd = () => {
         if (!newTaskTitle.trim()) return;
@@ -30,16 +62,31 @@ const BoardColumn = memo(function BoardColumn({ column, onAddTask, onDeleteTask,
         setShowInput(false);
     };
 
+    const handleRename = () => {
+        if (!renameValue.trim()) {
+            setRenameValue(column.name); // Revert if empty
+            setIsRenaming(false);
+            return;
+        }
+        if (renameValue.trim() !== column.name) {
+            onUpdateColumn(column.id, renameValue.trim());
+        }
+        setIsRenaming(false);
+    };
+
     return (
         <Box
+            ref={innerRef}
+            {...draggableProps}
             style={{
                 minWidth: 320,
                 maxWidth: 360,
                 width: '100%',
                 display: 'flex',
                 flexDirection: 'column',
-                maxHeight: 'calc(100vh - 180px)',
+                maxHeight: '100%',
                 position: 'relative',
+                ...draggableProps?.style,
             }}
         >
             {/* Glass Background Layer */}
@@ -65,11 +112,12 @@ const BoardColumn = memo(function BoardColumn({ column, onAddTask, onDeleteTask,
                     display: 'flex',
                     flexDirection: 'column',
                     height: '100%',
+                    overflow: 'hidden',
                 }}
             >
                 {/* Column Header */}
-                <Group justify="space-between" mb="md">
-                    <Group gap="sm">
+                <Group justify="space-between" mb="md" {...dragHandleProps} style={{ cursor: 'grab' }}>
+                    <Group gap="sm" style={{ flex: 1 }}>
                         <Box
                             style={{
                                 width: 10,
@@ -79,13 +127,60 @@ const BoardColumn = memo(function BoardColumn({ column, onAddTask, onDeleteTask,
                                 boxShadow: `0 0 12px ${accentColor}80`,
                             }}
                         />
-                        <Text fw={700} size="md" c="white" style={{ letterSpacing: '0.2px' }}>
-                            {column.name}
-                        </Text>
+                        {isRenaming ? (
+                            <TextInput
+                                ref={renameInputRef}
+                                value={renameValue}
+                                onChange={(e) => setRenameValue(e.currentTarget.value)}
+                                onBlur={handleRename}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleRename();
+                                    if (e.key === 'Escape') {
+                                        setRenameValue(column.name);
+                                        setIsRenaming(false);
+                                    }
+                                }}
+                                size="xs"
+                                styles={{ input: { fontWeight: 700, height: 24, padding: '0 8px' } }}
+                            />
+                        ) : (
+                            <Text
+                                fw={700}
+                                size="md"
+                                c="white"
+                                style={{ letterSpacing: '0.2px', cursor: 'pointer' }}
+                                onDoubleClick={() => setIsRenaming(true)}
+                            >
+                                {column.name}
+                            </Text>
+                        )}
+                        <Badge variant="filled" color="dark" size="md" radius="sm" styles={{ root: { background: 'rgba(255,255,255,0.1)' } }}>
+                            {visibleTaskIds
+                                ? `${column.taskCards.filter(t => visibleTaskIds.has(t.id)).length}/${column.taskCards.length}`
+                                : column.taskCards.length}
+                        </Badge>
                     </Group>
-                    <Badge variant="filled" color="dark" size="md" radius="sm" styles={{ root: { background: 'rgba(255,255,255,0.1)' } }}>
-                        {column.taskCards.length}
-                    </Badge>
+
+                    {/* Column Actions Menu */}
+                    <Menu position="bottom-end" shadow="md" width={160}>
+                        <Menu.Target>
+                            <ActionIcon variant="subtle" color="gray" size="sm">
+                                <IconDots size={16} />
+                            </ActionIcon>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                            <Menu.Item leftSection={<IconPencil size={14} />} onClick={() => setIsRenaming(true)}>
+                                Rename
+                            </Menu.Item>
+                            <Menu.Item
+                                leftSection={<IconTrash size={14} />}
+                                color="red"
+                                onClick={() => onDeleteColumn(column.id)}
+                            >
+                                Delete List
+                            </Menu.Item>
+                        </Menu.Dropdown>
+                    </Menu>
                 </Group>
 
                 {/* Task List (Droppable) */}
@@ -97,7 +192,7 @@ const BoardColumn = memo(function BoardColumn({ column, onAddTask, onDeleteTask,
                             style={{
                                 flex: 1,
                                 overflowY: 'auto',
-                                minHeight: 60,
+                                minHeight: 0,
                                 padding: 4,
                                 borderRadius: 8,
                                 background: snapshot.isDraggingOver
@@ -107,13 +202,19 @@ const BoardColumn = memo(function BoardColumn({ column, onAddTask, onDeleteTask,
                             }}
                         >
                             {column.taskCards.map((task: TaskCardType, index: number) => (
-                                <TaskCard
+                                <div
                                     key={task.id}
-                                    task={task}
-                                    index={index}
-                                    onDelete={onDeleteTask}
-                                    onClick={onTaskClick}
-                                />
+                                    style={visibleTaskIds && !visibleTaskIds.has(task.id)
+                                        ? { display: 'none' }
+                                        : undefined}
+                                >
+                                    <TaskCard
+                                        task={task}
+                                        index={index}
+                                        onDelete={onDeleteTask}
+                                        onClick={onTaskClick}
+                                    />
+                                </div>
                             ))}
                             {provided.placeholder}
                         </Box>
@@ -134,6 +235,7 @@ const BoardColumn = memo(function BoardColumn({ column, onAddTask, onDeleteTask,
                                     setNewTaskTitle('');
                                 }
                             }}
+                            ref={addTaskInputRef}
                             autoFocus
                             size="xs"
                             styles={{ input: { background: 'rgba(0,0,0,0.5)' } }}
@@ -170,7 +272,7 @@ const BoardColumn = memo(function BoardColumn({ column, onAddTask, onDeleteTask,
                     </Group>
                 )}
             </Box>
-        </Box>
+        </Box >
     );
 });
 

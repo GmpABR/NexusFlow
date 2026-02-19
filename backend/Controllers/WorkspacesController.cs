@@ -27,8 +27,7 @@ public class WorkspacesController : ControllerBase
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
 
         var workspaces = await _context.Workspaces
-            .Include(w => w.Owner)
-            .Include(w => w.Members).ThenInclude(m => m.User)
+            .AsNoTracking()
             .Where(w => w.OwnerId == userId || w.Members.Any(m => m.UserId == userId && m.Status == "Accepted"))
             .Select(w => new WorkspaceDto
             {
@@ -62,14 +61,20 @@ public class WorkspacesController : ControllerBase
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
 
         var workspace = await _context.Workspaces
-            .Include(w => w.Owner)
-            .Include(w => w.Members).ThenInclude(m => m.User)
-            .FirstOrDefaultAsync(w => w.Id == id);
+            .AsNoTracking()
+            .Where(w => w.Id == id)
+            .Select(w => new {
+                w.Id, w.Name, w.Description, w.OwnerId, w.Owner.Username, w.CreatedAt,
+                Members = w.Members.Select(m => new { m.UserId, m.User.Username, m.Role, m.Status, m.JoinedAt }).ToList()
+            })
+            .FirstOrDefaultAsync();
 
         if (workspace == null) return NotFound();
 
         // Check access
-        if (workspace.OwnerId != userId && !workspace.Members.Any(m => m.UserId == userId))
+         var isMember = workspace.OwnerId == userId || workspace.Members.Any(m => m.UserId == userId);
+
+        if (!isMember)
         {
             return Forbid();
         }
@@ -80,12 +85,12 @@ public class WorkspacesController : ControllerBase
             Name = workspace.Name,
             Description = workspace.Description,
             OwnerId = workspace.OwnerId,
-            OwnerName = workspace.Owner.Username,
+            OwnerName = workspace.Username,
             CreatedAt = workspace.CreatedAt,
             Members = workspace.Members.Select(m => new WorkspaceMemberDto
             {
                 UserId = m.UserId,
-                Username = m.User.Username,
+                Username = m.Username,
                 Role = m.Role,
                 Status = m.Status,
                 JoinedAt = m.JoinedAt
