@@ -32,6 +32,7 @@ import {
     IconList,
     IconPlus,
     IconX,
+    IconChartBar
 } from '@tabler/icons-react';
 import {
     DragDropContext,
@@ -69,6 +70,7 @@ import BoardTableView from '../components/BoardTableView';
 import BoardCalendarView from '../components/BoardCalendarView';
 import BoardDashboardView from '../components/BoardDashboardView';
 import BoardTimelineView from '../components/BoardTimelineView';
+import BoardAnalyticsModal from '../components/BoardAnalyticsModal';
 import { BOARD_THEMES, type ThemeColor } from '../constants/themes';
 
 type ViewMode = 'board' | 'table' | 'calendar' | 'dashboard' | 'timeline' | 'map';
@@ -83,6 +85,7 @@ export default function BoardPage() {
     const [loading, setLoading] = useState(true);
     const [membersModalOpen, setMembersModalOpen] = useState(false);
     const [inviting, setInviting] = useState(false);
+    const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
 
     // Task Detail Modal State
     const [selectedTask, setSelectedTask] = useState<TaskCardType | null>(null);
@@ -187,17 +190,11 @@ export default function BoardPage() {
         setBoard((prev) => {
             if (!prev) return prev;
 
-            // Deep clone columns to modify
-            const newColumns = prev.columns.map(col => ({
-                ...col,
-                taskCards: [...col.taskCards]
-            }));
-
             // Find current location of the task
             let sourceColIndex = -1;
             let sourceTaskIndex = -1;
 
-            newColumns.forEach((col, cIdx) => {
+            prev.columns.forEach((col, cIdx) => {
                 const tIdx = col.taskCards.findIndex(t => t.id === task.id);
                 if (tIdx !== -1) {
                     sourceColIndex = cIdx;
@@ -209,22 +206,37 @@ export default function BoardPage() {
             // But usually move implies existing. If checks fail, return prev.
             if (sourceColIndex === -1 && !task.columnId) return prev;
 
-            // If found, remove from old
-            if (sourceColIndex !== -1) {
-                newColumns[sourceColIndex].taskCards.splice(sourceTaskIndex, 1);
-            }
-
-            // Find target column
-            const targetCol = newColumns.find(c => c.id === task.columnId);
-            if (!targetCol) return prev; // Should not happen if data is consistent
-
-            // Insert at new order
-            // We use task.order as the index, clamped to bounds
-            const insertIndex = Math.min(task.order, targetCol.taskCards.length);
+            const targetColIndex = prev.columns.findIndex(c => c.id === task.columnId);
+            if (targetColIndex === -1) return prev;
 
             // Clone to ensure we have a new object reference in state
             const updatedTask = { ...task };
-            targetCol.taskCards.splice(insertIndex, 0, updatedTask);
+
+            const newColumns = [...prev.columns];
+
+            // If dragging within same column
+            if (sourceColIndex === targetColIndex) {
+                const newCards = [...newColumns[sourceColIndex].taskCards];
+                if (sourceColIndex !== -1) newCards.splice(sourceTaskIndex, 1);
+
+                const insertIndex = Math.min(task.order, newCards.length);
+                newCards.splice(insertIndex, 0, updatedTask);
+
+                newColumns[sourceColIndex] = { ...newColumns[sourceColIndex], taskCards: newCards };
+            }
+            // If dragging between different columns
+            else {
+                if (sourceColIndex !== -1) {
+                    const sourceCards = [...newColumns[sourceColIndex].taskCards];
+                    sourceCards.splice(sourceTaskIndex, 1);
+                    newColumns[sourceColIndex] = { ...newColumns[sourceColIndex], taskCards: sourceCards };
+                }
+
+                const targetCards = [...newColumns[targetColIndex].taskCards];
+                const insertIndex = Math.min(task.order, targetCards.length);
+                targetCards.splice(insertIndex, 0, updatedTask);
+                newColumns[targetColIndex] = { ...newColumns[targetColIndex], taskCards: targetCards };
+            }
 
             return {
                 ...prev,
@@ -425,26 +437,41 @@ export default function BoardPage() {
         const previousBoard = board;
         setBoard((prev) => {
             if (!prev) return prev;
-            // Deep clone columns
-            const newColumns = prev.columns.map(col => ({
-                ...col,
-                taskCards: [...col.taskCards]
-            }));
 
-            const sourceCol = newColumns.find(c => c.id === sourceColumnId);
-            const destCol = newColumns.find(c => c.id === targetColumnId);
+            const newColumns = [...prev.columns];
+            const sourceColIndex = newColumns.findIndex(c => c.id === sourceColumnId);
+            const targetColIndex = newColumns.findIndex(c => c.id === targetColumnId);
 
-            if (!sourceCol || !destCol) return prev;
+            if (sourceColIndex === -1 || targetColIndex === -1) return prev;
 
-            const [movedTask] = sourceCol.taskCards.splice(source.index, 1);
+            const sourceCol = newColumns[sourceColIndex];
+            const destCol = newColumns[targetColIndex];
 
-            const updatedMovedTask = {
-                ...movedTask,
-                columnId: targetColumnId,
-                order: destination.index
-            };
+            // Same column drag
+            if (sourceColumnId === targetColumnId) {
+                const newCards = [...sourceCol.taskCards];
+                const [movedTask] = newCards.splice(source.index, 1);
+                newCards.splice(destination.index, 0, movedTask);
+                newColumns[sourceColIndex] = { ...sourceCol, taskCards: newCards };
+            }
+            // Cross column drag
+            else {
+                const sourceCards = [...sourceCol.taskCards];
+                const destCards = [...destCol.taskCards];
 
-            destCol.taskCards.splice(destination.index, 0, updatedMovedTask);
+                const [movedTask] = sourceCards.splice(source.index, 1);
+
+                const updatedMovedTask = {
+                    ...movedTask,
+                    columnId: targetColumnId,
+                    order: destination.index
+                };
+
+                destCards.splice(destination.index, 0, updatedMovedTask);
+
+                newColumns[sourceColIndex] = { ...sourceCol, taskCards: sourceCards };
+                newColumns[targetColIndex] = { ...destCol, taskCards: destCards };
+            }
 
             return { ...prev, columns: newColumns };
         });
@@ -568,20 +595,6 @@ export default function BoardPage() {
         fetchAllBoards();
     };
 
-    const handleUpdateTheme = async (color: ThemeColor) => {
-        if (!boardId) return;
-        // Optimistic update
-        setBoard(prev => prev ? { ...prev, themeColor: color } : null);
-
-        try {
-            await updateBoard(boardId, { themeColor: color });
-            notifications.show({ title: 'Theme Updated', message: 'Board theme has been changed.', color: 'green' });
-        } catch {
-            notifications.show({ title: 'Error', message: 'Failed to update theme.', color: 'red' });
-            fetchBoard(); // Revert
-        }
-    };
-
     const handleTitleUpdate = async () => {
         if (!boardId || !editedTitle.trim() || editedTitle === board?.name) {
             setIsEditingTitle(false);
@@ -624,7 +637,7 @@ export default function BoardPage() {
     return (
         <Box
             style={{
-                height: 'calc(100vh - 64px)',
+                height: 'calc(100vh - 76px)',
                 background: activeTheme.gradient,
                 overflow: 'hidden',
                 display: 'flex',
@@ -717,6 +730,17 @@ export default function BoardPage() {
                     </Group>
 
                     <Group gap="md">
+                        <Button
+                            variant="white"
+                            color="dark"
+                            size="md"
+                            radius="md"
+                            leftSection={<IconChartBar size={20} />}
+                            onClick={() => setAnalyticsModalOpen(true)}
+                            fw={700}
+                        >
+                            Analytics
+                        </Button>
                         <Button
                             variant="white"
                             color="dark"
@@ -1169,6 +1193,14 @@ export default function BoardPage() {
                 members={members}
                 onTaskUpdated={handleTaskUpdated}
             />
+
+            {boardId && (
+                <BoardAnalyticsModal
+                    opened={analyticsModalOpen}
+                    onClose={() => setAnalyticsModalOpen(false)}
+                    boardId={boardId}
+                />
+            )}
         </Box >
     );
 }

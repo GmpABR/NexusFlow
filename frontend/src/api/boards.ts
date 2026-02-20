@@ -23,6 +23,8 @@ export interface TaskCard {
     assigneeId: number | null;
     assigneeName: string | null;
     tags: string | null;
+    totalTimeSpentMinutes: number;
+    isTimerRunning: boolean;
     subtasks?: Subtask[];
 }
 

@@ -16,6 +16,7 @@ public class AppDbContext : DbContext
     public DbSet<WorkspaceMember> WorkspaceMembers { get; set; }
     public DbSet<Subtask> Subtasks { get; set; }
     public DbSet<TaskActivity> TaskActivities { get; set; }
+    public DbSet<TimeLog> TimeLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -116,10 +117,21 @@ public class AppDbContext : DbContext
             entity.HasOne(b => b.Workspace)
                   .WithMany(w => w.Boards)
                   .HasForeignKey(b => b.WorkspaceId)
-                  .OnDelete(DeleteBehavior.SetNull); // If workspace deleted, keep boards? Or Cascade? Trello cascades. Let's SetNull for safety first, or Cascade.
-                  // Actually, let's Cascade. If workspace is gone, boards should be gone.
-                  // But wait, if I delete workspace, I want boards to be deleted.
-                  // .OnDelete(DeleteBehavior.Cascade);
+                  .OnDelete(DeleteBehavior.SetNull); 
+        });
+
+        // TimeLog -> TaskCard and User
+        modelBuilder.Entity<TimeLog>(entity =>
+        {
+            entity.HasOne(tl => tl.TaskCard)
+                  .WithMany(tc => tc.TimeLogs)
+                  .HasForeignKey(tl => tl.TaskCardId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(tl => tl.User)
+                  .WithMany()
+                  .HasForeignKey(tl => tl.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

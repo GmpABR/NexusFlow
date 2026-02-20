@@ -17,4 +17,12 @@ public interface ITaskService
     
     Task<TaskCardDto?> GetTaskByIdAsync(int taskId);
     Task<List<TaskActivity>> GetTaskActivitiesAsync(int taskId);
+    Task<TaskActivity> AddCommentAsync(int taskId, string text, int userId);
+
+    // Time Tracking Methods
+    Task<TimeLogDto?> StartTimerAsync(int taskId, int userId);
+    Task<TimeLogDto?> StopTimerAsync(int taskId, int userId, DateTime? stoppedAt = null);
+    Task<TimeLogDto> AddManualTimeLogAsync(int taskId, int userId, AddManualTimeLogDto dto);
+    Task<bool> DeleteTimeLogAsync(int timeLogId, int userId);
+    Task<List<TimeLogDto>> GetTaskTimeLogsAsync(int taskId);
 }

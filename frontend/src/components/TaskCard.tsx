@@ -19,7 +19,7 @@ const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick }: Prop
 
     return (
         <Draggable draggableId={`task-${task.id}`} index={index}>
-            {(provided, snapshot) => (
+            {(provided) => (
                 <Paper
                     ref={provided.innerRef}
                     {...provided.draggableProps}
@@ -32,7 +32,6 @@ const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick }: Prop
                     style={{
                         ...provided.draggableProps.style,
                         cursor: 'pointer',
-                        transform: snapshot.isDragging ? provided.draggableProps.style?.transform : 'none',
                         background: 'rgba(255, 255, 255, 0.04)',
                         border: '1px solid rgba(255, 255, 255, 0.08)',
                     }}
@@ -95,6 +94,20 @@ const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick }: Prop
                                     <Group gap={4} c="dimmed">
                                         <IconStar size={12} color="#fbbf24" />
                                         <Text size="xs" fw={700} c="white" opacity={0.6}>{task.storyPoints}</Text>
+                                    </Group>
+                                )}
+
+                                {task.totalTimeSpentMinutes > 0 && !task.isTimerRunning && (
+                                    <Group gap={4} c="dimmed">
+                                        <IconClock size={12} color="#4dabf7" />
+                                        <Text size="xs" fw={700} c="white" opacity={0.6}>{Math.floor(task.totalTimeSpentMinutes / 60)}h {task.totalTimeSpentMinutes % 60}m</Text>
+                                    </Group>
+                                )}
+
+                                {task.isTimerRunning && (
+                                    <Group gap={4} c="blue">
+                                        <IconClock size={12} />
+                                        <Text size="xs" fw={700}>Running</Text>
                                     </Group>
                                 )}
 

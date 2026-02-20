@@ -22,4 +22,5 @@ public class TaskCard
     public Column Column { get; set; } = null!;
 
     public ICollection<Subtask> Subtasks { get; set; } = new List<Subtask>();
+    public ICollection<TimeLog> TimeLogs { get; set; } = new List<TimeLog>();
 }

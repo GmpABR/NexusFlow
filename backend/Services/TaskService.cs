@@ -224,6 +224,8 @@ public class TaskService : ITaskService
                 AssigneeName = t.Assignee != null ? t.Assignee.Username : null,
                 AssigneeAvatar = null,
                 Tags = t.Tags,
+                TotalTimeSpentMinutes = t.TimeLogs.Where(tl => tl.DurationMinutes.HasValue).Sum(tl => tl.DurationMinutes!.Value),
+                IsTimerRunning = t.TimeLogs.Any(tl => tl.StoppedAt == null),
                 Subtasks = t.Subtasks.OrderBy(s => s.Id).Select(s => new SubtaskDto 
                 { 
                     Id = s.Id, 
@@ -238,10 +240,151 @@ public class TaskService : ITaskService
     public async Task<List<TaskActivity>> GetTaskActivitiesAsync(int taskId)
     {
         return await _db.TaskActivities
+            .AsNoTracking()
             .Where(a => a.TaskCardId == taskId)
             .Include(a => a.User)
             .OrderByDescending(a => a.Timestamp)
             .ToListAsync();
+    }
+
+    public async Task<TaskActivity> AddCommentAsync(int taskId, string text, int userId)
+    {
+        var activity = new TaskActivity
+        {
+            TaskCardId = taskId,
+            UserId = userId,
+            Action = "Commented",
+            Details = text,
+            Timestamp = DateTime.UtcNow
+        };
+        
+        _db.TaskActivities.Add(activity);
+        await _db.SaveChangesAsync();
+
+        // Load the User so we can return the username/avatar
+        await _db.Entry(activity).Reference(a => a.User).LoadAsync();
+
+        return activity;
+    }
+
+    // Time Tracking Methods
+    public async Task<TimeLogDto?> StartTimerAsync(int taskId, int userId)
+    {
+        // Check if there's already a running timer for this user on this task
+        var existingLog = await _db.TimeLogs
+            .FirstOrDefaultAsync(tl => tl.TaskCardId == taskId && tl.UserId == userId && tl.StoppedAt == null);
+
+        if (existingLog != null) return null; // Timer already running
+
+        var timeLog = new TimeLog
+        {
+            TaskCardId = taskId,
+            UserId = userId,
+            StartedAt = DateTime.UtcNow
+        };
+
+        _db.TimeLogs.Add(timeLog);
+        await _db.SaveChangesAsync();
+
+        await LogActivity(taskId, userId, "Timer Started", "Started time tracking");
+
+        return await MapToTimeLogDto(timeLog);
+    }
+
+    public async Task<TimeLogDto?> StopTimerAsync(int taskId, int userId, DateTime? stoppedAt = null)
+    {
+        var timeLog = await _db.TimeLogs
+            .FirstOrDefaultAsync(tl => tl.TaskCardId == taskId && tl.UserId == userId && tl.StoppedAt == null);
+
+        if (timeLog == null) return null;
+
+        timeLog.StoppedAt = stoppedAt ?? DateTime.UtcNow;
+        var duration = timeLog.StoppedAt.Value - timeLog.StartedAt;
+        timeLog.DurationMinutes = (int)Math.Max(1, Math.Round(duration.TotalMinutes)); // At least 1 minute
+
+        await _db.SaveChangesAsync();
+
+        await LogActivity(taskId, userId, "Timer Stopped", $"Logged {timeLog.DurationMinutes} minutes");
+
+        return await MapToTimeLogDto(timeLog);
+    }
+
+    public async Task<TimeLogDto> AddManualTimeLogAsync(int taskId, int userId, AddManualTimeLogDto dto)
+    {
+        var duration = dto.StoppedAt - dto.StartedAt;
+        int durationMinutes = (int)Math.Max(1, Math.Round(duration.TotalMinutes));
+
+        var timeLog = new TimeLog
+        {
+            TaskCardId = taskId,
+            UserId = userId,
+            StartedAt = dto.StartedAt,
+            StoppedAt = dto.StoppedAt,
+            DurationMinutes = durationMinutes
+        };
+
+        _db.TimeLogs.Add(timeLog);
+        await _db.SaveChangesAsync();
+
+        await LogActivity(taskId, userId, "Time Logged Manually", $"Manually logged {durationMinutes} minutes");
+
+        return await MapToTimeLogDto(timeLog);
+    }
+
+    public async Task<bool> DeleteTimeLogAsync(int timeLogId, int userId)
+    {
+        var timeLog = await _db.TimeLogs.FindAsync(timeLogId);
+        if (timeLog == null) return false;
+
+        // Optionally check if userId matches, or if user is admin. For now, just delete.
+        int taskId = timeLog.TaskCardId;
+        int duration = timeLog.DurationMinutes ?? 0;
+
+        _db.TimeLogs.Remove(timeLog);
+        await _db.SaveChangesAsync();
+
+        await LogActivity(taskId, userId, "Time Log Deleted", $"Deleted time log of {duration} minutes");
+
+        return true;
+    }
+
+    public async Task<List<TimeLogDto>> GetTaskTimeLogsAsync(int taskId)
+    {
+        var logs = await _db.TimeLogs
+            .Include(tl => tl.User)
+            .Where(tl => tl.TaskCardId == taskId)
+            .OrderByDescending(tl => tl.StartedAt)
+            .ToListAsync();
+
+        return logs.Select(tl => new TimeLogDto
+        {
+            Id = tl.Id,
+            TaskCardId = tl.TaskCardId,
+            UserId = tl.UserId,
+            UserName = tl.User?.Username,
+            StartedAt = tl.StartedAt,
+            StoppedAt = tl.StoppedAt,
+            DurationMinutes = tl.DurationMinutes
+        }).ToList();
+    }
+
+    private async Task<TimeLogDto> MapToTimeLogDto(TimeLog timeLog)
+    {
+        if (timeLog.User == null)
+        {
+            await _db.Entry(timeLog).Reference(tl => tl.User).LoadAsync();
+        }
+
+        return new TimeLogDto
+        {
+            Id = timeLog.Id,
+            TaskCardId = timeLog.TaskCardId,
+            UserId = timeLog.UserId,
+            UserName = timeLog.User?.Username,
+            StartedAt = timeLog.StartedAt,
+            StoppedAt = timeLog.StoppedAt,
+            DurationMinutes = timeLog.DurationMinutes
+        };
     }
     
     private async Task LogActivity(int taskId, int userId, string action, string details)
@@ -281,6 +424,12 @@ public class TaskService : ITaskService
             await _db.Entry(task).Collection(t => t.Subtasks).LoadAsync();
         }
 
+        // Ensure TimeLogs are loaded for calculation
+        if (task.TimeLogs == null)
+        {
+            await _db.Entry(task).Collection(t => t.TimeLogs).LoadAsync();
+        }
+
         return new TaskCardDto
         {
             Id = task.Id,
@@ -297,6 +446,8 @@ public class TaskService : ITaskService
             AssigneeName = task.Assignee?.Username,
             AssigneeAvatar = null, // Placeholder
             Tags = task.Tags,
+            TotalTimeSpentMinutes = task.TimeLogs.Where(tl => tl.DurationMinutes.HasValue).Sum(tl => tl.DurationMinutes!.Value),
+            IsTimerRunning = task.TimeLogs.Any(tl => tl.StoppedAt == null),
             Subtasks = task.Subtasks.Select(s => new SubtaskDto 
             { 
                 Id = s.Id, 

@@ -200,7 +200,7 @@ export default function AppNavbar() {
 
             {/* Nav links */}
             <Group gap={4} ml={0} style={{ flexShrink: 0 }}>
-                <Tooltip label="My Boards" position="bottom">
+                <Tooltip label="My Boards" position="bottom" zIndex={2000}>
                     <ActionIcon
                         variant={isActive('/boards') ? 'filled' : 'subtle'}
                         color={isActive('/boards') ? 'violet' : 'gray'}
@@ -211,7 +211,7 @@ export default function AppNavbar() {
                         <IconLayoutDashboard size={20} />
                     </ActionIcon>
                 </Tooltip>
-                <Tooltip label="My Tasks" position="bottom">
+                <Tooltip label="My Tasks" position="bottom" zIndex={2000}>
                     <ActionIcon
                         variant={isActive('/my-tasks') ? 'filled' : 'subtle'}
                         color={isActive('/my-tasks') ? 'violet' : 'gray'}

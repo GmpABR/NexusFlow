@@ -1,5 +1,5 @@
 import { useState, memo, useRef, useEffect } from 'react';
-import { Text, Group, Badge, TextInput, ActionIcon, Box, Menu, Button } from '@mantine/core';
+import { Text, Group, Badge, TextInput, ActionIcon, Box, Menu } from '@mantine/core';
 import { IconPlus, IconDots, IconTrash, IconPencil } from '@tabler/icons-react';
 import { Droppable } from '@hello-pangea/dnd';
 import TaskCard from './TaskCard';
@@ -94,8 +94,7 @@ const BoardColumn = memo(function BoardColumn({
                 style={{
                     position: 'absolute',
                     inset: 0,
-                    background: 'rgba(20, 21, 23, 0.85)',
-                    backdropFilter: 'blur(20px)',
+                    background: 'rgba(20, 21, 23, 0.95)',
                     border: '1px solid rgba(255, 255, 255, 0.12)',
                     borderRadius: 20,
                     zIndex: 0,

@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Box, Center, Loader, Text, Group, Stack, Paper, Title,
+    Box, Center, Loader, Text, Group, Stack, Paper, Title, Flex, NavLink,
     Avatar, TextInput, Textarea, Button, ActionIcon, Tooltip, Divider,
-    Badge, ThemeIcon, ScrollArea,
+    Badge, ThemeIcon,
 } from '@mantine/core';
 import {
-    IconEdit, IconCheck, IconX, IconUser,
+    IconEdit, IconCheck, IconX, IconUser, IconHome, IconSettings,
     IconAt, IconCalendar, IconBriefcase, IconBuilding,
     IconMapPin, IconCamera, IconLink, IconUpload,
-    IconListCheck, IconLayoutDashboard, IconLogout,
+    IconLogout,
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { getMe, updateProfile, type UserProfile } from '../api/users';
@@ -20,7 +20,6 @@ function getInitials(name: string) {
     return name.slice(0, 2).toUpperCase();
 }
 
-/** Inline editable field row */
 function EditableField({
     label,
     icon,
@@ -55,14 +54,14 @@ function EditableField({
             <Text
                 size="xs"
                 c="dimmed"
-                mb={4}
+                mb={6}
                 fw={600}
                 style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}
             >
                 {label}
             </Text>
             {editing ? (
-                <Stack gap={6}>
+                <Stack gap={8}>
                     {textarea ? (
                         <Textarea
                             value={draft}
@@ -72,7 +71,7 @@ function EditableField({
                             minRows={2}
                             maxRows={5}
                             autoFocus
-                            styles={{ input: { background: '#282e33', borderColor: '#3b4754', color: '#b6c2cf' } }}
+                            styles={{ input: { background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: 'white' } }}
                             onKeyDown={e => { if (e.key === 'Escape') setEditing(false); }}
                         />
                     ) : (
@@ -81,14 +80,14 @@ function EditableField({
                             onChange={e => setDraft(e.currentTarget.value)}
                             placeholder={placeholder}
                             autoFocus
-                            styles={{ input: { background: '#282e33', borderColor: '#3b4754', color: '#b6c2cf' } }}
+                            styles={{ input: { background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: 'white' } }}
                             onKeyDown={e => {
                                 if (e.key === 'Enter') handleSave();
                                 if (e.key === 'Escape') setEditing(false);
                             }}
                         />
                     )}
-                    <Group gap={6}>
+                    <Group gap={8}>
                         <Button size="xs" color="violet" loading={saving} onClick={handleSave}
                             leftSection={<IconCheck size={12} />}>Save</Button>
                         <Button size="xs" variant="subtle" color="gray"
@@ -98,14 +97,14 @@ function EditableField({
             ) : (
                 <Group justify="space-between" gap={8} style={{ cursor: 'pointer' }}
                     onClick={() => { setDraft(value ?? ''); setEditing(true); }}>
-                    <Group gap={8}>
-                        <Box style={{ color: '#738496' }}>{icon}</Box>
+                    <Group gap={12}>
+                        <Box style={{ color: 'rgba(255,255,255,0.4)', display: 'flex' }}>{icon}</Box>
                         <Text size="sm" c={value ? 'white' : 'dimmed'} fw={value ? 500 : 400}>
                             {value || placeholder}
                         </Text>
                     </Group>
-                    <ActionIcon variant="subtle" color="gray" size="xs" opacity={0.5}>
-                        <IconEdit size={12} />
+                    <ActionIcon variant="subtle" color="gray" size="sm" opacity={0.5}>
+                        <IconEdit size={16} />
                     </ActionIcon>
                 </Group>
             )}
@@ -219,26 +218,33 @@ export default function ProfilePage() {
     const currentAvatar = avatarMode !== 'none' ? avatarPreview : (profile?.avatarUrl ?? '');
 
     return (
-        <Box style={{ minHeight: '100vh', background: '#1d2125', color: '#b6c2cf', display: 'flex', flexDirection: 'column' }}>
+        <Box
+            style={{
+                minHeight: 'calc(100vh - 76px)',
+                background: '#0a0a0b', // Deep minimalist dark mode
+                color: 'white',
+                display: 'flex',
+                flexDirection: 'column'
+            }}
+        >
+            <Flex align="stretch" style={{ flex: 1 }}>
 
-            {/* ── Two-column layout ── */}
-
-            <Box
-                style={{
-                    flex: 1,
-                    display: 'grid',
-                    gridTemplateColumns: '280px 1fr',
-                    gap: 0,
-                    maxWidth: 1100,
-                    margin: '0 auto',
-                    width: '100%',
-                    padding: '32px 24px',
-                    alignItems: 'start',
-                }}
-            >
                 {/* ── LEFT SIDEBAR ── */}
-                <Box style={{ position: 'sticky', top: 64 }}>
-                    <Stack gap="lg" align="center">
+                <Box
+                    style={{
+                        width: 280,
+                        flexShrink: 0,
+                        background: '#121214',
+                        borderRight: '1px solid rgba(255,255,255,0.05)',
+                        padding: '40px 24px',
+                        minHeight: 'calc(100vh - 76px)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        position: 'sticky',
+                        top: 0
+                    }}
+                >
+                    <Stack gap="lg" align="center" mb="xl">
                         {/* Avatar */}
                         <Box style={{ position: 'relative' }}>
                             <Avatar
@@ -246,7 +252,7 @@ export default function ProfilePage() {
                                 size={120}
                                 radius={120}
                                 color="violet"
-                                style={{ border: '3px solid #3b4754', fontSize: 32 }}
+                                style={{ border: '3px solid rgba(255,255,255,0.1)', fontSize: 32 }}
                             >
                                 {getInitials(profile?.username ?? 'U')}
                             </Avatar>
@@ -280,6 +286,7 @@ export default function ProfilePage() {
                                         size="xs"
                                         variant="outline"
                                         color="gray"
+                                        style={{ borderColor: 'rgba(255,255,255,0.1)' }}
                                         leftSection={<IconUpload size={13} />}
                                         onClick={() => fileInputRef.current?.click()}
                                     >
@@ -291,6 +298,7 @@ export default function ProfilePage() {
                                         size="xs"
                                         variant="outline"
                                         color="gray"
+                                        style={{ borderColor: 'rgba(255,255,255,0.1)' }}
                                         leftSection={<IconLink size={13} />}
                                         onClick={() => setAvatarMode('url')}
                                     >
@@ -322,7 +330,7 @@ export default function ProfilePage() {
                                     }}
                                     size="xs"
                                     autoFocus
-                                    styles={{ input: { background: '#282e33', borderColor: '#3b4754', color: '#b6c2cf' } }}
+                                    styles={{ input: { background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: 'white' } }}
                                 />
                                 <Group gap={6}>
                                     <Button size="xs" color="violet" loading={savingAvatar} onClick={saveAvatar}>Save</Button>
@@ -344,7 +352,7 @@ export default function ProfilePage() {
                             </Stack>
                         )}
 
-                        <Divider w="100%" color="#2c333a" />
+                        <Divider w="100%" color="rgba(255,255,255,0.05)" />
 
                         {/* Username display */}
                         <Stack gap={2} align="center" style={{ width: '100%' }}>
@@ -352,46 +360,59 @@ export default function ProfilePage() {
                             <Text size="xs" c="dimmed">{profile?.email}</Text>
                             {profile?.jobTitle && <Text size="xs" c="dimmed">{profile.jobTitle}</Text>}
                         </Stack>
-
-                        <Divider w="100%" color="#2c333a" />
-
-                        {/* Quick nav */}
-                        <Stack gap={4} style={{ width: '100%' }}>
-                            <Button
-                                variant="subtle" color="gray" justify="flex-start" size="sm" fullWidth
-                                leftSection={<IconListCheck size={16} />}
-                                onClick={() => navigate('/my-tasks')}
-                            >My Tasks</Button>
-                            <Button
-                                variant="subtle" color="gray" justify="flex-start" size="sm" fullWidth
-                                leftSection={<IconLayoutDashboard size={16} />}
-                                onClick={() => navigate('/boards')}
-                            >My Boards</Button>
-                            <Button
-                                variant="subtle" color="red" justify="flex-start" size="sm" fullWidth
-                                leftSection={<IconLogout size={16} />}
-                                onClick={() => {
-                                    localStorage.removeItem('token');
-                                    localStorage.removeItem('user');
-                                    navigate('/login');
-                                }}
-                            >Sign Out</Button>
-                        </Stack>
                     </Stack>
+
+                    <Divider w="100%" mb="xl" color="rgba(255,255,255,0.05)" />
+
+                    {/* Quick nav matching BoardsPage style */}
+                    <Stack gap={10}>
+                        <NavLink
+                            label="Overview"
+                            leftSection={<IconHome size={20} />}
+                            style={{ borderRadius: 8, fontWeight: 600, fontSize: '15px' }}
+                            onClick={() => navigate('/boards')}
+                        />
+                        <NavLink
+                            label="Settings"
+                            leftSection={<IconSettings size={20} />}
+                            active
+                            variant="light"
+                            color="violet"
+                            style={{ borderRadius: 8, fontWeight: 700, fontSize: '15px' }}
+                            onClick={() => navigate('/profile')}
+                        />
+                    </Stack>
+
+                    <Button
+                        variant="subtle" color="red" justify="flex-start" size="sm" fullWidth
+                        leftSection={<IconLogout size={16} />}
+                        mt="auto"
+                        onClick={() => {
+                            localStorage.removeItem('token');
+                            localStorage.removeItem('user');
+                            navigate('/login');
+                        }}
+                    >
+                        Sign Out
+                    </Button>
                 </Box>
 
-                {/* ── RIGHT CONTENT ── */}
-                <ScrollArea style={{ paddingLeft: 32 }}>
-                    <Stack gap="lg">
+                {/* ── RIGHT CONTENT (FULL WIDTH LAYOUT) ── */}
+                <Box style={{ flex: 1, padding: '40px 60px', maxWidth: '1400px', margin: '0 auto' }}>
+                    <Stack gap="xl">
 
                         {/* ── About You ── */}
                         <Paper
                             p="xl"
-                            radius="md"
-                            style={{ background: '#282e33', border: '1px solid #2c333a' }}
+                            radius="xl"
+                            style={{
+                                background: 'rgba(255, 255, 255, 0.02)',
+                                border: '1px solid rgba(255,255,255,0.05)',
+                                boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+                            }}
                         >
-                            <Title order={5} c="white" mb="lg" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <ThemeIcon size="sm" variant="light" color="violet"><IconUser size={13} /></ThemeIcon>
+                            <Title order={4} c="white" mb="xl" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <ThemeIcon size="md" variant="light" color="violet" radius="md"><IconUser size={16} /></ThemeIcon>
                                 About you
                             </Title>
 
@@ -403,7 +424,7 @@ export default function ProfilePage() {
                                     placeholder="Add your full name"
                                     onSave={async v => { const u = await save({ fullName: v }); setProfile(u); }}
                                 />
-                                <Divider color="#2c333a" />
+                                <Divider color="rgba(255,255,255,0.05)" />
                                 <EditableField
                                     label="Job title"
                                     icon={<IconBriefcase size={15} />}
@@ -411,7 +432,7 @@ export default function ProfilePage() {
                                     placeholder="Add your job title"
                                     onSave={async v => { const u = await save({ jobTitle: v }); setProfile(u); }}
                                 />
-                                <Divider color="#2c333a" />
+                                <Divider color="rgba(255,255,255,0.05)" />
                                 <EditableField
                                     label="Department"
                                     icon={<IconBuilding size={15} />}
@@ -419,7 +440,7 @@ export default function ProfilePage() {
                                     placeholder="Add your department"
                                     onSave={async v => { const u = await save({ department: v }); setProfile(u); }}
                                 />
-                                <Divider color="#2c333a" />
+                                <Divider color="rgba(255,255,255,0.05)" />
                                 <EditableField
                                     label="Organization"
                                     icon={<IconBuilding size={15} />}
@@ -427,7 +448,7 @@ export default function ProfilePage() {
                                     placeholder="Add your organization"
                                     onSave={async v => { const u = await save({ organization: v }); setProfile(u); }}
                                 />
-                                <Divider color="#2c333a" />
+                                <Divider color="rgba(255,255,255,0.05)" />
                                 <EditableField
                                     label="Based in"
                                     icon={<IconMapPin size={15} />}
@@ -435,7 +456,7 @@ export default function ProfilePage() {
                                     placeholder="Add your location"
                                     onSave={async v => { const u = await save({ location: v }); setProfile(u); }}
                                 />
-                                <Divider color="#2c333a" />
+                                <Divider color="rgba(255,255,255,0.05)" />
                                 <EditableField
                                     label="Bio"
                                     icon={<IconUser size={15} />}
@@ -450,18 +471,22 @@ export default function ProfilePage() {
                         {/* ── Account ── */}
                         <Paper
                             p="xl"
-                            radius="md"
-                            style={{ background: '#282e33', border: '1px solid #2c333a' }}
+                            radius="xl"
+                            style={{
+                                background: 'rgba(255, 255, 255, 0.02)',
+                                border: '1px solid rgba(255,255,255,0.05)',
+                                boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+                            }}
                         >
-                            <Title order={5} c="white" mb="lg" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <ThemeIcon size="sm" variant="light" color="violet"><IconAt size={13} /></ThemeIcon>
-                                Account
+                            <Title order={4} c="white" mb="xl" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <ThemeIcon size="md" variant="light" color="violet" radius="md"><IconAt size={16} /></ThemeIcon>
+                                Account Settings
                             </Title>
 
                             <Stack gap="md">
                                 {/* Username */}
                                 <Box>
-                                    <Text size="xs" c="dimmed" mb={4} fw={600}
+                                    <Text size="xs" c="dimmed" mb={8} fw={600}
                                         style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                                         Username
                                     </Text>
@@ -472,7 +497,7 @@ export default function ProfilePage() {
                                                 onChange={e => setUsernameDraft(e.currentTarget.value)}
                                                 size="sm"
                                                 style={{ flex: 1 }}
-                                                styles={{ input: { background: '#1d2125', borderColor: '#3b4754', color: '#b6c2cf' } }}
+                                                styles={{ input: { background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: 'white' } }}
                                                 onKeyDown={e => {
                                                     if (e.key === 'Enter') saveUsername();
                                                     if (e.key === 'Escape') { setEditingUsername(false); setUsernameDraft(profile?.username ?? ''); }
@@ -489,45 +514,45 @@ export default function ProfilePage() {
                                         </Group>
                                     ) : (
                                         <Group justify="space-between">
-                                            <Group gap={8}>
-                                                <IconUser size={16} color="#738496" />
+                                            <Group gap={12}>
+                                                <IconUser size={18} color="rgba(255,255,255,0.4)" />
                                                 <Text size="sm" c="white" fw={500}>{profile?.username}</Text>
                                             </Group>
                                             <Tooltip label="Edit username">
                                                 <ActionIcon variant="subtle" color="gray" size="sm"
                                                     onClick={() => setEditingUsername(true)}>
-                                                    <IconEdit size={14} />
+                                                    <IconEdit size={16} />
                                                 </ActionIcon>
                                             </Tooltip>
                                         </Group>
                                     )}
                                 </Box>
 
-                                <Divider color="#2c333a" />
+                                <Divider color="rgba(255,255,255,0.05)" />
 
                                 {/* Email */}
                                 <Box>
-                                    <Text size="xs" c="dimmed" mb={4} fw={600}
+                                    <Text size="xs" c="dimmed" mb={8} fw={600}
                                         style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                                         Email
                                     </Text>
-                                    <Group gap={8}>
-                                        <IconAt size={16} color="#738496" />
+                                    <Group gap={12}>
+                                        <IconAt size={18} color="rgba(255,255,255,0.4)" />
                                         <Text size="sm" c="white" fw={500}>{profile?.email}</Text>
                                         <Badge size="xs" variant="light" color="gray" ml="auto">Read-only</Badge>
                                     </Group>
                                 </Box>
 
-                                <Divider color="#2c333a" />
+                                <Divider color="rgba(255,255,255,0.05)" />
 
                                 {/* Member since */}
                                 <Box>
-                                    <Text size="xs" c="dimmed" mb={4} fw={600}
+                                    <Text size="xs" c="dimmed" mb={8} fw={600}
                                         style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                                         Member Since
                                     </Text>
-                                    <Group gap={8}>
-                                        <IconCalendar size={16} color="#738496" />
+                                    <Group gap={12}>
+                                        <IconCalendar size={18} color="rgba(255,255,255,0.4)" />
                                         <Text size="sm" c="white" fw={500}>
                                             {profile ? new Date(profile.createdAt).toLocaleDateString('en-GB', {
                                                 day: '2-digit', month: 'long', year: 'numeric'
@@ -539,8 +564,8 @@ export default function ProfilePage() {
                         </Paper>
 
                     </Stack>
-                </ScrollArea>
-            </Box>
+                </Box>
+            </Flex>
         </Box>
     );
 }

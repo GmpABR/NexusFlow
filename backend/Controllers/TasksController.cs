@@ -132,6 +132,23 @@ public class TasksController : ControllerBase
         return Ok(activities);
     }
 
+    [HttpPost("{taskId}/comments")]
+    public async Task<IActionResult> CreateComment(int taskId, [FromBody] AddCommentDto dto)
+    {
+        var activity = await _taskService.AddCommentAsync(taskId, dto.Text, GetUserId());
+
+        // Notify clients to append to the activity log directly
+        // Better yet, just emit TaskUpdated to reload activities on frontend
+        var task = await _taskService.GetTaskByIdAsync(taskId);
+        if (task != null)
+        {
+            await _hubContext.Clients.Group($"board_{task.BoardId}")
+                .SendAsync("TaskUpdated", task);
+        }
+
+        return Ok(activity);
+    }
+
     private int GetUserId()
     {
         var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 

@@ -47,6 +47,11 @@ public class TaskCardDto
     public string? AssigneeName { get; set; }
     public string? AssigneeAvatar { get; set; }
     public string? Tags { get; set; }
+
+    // Time Tracking
+    public int TotalTimeSpentMinutes { get; set; } = 0;
+    public bool IsTimerRunning { get; set; } = false;
+
     public ICollection<SubtaskDto> Subtasks { get; set; } = new List<SubtaskDto>();
 }
 
@@ -75,4 +80,10 @@ public class MoveTaskDto
     [Required]
     public int TargetColumnId { get; set; }
     public int NewOrder { get; set; }
+}
+
+public class AddCommentDto
+{
+    [Required, MinLength(1)]
+    public string Text { get; set; } = string.Empty;
 }

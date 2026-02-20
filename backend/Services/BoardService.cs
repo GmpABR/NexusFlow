@@ -20,7 +20,7 @@ public class BoardService : IBoardService
             .AsNoTracking()
             .Where(b => b.OwnerId == userId 
                      || b.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
-                     || (b.Workspace != null && b.Workspace.Members.Any(wm => wm.UserId == userId)))
+                     || (b.Workspace != null && b.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted")))
             .Select(b => new BoardSummaryDto
             {
                 Id = b.Id,
@@ -54,12 +54,12 @@ public class BoardService : IBoardService
     {
         // Combined Query: Checks existence + access + projects result in one go.
         // Returns null if board doesn't exist OR user has no access.
-        return await _db.Boards
+        var boardDto = await _db.Boards
             .AsNoTracking()
             .Where(b => b.Id == boardId && (
                 b.OwnerId == userId 
-                || b.Members.Any(m => m.UserId == userId) // Accepted check logic can be added here if needed, consistent with previous access logic
-                || (b.Workspace != null && b.Workspace.Members.Any(wm => wm.UserId == userId))
+                || b.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
+                || (b.Workspace != null && b.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted"))
             ))
             .Select(b => new BoardDetailDto
             {
@@ -112,6 +112,51 @@ public class BoardService : IBoardService
                 // Handle null coalescing properly.
             })
             .FirstOrDefaultAsync();
+
+        if (boardDto != null)
+        {
+            // Owner is implicitly a member
+            var owner = await _db.Users.FindAsync(boardDto.OwnerId);
+            if (owner != null && !boardDto.Members.Any(m => m.UserId == owner.Id))
+            {
+                boardDto.Members.Add(new BoardMemberDto
+                {
+                    Id = 0,
+                    UserId = owner.Id,
+                    Username = owner.Username,
+                    Email = owner.Email,
+                    Role = "Owner",
+                    JoinedAt = boardDto.CreatedAt
+                });
+            }
+
+            // Workspace members are implicitly members of the board
+            if (boardDto.WorkspaceId.HasValue)
+            {
+                var wsMembers = await _db.WorkspaceMembers
+                    .Include(wm => wm.User)
+                    .Where(wm => wm.WorkspaceId == boardDto.WorkspaceId.Value && wm.Status == "Accepted")
+                    .ToListAsync();
+                
+                foreach (var wm in wsMembers)
+                {
+                    if (!boardDto.Members.Any(m => m.UserId == wm.UserId))
+                    {
+                        boardDto.Members.Add(new BoardMemberDto
+                        {
+                            Id = wm.Id,
+                            UserId = wm.UserId,
+                            Username = wm.User.Username,
+                            Email = wm.User.Email,
+                            Role = wm.Role,
+                            JoinedAt = wm.JoinedAt
+                        });
+                    }
+                }
+            }
+        }
+
+        return boardDto;
     }
 
     public async Task<BoardSummaryDto> CreateBoardAsync(CreateBoardDto dto, int userId)
@@ -296,7 +341,7 @@ public class BoardService : IBoardService
 
         var isMember = board.OwnerId == userId 
             || board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
-            || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId));
+            || (board.Workspace?.Members?.Any(wm => wm.UserId == userId && wm.Status == "Accepted") == true);
 
         if (!isMember) throw new UnauthorizedAccessException("User is not a member of this board");
 
@@ -335,7 +380,7 @@ public class BoardService : IBoardService
 
         var isMember = board.OwnerId == userId 
             || board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
-            || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId));
+            || (board.Workspace?.Members?.Any(wm => wm.UserId == userId && wm.Status == "Accepted") == true);
 
         if (!isMember) return false;
 
@@ -375,7 +420,7 @@ public class BoardService : IBoardService
 
         var isMember = board.OwnerId == userId 
             || board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
-            || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId));
+            || (board.Workspace?.Members?.Any(wm => wm.UserId == userId && wm.Status == "Accepted") == true);
 
         if (!isMember) return false;
 
@@ -407,7 +452,7 @@ public class BoardService : IBoardService
 
         var isMember = board.OwnerId == userId 
             || board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
-            || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId));
+            || (board.Workspace?.Members?.Any(wm => wm.UserId == userId && wm.Status == "Accepted") == true);
 
         if (!isMember) return null;
 

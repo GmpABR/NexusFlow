@@ -3,9 +3,10 @@ import { DateInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
 import { useEffect, useState } from 'react';
 import type { TaskCard, BoardMember } from '../api/boards';
-import { updateTask, createSubtask, updateSubtask, deleteSubtask, type Subtask, getTaskActivities, type TaskActivity } from '../api/tasks';
+import { updateTask, createSubtask, updateSubtask, deleteSubtask, type Subtask, getTaskActivities, type TaskActivity, addComment } from '../api/tasks';
+import { startTimer, stopTimer } from '../api/timelogs';
 import { notifications } from '@mantine/notifications';
-import { IconCalendar, IconUser, IconTag, IconTrash, IconMessageCircle } from '@tabler/icons-react';
+import { IconCalendar, IconUser, IconTag, IconTrash, IconMessageCircle, IconClock, IconPlayerPlay, IconPlayerStop } from '@tabler/icons-react';
 import '@mantine/dates/styles.css';
 import dayjs from 'dayjs';
 import RichText from './RichText';
@@ -37,6 +38,10 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
     const [isAddingSubtask, setIsAddingSubtask] = useState(false);
     const [activities, setActivities] = useState<TaskActivity[]>([]);
 
+    // Comments
+    const [newComment, setNewComment] = useState('');
+    const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
     useEffect(() => {
         if (task) {
             const isDescDirty = form.isDirty('description');
@@ -63,6 +68,41 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
             setActivities(data);
         } catch (error) {
             console.error("Failed to fetch activities", error);
+        }
+    };
+
+    const handleAddComment = async () => {
+        if (!task || !newComment.trim() || isSubmittingComment) return;
+        setIsSubmittingComment(true);
+
+        const commentText = newComment;
+        setNewComment('');
+
+        // 1. Optimistic Update: instantly append to the feed
+        const tempActivity: TaskActivity = {
+            id: Date.now(), // Fake ID
+            taskCardId: task.id,
+            userId: 0, // Current user id conceptually, but avatar logic might miss it temporarily unless we find it from members. 
+            // But often UI just needs the text to appear.
+            user: { id: 0, username: 'You', email: '' }, // Fallback for optimistic
+            action: 'Commented',
+            details: commentText,
+            timestamp: new Date().toISOString()
+        };
+
+        setActivities(prev => [tempActivity, ...prev]);
+
+        // 2. Background API call
+        try {
+            await addComment(task.id, commentText);
+            // Replace exact temp comment with real data by refetching
+            fetchActivities(task.id);
+        } catch (error) {
+            notifications.show({ title: 'Error', message: 'Failed to post comment', color: 'red' });
+            // Revert on failure
+            setActivities(prev => prev.filter(a => a.id !== tempActivity.id));
+        } finally {
+            setIsSubmittingComment(false);
         }
     };
 
@@ -142,13 +182,47 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
         }
     };
 
+    const handleToggleTimer = async () => {
+        if (!task) return;
+
+        // 1. Optimistic UI update on the parent task reference
+        const previousState = task.isTimerRunning;
+        const newState = !previousState;
+
+        // Optimistically update the UI by firing the provided callback
+        onTaskUpdated({ ...task, isTimerRunning: newState });
+
+        if (newState) {
+            notifications.show({ title: 'Timer Started', message: 'Tracking time for this task', color: 'green' });
+        } else {
+            notifications.show({ title: 'Timer Stopped', message: 'Time logged successfully', color: 'blue' });
+        }
+
+        // 2. Background API Call
+        try {
+            if (previousState) {
+                await stopTimer(task.id);
+            } else {
+                await startTimer(task.id);
+            }
+            // Sync up exactly after API returns
+            fetchActivities(task.id);
+        } catch (error: any) {
+            // Revert on failure
+            onTaskUpdated({ ...task, isTimerRunning: previousState });
+            notifications.show({ title: 'Error', message: error.response?.data?.message || 'Failed to toggle timer', color: 'red' });
+        }
+    };
+
     if (!task) return null;
 
     return (
         <Modal
             opened={opened}
             onClose={onClose}
-            title={<Badge size="lg" variant="dot" color={getPriorityColor(task.priority)}>{task.priority}</Badge>}
+            title={<Group><Badge size="lg" variant="dot" color={getPriorityColor(task.priority)}>{task.priority}</Badge>
+                {task.isTimerRunning && <Badge size="sm" color="blue" variant="light" leftSection={<IconClock size={10} />}>Timer Running</Badge>}
+            </Group>}
             size={1100}
             centered
             styles={{
@@ -162,14 +236,34 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                 {/* ── Left Column: Task Form ── */}
                 <ScrollArea style={{ flex: 1, minWidth: 0 }} styles={{ viewport: { padding: '20px 24px 24px' } }}>
                     <form onSubmit={form.onSubmit(handleSubmit)}>
-                        <TextInput
-                            label="Title"
-                            placeholder="Task title"
-                            required
-                            mb="md"
-                            {...form.getInputProps('title')}
-                            styles={{ input: { background: '#25262b', color: 'white', borderColor: '#373A40' } }}
-                        />
+                        <Group align="flex-end" mb="md" gap="md">
+                            <TextInput
+                                style={{ flex: 1 }}
+                                label="Title"
+                                placeholder="Task title"
+                                required
+                                {...form.getInputProps('title')}
+                                styles={{ input: { background: '#25262b', color: 'white', borderColor: '#373A40', fontSize: '1.2rem', fontWeight: 600 } }}
+                            />
+
+                            <Stack gap={2} align="center">
+                                <Text size="xs" c="dimmed" fw={600}>TIME SPENT</Text>
+                                <Group gap="xs">
+                                    <Badge size="lg" variant="filled" color={task.isTimerRunning ? 'blue' : 'dark'} styles={{ root: { minWidth: 80 } }}>
+                                        {Math.floor(task.totalTimeSpentMinutes / 60)}h {task.totalTimeSpentMinutes % 60}m
+                                    </Badge>
+                                    <Button
+                                        size="compact-md"
+                                        variant={task.isTimerRunning ? "light" : "filled"}
+                                        color={task.isTimerRunning ? "red" : "blue"}
+                                        onClick={handleToggleTimer}
+                                        leftSection={task.isTimerRunning ? <IconPlayerStop size={14} /> : <IconPlayerPlay size={14} />}
+                                    >
+                                        {task.isTimerRunning ? "Stop" : "Start"}
+                                    </Button>
+                                </Group>
+                            </Stack>
+                        </Group>
 
                         <Stack gap={4} mb="md">
                             <Text size="sm" fw={500}>Description</Text>
@@ -315,6 +409,30 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                     <ScrollArea style={{ flex: 1 }} styles={{ viewport: { padding: '12px 12px' } }}>
                         <ActivityLog activities={activities} />
                     </ScrollArea>
+
+                    {/* Add Comment Input */}
+                    <div style={{ padding: '12px 16px', borderTop: '1px solid #2C2E33', background: '#1a1b1e' }}>
+                        <TextInput
+                            placeholder="Write a comment..."
+                            value={newComment}
+                            onChange={(e) => setNewComment(e.currentTarget.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') { e.preventDefault(); handleAddComment(); }
+                            }}
+                            styles={{ input: { background: '#25262b', color: 'white', borderColor: '#373A40' } }}
+                            rightSection={
+                                <ActionIcon
+                                    size={28}
+                                    color="violet"
+                                    variant="filled"
+                                    onClick={handleAddComment}
+                                    disabled={!newComment.trim() || isSubmittingComment}
+                                >
+                                    <IconMessageCircle size={16} />
+                                </ActionIcon>
+                            }
+                        />
+                    </div>
                 </div>
             </div>
         </Modal>

@@ -69,3 +69,8 @@ export const getTaskActivities = async (taskId: number): Promise<TaskActivity[]>
     const { data } = await api.get<TaskActivity[]>(`/tasks/${taskId}/activities`);
     return data;
 };
+
+export const addComment = async (taskId: number, text: string): Promise<TaskActivity> => {
+    const { data } = await api.post<TaskActivity>(`/tasks/${taskId}/comments`, { text });
+    return data;
+};
