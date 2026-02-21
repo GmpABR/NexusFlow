@@ -22,9 +22,8 @@ import {
     IconPlus,
     IconCheck,
     IconLayoutDashboard,
-    IconHome,
     IconUser,
-    IconSettings
+    IconChartBar
 } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { notifications } from '@mantine/notifications';
@@ -119,7 +118,7 @@ export default function BoardsPage() {
     return (
         <Box
             style={{
-                minHeight: 'calc(100vh - 76px)',
+                minHeight: '100%',
                 background: '#0a0a0b', // Deep minimalist dark mode
                 color: 'white',
             }}
@@ -133,30 +132,13 @@ export default function BoardsPage() {
                         background: '#121214', // Solid dark for the sidebar
                         borderRight: '1px solid rgba(255,255,255,0.05)',
                         padding: '40px 24px',
-                        minHeight: 'calc(100vh - 76px)',
+                        minHeight: '100%',
                         display: 'flex',
                         flexDirection: 'column',
                         position: 'sticky',
                         top: 0
                     }}
                 >
-                    <Stack gap={10} mb="xl">
-                        <NavLink
-                            label="Overview"
-                            leftSection={<IconHome size={20} />}
-                            active
-                            variant="light"
-                            color="violet"
-                            style={{ borderRadius: 8, fontWeight: 700, fontSize: '15px' }}
-                            onClick={() => navigate('/boards')}
-                        />
-                        <NavLink
-                            label="Settings"
-                            leftSection={<IconSettings size={20} />}
-                            style={{ borderRadius: 8, fontWeight: 600, fontSize: '15px' }}
-                            onClick={() => navigate('/profile')}
-                        />
-                    </Stack>
 
                     <Divider my="md" color="rgba(255,255,255,0.1)" />
 
@@ -187,6 +169,15 @@ export default function BoardsPage() {
                                 childrenOffset={28}
                                 style={{ borderRadius: 8, fontWeight: 600, fontSize: '16px', marginBottom: 4 }}
                             >
+                                <NavLink
+                                    label="Overview"
+                                    leftSection={<IconChartBar size={16} />}
+                                    style={{ borderRadius: 8, fontSize: '15px', fontWeight: 500 }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/workspaces/${w.id}?tab=overview`);
+                                    }}
+                                />
                                 <NavLink
                                     label="Boards"
                                     leftSection={<IconLayoutDashboard size={16} />}

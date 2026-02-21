@@ -12,13 +12,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('token');
   if (!token) return <Navigate to="/login" replace />;
   return (
-    <>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <AppNavbar />
-      {/* 76px top padding = navbar height */}
-      <div style={{ paddingTop: 76 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto' }}>
         {children}
       </div>
-    </>
+    </div>
   );
 }
 

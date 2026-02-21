@@ -89,6 +89,30 @@ public class BoardService : IBoardService
                         AssigneeId = t.AssigneeId,
                         AssigneeName = t.Assignee != null ? t.Assignee.Username : null,
                         Tags = t.Tags,
+                        TotalTimeSpentMinutes = t.TimeLogs
+                            .Where(tl => tl.DurationMinutes.HasValue)
+                            .Sum(tl => tl.DurationMinutes!.Value),
+                        IsTimerRunning = t.TimeLogs.Any(tl => tl.StoppedAt == null),
+                        // Multi-assignees
+                        Assignees = t.Assignees
+                            .Select(ta => new AssigneeDto { UserId = ta.UserId, Username = ta.User.Username })
+                            .ToList(),
+                        // Attachments
+                        Attachments = t.Attachments
+                            .OrderByDescending(a => a.UploadedAt)
+                            .Select(a => new AttachmentDto
+                            {
+                                Id = a.Id,
+                                TaskCardId = a.TaskCardId,
+                                UploadedById = a.UploadedById,
+                                UploadedByUsername = a.UploadedBy.Username,
+                                FileName = a.FileName,
+                                StoragePath = a.StoragePath,
+                                PublicUrl = a.PublicUrl,
+                                ContentType = a.ContentType,
+                                FileSizeBytes = a.FileSizeBytes,
+                                UploadedAt = a.UploadedAt
+                            }).ToList(),
                         Subtasks = t.Subtasks.OrderBy(s => s.Id).Select(s => new SubtaskDto
                         {
                             Id = s.Id,

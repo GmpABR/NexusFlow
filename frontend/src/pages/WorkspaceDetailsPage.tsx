@@ -22,7 +22,8 @@ import {
     ActionIcon,
     ThemeIcon,
 } from '@mantine/core';
-import { IconLayoutBoard, IconUsers, IconPlus, IconArrowLeft, IconCheck, IconPalette } from '@tabler/icons-react';
+import { IconLayoutBoard, IconUsers, IconPlus, IconArrowLeft, IconCheck, IconPalette, IconChartBar } from '@tabler/icons-react';
+import WorkspaceOverview from '../components/WorkspaceOverview';
 import { useDebouncedValue } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { getWorkspace, getWorkspaceBoards, addWorkspaceMember, removeWorkspaceMember, type Workspace } from '../api/workspaces';
@@ -90,7 +91,6 @@ export default function WorkspaceDetailsPage() {
             setSearchValue('');
             setSearchResults([]);
             fetchWorkspace(workspace.id);
-            fetchWorkspace(workspace.id);
         } catch (error: any) {
             const message = error.response?.data?.message || 'Failed to add member';
             notifications.show({ title: 'Error', message, color: 'red' });
@@ -153,11 +153,11 @@ export default function WorkspaceDetailsPage() {
         }
     };
 
-    if (loading) return <Center h="100vh"><Loader color="violet" /></Center>;
+    if (loading) return <Center h="100%"><Loader color="violet" /></Center>;
     if (!workspace) return null;
 
     return (
-        <Box style={{ minHeight: '100vh', background: '#141517' }}>
+        <Box style={{ minHeight: '100%', background: '#141517' }}>
             <Container size="lg" py="xl">
                 <Button
                     variant="subtle"
@@ -184,9 +184,14 @@ export default function WorkspaceDetailsPage() {
                     color="violet"
                 >
                     <Tabs.List mb="lg" style={{ background: '#25262b', padding: 4, borderRadius: 8, border: '1px solid #373A40' }}>
+                        <Tabs.Tab value="overview" leftSection={<IconChartBar size={16} />}>Overview</Tabs.Tab>
                         <Tabs.Tab value="boards" leftSection={<IconLayoutBoard size={16} />}>Boards</Tabs.Tab>
                         <Tabs.Tab value="members" leftSection={<IconUsers size={16} />}>Members</Tabs.Tab>
                     </Tabs.List>
+
+                    <Tabs.Panel value="overview">
+                        {workspace && <WorkspaceOverview workspaceId={workspace.id} />}
+                    </Tabs.Panel>
 
                     <Tabs.Panel value="boards">
                         {boards.length === 0 ? (

@@ -48,7 +48,7 @@ export default function MyTasksPage() {
 
     if (loading) {
         return (
-            <Center style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0d0e11 0%, #121318 100%)' }}>
+            <Center style={{ minHeight: '100%', background: 'linear-gradient(135deg, #0d0e11 0%, #121318 100%)' }}>
                 <Loader color="violet" size="lg" />
             </Center>
         );
@@ -57,7 +57,7 @@ export default function MyTasksPage() {
     return (
         <Box
             style={{
-                minHeight: '100vh',
+                minHeight: '100%',
                 background: 'linear-gradient(135deg, #0d0e11 0%, #121318 100%)',
                 color: 'white',
             }}
@@ -71,7 +71,7 @@ export default function MyTasksPage() {
                     backdropFilter: 'blur(12px)',
                     borderBottom: '1px solid rgba(255,255,255,0.08)',
                     position: 'sticky',
-                    top: 64,
+                    top: 0,
                     zIndex: 10,
                 }}
             >

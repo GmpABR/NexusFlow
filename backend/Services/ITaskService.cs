@@ -25,4 +25,9 @@ public interface ITaskService
     Task<TimeLogDto> AddManualTimeLogAsync(int taskId, int userId, AddManualTimeLogDto dto);
     Task<bool> DeleteTimeLogAsync(int timeLogId, int userId);
     Task<List<TimeLogDto>> GetTaskTimeLogsAsync(int taskId);
+
+    // Attachment Methods
+    Task<List<AttachmentDto>> GetAttachmentsAsync(int taskId);
+    Task<AttachmentDto> AddAttachmentAsync(int taskId, CreateAttachmentDto dto, int userId);
+    Task<bool> DeleteAttachmentAsync(int attachmentId, int userId);
 }

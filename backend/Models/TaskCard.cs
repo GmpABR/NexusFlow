@@ -23,4 +23,6 @@ public class TaskCard
 
     public ICollection<Subtask> Subtasks { get; set; } = new List<Subtask>();
     public ICollection<TimeLog> TimeLogs { get; set; } = new List<TimeLog>();
+    public ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();
+    public ICollection<TaskAssignee> Assignees { get; set; } = new List<TaskAssignee>();
 }

@@ -17,6 +17,8 @@ public class AppDbContext : DbContext
     public DbSet<Subtask> Subtasks { get; set; }
     public DbSet<TaskActivity> TaskActivities { get; set; }
     public DbSet<TimeLog> TimeLogs { get; set; }
+    public DbSet<Attachment> Attachments { get; set; }
+    public DbSet<TaskAssignee> TaskAssignees { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -132,6 +134,36 @@ public class AppDbContext : DbContext
                   .WithMany()
                   .HasForeignKey(tl => tl.UserId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Attachment -> TaskCard and UploadedBy
+        modelBuilder.Entity<Attachment>(entity =>
+        {
+            entity.HasOne(a => a.TaskCard)
+                  .WithMany(tc => tc.Attachments)
+                  .HasForeignKey(a => a.TaskCardId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(a => a.UploadedBy)
+                  .WithMany()
+                  .HasForeignKey(a => a.UploadedById)
+                  .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // TaskAssignee (TaskCard <-> User many-to-many)
+        modelBuilder.Entity<TaskAssignee>(entity =>
+        {
+            entity.HasKey(ta => new { ta.TaskCardId, ta.UserId });
+
+            entity.HasOne(ta => ta.TaskCard)
+                  .WithMany(tc => tc.Assignees)
+                  .HasForeignKey(ta => ta.TaskCardId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(ta => ta.User)
+                  .WithMany()
+                  .HasForeignKey(ta => ta.UserId)
+                  .OnDelete(DeleteBehavior.NoAction);
         });
     }
 }

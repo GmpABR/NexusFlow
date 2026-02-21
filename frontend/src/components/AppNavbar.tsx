@@ -161,10 +161,6 @@ export default function AppNavbar() {
     return (
         <Box
             style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
                 height: 76,
                 background: '#1d2125',
                 borderBottom: '1px solid #2c333a',
@@ -174,6 +170,7 @@ export default function AppNavbar() {
                 gap: 12,
                 zIndex: 1000,
                 boxShadow: '0 2px 16px rgba(0,0,0,0.5)',
+                flexShrink: 0,
             }}
         >
             {/* Logo removed as requested */}
@@ -418,6 +415,6 @@ export default function AppNavbar() {
                     </Menu.Dropdown>
                 </Menu>
             </Group>
-        </Box>
+        </Box >
     );
 }

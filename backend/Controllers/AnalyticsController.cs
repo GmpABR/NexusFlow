@@ -122,6 +122,114 @@ public class AnalyticsController : ControllerBase
         return Ok(dto);
     }
 
+    [HttpGet("workspace/{workspaceId}")]
+    public async Task<IActionResult> GetWorkspaceAnalytics(int workspaceId)
+    {
+        var userId = GetUserId();
+
+        // Verify user is a member of this workspace
+        var hasAccess = await _db.Workspaces
+            .Where(w => w.Id == workspaceId)
+            .AnyAsync(w => w.OwnerId == userId || w.Members.Any(m => m.UserId == userId && m.Status == "Accepted"));
+
+        if (!hasAccess) return Forbid();
+
+        var now = DateTime.UtcNow;
+
+        // Load all tasks across all boards in this workspace
+        var tasks = await _db.TaskCards
+            .AsNoTracking()
+            .Where(t => t.Column.Board.WorkspaceId == workspaceId)
+            .Select(t => new
+            {
+                t.Id,
+                t.Title,
+                t.Priority,
+                t.DueDate,
+                t.ColumnId,
+                t.CreatedAt,
+                ColumnName = t.Column.Name,
+                BoardId = t.Column.BoardId,
+                BoardName = t.Column.Board.Name,
+                AssigneeUsername = t.Assignee != null ? t.Assignee.Username : null
+            })
+            .ToListAsync();
+
+        // Board count
+        var boardCount = await _db.Boards.CountAsync(b => b.WorkspaceId == workspaceId);
+
+        // Member count
+        var memberCount = await _db.WorkspaceMembers
+            .CountAsync(m => m.WorkspaceId == workspaceId && m.Status == "Accepted");
+
+        // Done column IDs across workspace
+        var doneColumnIds = await _db.Columns
+            .AsNoTracking()
+            .Where(c => c.Board.WorkspaceId == workspaceId &&
+                        (c.Name.ToLower().Contains("done") || c.Name.ToLower().Contains("complete")))
+            .Select(c => c.Id)
+            .ToListAsync();
+
+        int totalTasks = tasks.Count;
+        int completedTasks = tasks.Count(t => doneColumnIds.Contains(t.ColumnId));
+        int pendingTasks = totalTasks - completedTasks;
+        int overdueTasks = tasks.Count(t =>
+            !doneColumnIds.Contains(t.ColumnId) &&
+            t.DueDate.HasValue &&
+            t.DueDate.Value < now);
+
+        // Tasks by priority
+        var tasksByPriority = tasks
+            .GroupBy(t => t.Priority)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        // Tasks by assignee (top 8)
+        var tasksByAssignee = tasks
+            .Where(t => t.AssigneeUsername != null)
+            .GroupBy(t => t.AssigneeUsername!)
+            .OrderByDescending(g => g.Count())
+            .Take(8)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        // Tasks per board
+        var tasksPerBoard = tasks
+            .GroupBy(t => t.BoardName)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        // Recent activity (last 7 days)
+        var recentActivity = await _db.TaskActivities
+            .AsNoTracking()
+            .Where(a => a.TaskCard.Column.Board.WorkspaceId == workspaceId &&
+                        a.Timestamp >= now.AddDays(-7))
+            .OrderByDescending(a => a.Timestamp)
+            .Take(10)
+            .Select(a => new WorkspaceActivityDto
+            {
+                Username = a.User.Username,
+                Action = a.Action,
+                Details = a.Details ?? "",
+                TaskTitle = a.TaskCard.Title,
+                BoardName = a.TaskCard.Column.Board.Name,
+                Timestamp = a.Timestamp
+            })
+            .ToListAsync();
+
+        return Ok(new WorkspaceAnalyticsDto
+        {
+            WorkspaceId = workspaceId,
+            TotalBoards = boardCount,
+            TotalMembers = memberCount,
+            TotalTasks = totalTasks,
+            CompletedTasks = completedTasks,
+            PendingTasks = pendingTasks,
+            OverdueTasks = overdueTasks,
+            TasksByPriority = tasksByPriority,
+            TasksByAssignee = tasksByAssignee,
+            TasksPerBoard = tasksPerBoard,
+            RecentActivity = recentActivity
+        });
+    }
+
     private int GetUserId()
     {
         var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 

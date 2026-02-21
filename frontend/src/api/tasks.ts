@@ -17,7 +17,8 @@ export interface UpdateTaskDto {
     priority?: string;
     dueDate?: string | null;
     storyPoints?: number | null;
-    assigneeId?: number | null;
+    assigneeId?: number | null;    // legacy single (kept for compat)
+    assigneeIds?: number[];         // multi-assignee (authoritative)
     tags?: string | null;
 }
 
@@ -73,4 +74,26 @@ export const getTaskActivities = async (taskId: number): Promise<TaskActivity[]>
 export const addComment = async (taskId: number, text: string): Promise<TaskActivity> => {
     const { data } = await api.post<TaskActivity>(`/tasks/${taskId}/comments`, { text });
     return data;
+};
+
+export interface CreateAttachmentPayload {
+    fileName: string;
+    storagePath: string;
+    publicUrl: string;
+    contentType: string;
+    fileSizeBytes: number;
+}
+
+export const getAttachments = async (taskId: number) => {
+    const { data } = await api.get(`/tasks/${taskId}/attachments`);
+    return data;
+};
+
+export const registerAttachment = async (taskId: number, payload: CreateAttachmentPayload) => {
+    const { data } = await api.post(`/tasks/${taskId}/attachments`, payload);
+    return data;
+};
+
+export const deleteAttachment = async (taskId: number, attachmentId: number): Promise<void> => {
+    await api.delete(`/tasks/${taskId}/attachments/${attachmentId}`);
 };

@@ -36,6 +36,16 @@ public class TaskService : ITaskService
         _db.TaskCards.Add(task);
         await _db.SaveChangesAsync();
 
+        // Sync multi-assignees
+        if (dto.AssigneeIds != null && dto.AssigneeIds.Count > 0)
+        {
+            foreach (var uid in dto.AssigneeIds.Distinct())
+            {
+                _db.TaskAssignees.Add(new TaskAssignee { TaskCardId = task.Id, UserId = uid });
+            }
+            await _db.SaveChangesAsync();
+        }
+
         await LogActivity(task.Id, userId, "Created", $"Task created in column {task.ColumnId}");
 
         return await MapToDto(task);
@@ -68,6 +78,18 @@ public class TaskService : ITaskService
         task.Tags = dto.Tags;
 
         await _db.SaveChangesAsync();
+
+        // Sync multi-assignees (full replace)
+        if (dto.AssigneeIds != null)
+        {
+            var existing = await _db.TaskAssignees.Where(ta => ta.TaskCardId == taskId).ToListAsync();
+            _db.TaskAssignees.RemoveRange(existing);
+            foreach (var uid in dto.AssigneeIds.Distinct())
+            {
+                _db.TaskAssignees.Add(new TaskAssignee { TaskCardId = taskId, UserId = uid });
+            }
+            await _db.SaveChangesAsync();
+        }
         
         if (changes.Any())
         {
@@ -226,6 +248,20 @@ public class TaskService : ITaskService
                 Tags = t.Tags,
                 TotalTimeSpentMinutes = t.TimeLogs.Where(tl => tl.DurationMinutes.HasValue).Sum(tl => tl.DurationMinutes!.Value),
                 IsTimerRunning = t.TimeLogs.Any(tl => tl.StoppedAt == null),
+                Assignees = t.Assignees.Select(ta => new AssigneeDto { UserId = ta.UserId, Username = ta.User.Username }).ToList(),
+                Attachments = t.Attachments.OrderByDescending(a => a.UploadedAt).Select(a => new AttachmentDto
+                {
+                    Id = a.Id,
+                    TaskCardId = a.TaskCardId,
+                    UploadedById = a.UploadedById,
+                    UploadedByUsername = a.UploadedBy.Username,
+                    FileName = a.FileName,
+                    StoragePath = a.StoragePath,
+                    PublicUrl = a.PublicUrl,
+                    ContentType = a.ContentType,
+                    FileSizeBytes = a.FileSizeBytes,
+                    UploadedAt = a.UploadedAt
+                }).ToList(),
                 Subtasks = t.Subtasks.OrderBy(s => s.Id).Select(s => new SubtaskDto 
                 { 
                     Id = s.Id, 
@@ -406,29 +442,35 @@ public class TaskService : ITaskService
 
     private async Task<TaskCardDto> MapToDto(TaskCard task)
     {
-        // If Assignee is null but ID is set, we might want to load it
         if (task.Assignee == null && task.AssigneeId.HasValue) 
         {
              await _db.Entry(task).Reference(t => t.Assignee).LoadAsync();
         }
-
-        // Ensure Column is loaded to get BoardId (if not already loaded)
         if (task.Column == null)
         {
             await _db.Entry(task).Reference(t => t.Column).LoadAsync();
         }
-
-        // Ensure Subtasks are loaded if they weren't included in the query
         if (task.Subtasks == null) 
         {
             await _db.Entry(task).Collection(t => t.Subtasks).LoadAsync();
         }
-
-        // Ensure TimeLogs are loaded for calculation
         if (task.TimeLogs == null)
         {
             await _db.Entry(task).Collection(t => t.TimeLogs).LoadAsync();
         }
+
+        // Load Assignees with User
+        var assignees = await _db.TaskAssignees
+            .Where(ta => ta.TaskCardId == task.Id)
+            .Include(ta => ta.User)
+            .ToListAsync();
+
+        // Load Attachments with UploadedBy
+        var attachments = await _db.Attachments
+            .Where(a => a.TaskCardId == task.Id)
+            .Include(a => a.UploadedBy)
+            .OrderByDescending(a => a.UploadedAt)
+            .ToListAsync();
 
         return new TaskCardDto
         {
@@ -444,10 +486,24 @@ public class TaskService : ITaskService
             StoryPoints = task.StoryPoints,
             AssigneeId = task.AssigneeId,
             AssigneeName = task.Assignee?.Username,
-            AssigneeAvatar = null, // Placeholder
+            AssigneeAvatar = null,
             Tags = task.Tags,
             TotalTimeSpentMinutes = task.TimeLogs.Where(tl => tl.DurationMinutes.HasValue).Sum(tl => tl.DurationMinutes!.Value),
             IsTimerRunning = task.TimeLogs.Any(tl => tl.StoppedAt == null),
+            Assignees = assignees.Select(ta => new AssigneeDto { UserId = ta.UserId, Username = ta.User.Username }).ToList(),
+            Attachments = attachments.Select(a => new AttachmentDto
+            {
+                Id = a.Id,
+                TaskCardId = a.TaskCardId,
+                UploadedById = a.UploadedById,
+                UploadedByUsername = a.UploadedBy?.Username ?? "",
+                FileName = a.FileName,
+                StoragePath = a.StoragePath,
+                PublicUrl = a.PublicUrl,
+                ContentType = a.ContentType,
+                FileSizeBytes = a.FileSizeBytes,
+                UploadedAt = a.UploadedAt
+            }).ToList(),
             Subtasks = task.Subtasks.Select(s => new SubtaskDto 
             { 
                 Id = s.Id, 
@@ -456,5 +512,79 @@ public class TaskService : ITaskService
                 TaskCardId = s.TaskCardId
             }).OrderBy(s => s.Id).ToList()
         };
+    }
+
+    // Attachment Methods
+    public async Task<List<AttachmentDto>> GetAttachmentsAsync(int taskId)
+    {
+        return await _db.Attachments
+            .AsNoTracking()
+            .Where(a => a.TaskCardId == taskId)
+            .Include(a => a.UploadedBy)
+            .OrderByDescending(a => a.UploadedAt)
+            .Select(a => new AttachmentDto
+            {
+                Id = a.Id,
+                TaskCardId = a.TaskCardId,
+                UploadedById = a.UploadedById,
+                UploadedByUsername = a.UploadedBy.Username,
+                FileName = a.FileName,
+                StoragePath = a.StoragePath,
+                PublicUrl = a.PublicUrl,
+                ContentType = a.ContentType,
+                FileSizeBytes = a.FileSizeBytes,
+                UploadedAt = a.UploadedAt
+            })
+            .ToListAsync();
+    }
+
+    public async Task<AttachmentDto> AddAttachmentAsync(int taskId, CreateAttachmentDto dto, int userId)
+    {
+        var attachment = new Attachment
+        {
+            TaskCardId = taskId,
+            UploadedById = userId,
+            FileName = dto.FileName,
+            StoragePath = dto.StoragePath,
+            PublicUrl = dto.PublicUrl,
+            ContentType = dto.ContentType,
+            FileSizeBytes = dto.FileSizeBytes,
+            UploadedAt = DateTime.UtcNow
+        };
+
+        _db.Attachments.Add(attachment);
+        await _db.SaveChangesAsync();
+
+        await _db.Entry(attachment).Reference(a => a.UploadedBy).LoadAsync();
+        await LogActivity(taskId, userId, "Attachment Added", $"Attached file: {dto.FileName}");
+
+        return new AttachmentDto
+        {
+            Id = attachment.Id,
+            TaskCardId = attachment.TaskCardId,
+            UploadedById = attachment.UploadedById,
+            UploadedByUsername = attachment.UploadedBy?.Username ?? "",
+            FileName = attachment.FileName,
+            StoragePath = attachment.StoragePath,
+            PublicUrl = attachment.PublicUrl,
+            ContentType = attachment.ContentType,
+            FileSizeBytes = attachment.FileSizeBytes,
+            UploadedAt = attachment.UploadedAt
+        };
+    }
+
+    public async Task<bool> DeleteAttachmentAsync(int attachmentId, int userId)
+    {
+        var attachment = await _db.Attachments.FindAsync(attachmentId);
+        if (attachment == null) return false;
+
+        int taskId = attachment.TaskCardId;
+        string fileName = attachment.FileName;
+
+        _db.Attachments.Remove(attachment);
+        await _db.SaveChangesAsync();
+
+        await LogActivity(taskId, userId, "Attachment Deleted", $"Removed file: {fileName}");
+        return true;
     }
 }

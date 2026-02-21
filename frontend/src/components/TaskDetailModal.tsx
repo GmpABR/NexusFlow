@@ -1,16 +1,17 @@
-import { Modal, TextInput, Select, NumberInput, Button, Group, Badge, TagsInput, Stack, Text, Progress, Checkbox, ActionIcon, ScrollArea } from '@mantine/core';
+import { Modal, TextInput, Select, MultiSelect, NumberInput, Button, Group, Badge, TagsInput, Stack, Text, Progress, Checkbox, ActionIcon, ScrollArea, Loader } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
-import { useEffect, useState } from 'react';
-import type { TaskCard, BoardMember } from '../api/boards';
-import { updateTask, createSubtask, updateSubtask, deleteSubtask, type Subtask, getTaskActivities, type TaskActivity, addComment } from '../api/tasks';
+import { useEffect, useState, useRef } from 'react';
+import type { TaskCard, Attachment } from '../api/boards';
+import { updateTask, createSubtask, updateSubtask, deleteSubtask, type Subtask, getTaskActivities, type TaskActivity, addComment, registerAttachment, deleteAttachment } from '../api/tasks';
 import { startTimer, stopTimer } from '../api/timelogs';
 import { notifications } from '@mantine/notifications';
-import { IconCalendar, IconUser, IconTag, IconTrash, IconMessageCircle, IconClock, IconPlayerPlay, IconPlayerStop } from '@tabler/icons-react';
+import { IconCalendar, IconUser, IconTag, IconTrash, IconMessageCircle, IconClock, IconPlayerPlay, IconPlayerStop, IconAlertCircle, IconPaperclip, IconDownload, IconUpload } from '@tabler/icons-react';
 import '@mantine/dates/styles.css';
 import dayjs from 'dayjs';
 import RichText from './RichText';
 import ActivityLog from './ActivityLog';
+import { uploadTaskAttachment, removeTaskAttachment } from '../api/storage';
 
 interface TaskDetailModalProps {
     opened: boolean;
@@ -19,6 +20,8 @@ interface TaskDetailModalProps {
     members: BoardMember[];
     onTaskUpdated: (task: TaskCard) => void;
 }
+
+type BoardMember = import('../api/boards').BoardMember;
 
 export default function TaskDetailModal({ opened, onClose, task, members, onTaskUpdated }: TaskDetailModalProps) {
     const form = useForm({
@@ -29,10 +32,15 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
             dueDate: null as Date | null,
             storyPoints: 0 as number | null,
             assigneeId: null as string | null,
+            assigneeIds: [] as string[],
             tags: [] as string[],
             subtasks: [] as Subtask[]
         },
     });
+
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [attachments, setAttachments] = useState<Attachment[]>([]);
+    const [isUploading, setIsUploading] = useState(false);
 
     const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
     const [isAddingSubtask, setIsAddingSubtask] = useState(false);
@@ -54,10 +62,12 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                 dueDate: task.dueDate ? new Date(task.dueDate) : null,
                 storyPoints: task.storyPoints || 0,
                 assigneeId: task.assigneeId ? task.assigneeId.toString() : null,
+                assigneeIds: task.assignees?.map(a => a.userId.toString()) ?? (task.assigneeId ? [task.assigneeId.toString()] : []),
                 tags: task.tags ? task.tags.split(',') : [],
                 subtasks: task.subtasks || []
             });
 
+            setAttachments(task.attachments ?? []);
             fetchActivities(task.id);
         }
     }, [task]);
@@ -159,10 +169,46 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
         }
     };
 
+    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!task || !e.target.files?.length) return;
+        const file = e.target.files[0];
+        setIsUploading(true);
+        try {
+            const { path, publicUrl } = await uploadTaskAttachment(file, task.id);
+            const saved = await registerAttachment(task.id, {
+                fileName: file.name,
+                storagePath: path,
+                publicUrl,
+                contentType: file.type || 'application/octet-stream',
+                fileSizeBytes: file.size
+            });
+            setAttachments(prev => [saved, ...prev]);
+            notifications.show({ title: 'Uploaded', message: file.name, color: 'green' });
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        } catch (err: any) {
+            notifications.show({ title: 'Upload failed', message: err.message ?? 'Unknown error', color: 'red' });
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleDeleteAttachment = async (att: Attachment) => {
+        if (!task) return;
+        try {
+            await deleteAttachment(task.id, att.id);
+            await removeTaskAttachment(att.storagePath);
+            setAttachments(prev => prev.filter(a => a.id !== att.id));
+            notifications.show({ title: 'Removed', message: att.fileName, color: 'blue' });
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to remove attachment', color: 'red' });
+        }
+    };
+
     const handleSubmit = async (values: typeof form.values) => {
         if (!task) return;
         try {
             const assigneeId = values.assigneeId ? parseInt(values.assigneeId) : null;
+            const assigneeIds = values.assigneeIds.map(Number).filter(Boolean);
             const updatedTask = await updateTask(task.id, {
                 title: values.title,
                 description: values.description,
@@ -170,6 +216,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                 dueDate: values.dueDate ? dayjs(values.dueDate).toISOString() : null,
                 storyPoints: values.storyPoints,
                 assigneeId: (assigneeId && !isNaN(assigneeId)) ? assigneeId : null,
+                assigneeIds,
                 tags: values.tags.length > 0 ? values.tags.join(',') : null
             });
             onTaskUpdated(updatedTask);
@@ -216,11 +263,27 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
 
     if (!task) return null;
 
+    // Due date urgency
+    const dueDateStatus = (() => {
+        if (!task.dueDate) return null;
+        const diffMs = new Date(task.dueDate).getTime() - Date.now();
+        if (diffMs < 0) return 'overdue' as const;
+        if (diffMs <= 24 * 60 * 60 * 1000) return 'due-soon' as const;
+        return null;
+    })();
+
     return (
         <Modal
             opened={opened}
             onClose={onClose}
-            title={<Group><Badge size="lg" variant="dot" color={getPriorityColor(task.priority)}>{task.priority}</Badge>
+            title={<Group>
+                <Badge size="lg" variant="dot" color={getPriorityColor(task.priority)}>{task.priority}</Badge>
+                {dueDateStatus === 'overdue' && (
+                    <Badge size="sm" color="red" variant="light" leftSection={<IconAlertCircle size={10} />}>Overdue</Badge>
+                )}
+                {dueDateStatus === 'due-soon' && (
+                    <Badge size="sm" color="yellow" variant="light" leftSection={<IconAlertCircle size={10} />}>Due Soon</Badge>
+                )}
                 {task.isTimerRunning && <Badge size="sm" color="blue" variant="light" leftSection={<IconClock size={10} />}>Timer Running</Badge>}
             </Group>}
             size={1100}
@@ -343,23 +406,118 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
 
                         <Group grow mb="md">
                             <DateInput
-                                label="Due Date"
+                                label={<span style={{ color: dueDateStatus === 'overdue' ? '#ff6b6b' : dueDateStatus === 'due-soon' ? '#fbbf24' : 'inherit' }}>
+                                    Due Date{dueDateStatus === 'overdue' ? ' ⚠ Overdue' : dueDateStatus === 'due-soon' ? ' ⚠ Due Soon' : ''}
+                                </span>}
                                 placeholder="Pick date"
-                                leftSection={<IconCalendar size={16} />}
+                                leftSection={<IconCalendar size={16} color={dueDateStatus === 'overdue' ? '#ff6b6b' : dueDateStatus === 'due-soon' ? '#fbbf24' : undefined} />}
                                 clearable
                                 {...form.getInputProps('dueDate')}
-                                styles={{ input: { background: '#25262b', color: 'white', borderColor: '#373A40' } }}
+                                styles={{
+                                    input: {
+                                        background: '#25262b',
+                                        color: 'white',
+                                        borderColor: dueDateStatus === 'overdue' ? 'rgba(255,107,107,0.5)' : dueDateStatus === 'due-soon' ? 'rgba(251,191,36,0.4)' : '#373A40',
+                                    }
+                                }}
                             />
-                            <Select
-                                label="Assignee"
-                                placeholder="Unassigned"
+                            <MultiSelect
+                                label="Assignees"
+                                placeholder="Pick members"
                                 data={members.map(m => ({ value: m.userId.toString(), label: m.username }))}
                                 leftSection={<IconUser size={16} />}
                                 clearable
-                                {...form.getInputProps('assigneeId')}
+                                searchable
+                                {...form.getInputProps('assigneeIds')}
                                 styles={{ input: { background: '#25262b', color: 'white', borderColor: '#373A40' } }}
                             />
                         </Group>
+
+                        {/* Attachments Section */}
+                        <Stack gap={6} mb="md">
+                            <Group justify="space-between">
+                                <Group gap={6}>
+                                    <IconPaperclip size={14} color="rgba(255,255,255,0.5)" />
+                                    <Text size="sm" fw={500}>Attachments</Text>
+                                    {attachments.length > 0 && (
+                                        <Badge size="xs" variant="filled" color="dark">{attachments.length}</Badge>
+                                    )}
+                                </Group>
+                                <Button
+                                    size="compact-xs"
+                                    variant="light"
+                                    color="violet"
+                                    leftSection={isUploading ? <Loader size={10} color="white" /> : <IconUpload size={12} />}
+                                    disabled={isUploading}
+                                    onClick={() => fileInputRef.current?.click()}
+                                    type="button"
+                                >
+                                    {isUploading ? 'Uploading…' : 'Attach File'}
+                                </Button>
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    style={{ display: 'none' }}
+                                    onChange={handleUpload}
+                                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
+                                />
+                            </Group>
+                            {attachments.length === 0 ? (
+                                <Text size="xs" c="dimmed">No attachments yet</Text>
+                            ) : (
+                                <Stack gap={4}>
+                                    {attachments.map(att => {
+                                        const isImage = att.contentType.startsWith('image/');
+                                        const sizeKb = (att.fileSizeBytes / 1024).toFixed(1);
+                                        return (
+                                            <Group key={att.id} gap={8} style={{
+                                                padding: '6px 8px',
+                                                background: 'rgba(255,255,255,0.04)',
+                                                borderRadius: 6,
+                                                border: '1px solid rgba(255,255,255,0.07)'
+                                            }}>
+                                                {isImage ? (
+                                                    <img
+                                                        src={att.publicUrl}
+                                                        alt={att.fileName}
+                                                        style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }}
+                                                    />
+                                                ) : (
+                                                    <div style={{
+                                                        width: 36, height: 36, borderRadius: 4, flexShrink: 0,
+                                                        background: 'rgba(139,92,246,0.2)',
+                                                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                                    }}>
+                                                        <IconPaperclip size={16} color="#a78bfa" />
+                                                    </div>
+                                                )}
+                                                <Stack gap={1} style={{ flex: 1, minWidth: 0 }}>
+                                                    <Text size="xs" fw={600} c="white" truncate>{att.fileName}</Text>
+                                                    <Text size="xs" c="dimmed">{sizeKb} KB · {att.uploadedByUsername}</Text>
+                                                </Stack>
+                                                <Group gap={4}>
+                                                    <ActionIcon
+                                                        component="a"
+                                                        href={att.publicUrl}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        size="sm" variant="subtle" color="gray"
+                                                    >
+                                                        <IconDownload size={14} />
+                                                    </ActionIcon>
+                                                    <ActionIcon
+                                                        size="sm" variant="subtle" color="red"
+                                                        onClick={() => handleDeleteAttachment(att)}
+                                                    >
+                                                        <IconTrash size={14} />
+                                                    </ActionIcon>
+                                                </Group>
+                                            </Group>
+                                        );
+                                    })}
+                                </Stack>
+                            )}
+                        </Stack>
 
                         <TagsInput
                             label="Tags"

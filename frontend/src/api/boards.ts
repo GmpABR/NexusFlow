@@ -10,6 +10,19 @@ export interface BoardSummary {
     workspaceId: number | null;
 }
 
+export interface Attachment {
+    id: number;
+    taskCardId: number;
+    uploadedById: number;
+    uploadedByUsername: string;
+    fileName: string;
+    storagePath: string;
+    publicUrl: string;
+    contentType: string;
+    fileSizeBytes: number;
+    uploadedAt: string;
+}
+
 export interface TaskCard {
     id: number;
     title: string;
@@ -22,10 +35,12 @@ export interface TaskCard {
     storyPoints: number | null;
     assigneeId: number | null;
     assigneeName: string | null;
+    assignees?: { userId: number; username: string }[];
     tags: string | null;
     totalTimeSpentMinutes: number;
     isTimerRunning: boolean;
     subtasks?: Subtask[];
+    attachments?: Attachment[];
 }
 
 export interface Column {

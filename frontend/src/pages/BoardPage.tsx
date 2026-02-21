@@ -304,13 +304,7 @@ export default function BoardPage() {
                 };
             });
         },
-        onTaskUpdated: (task: TaskCardType) => { // New SignalR event? Or handle locally + socket?
-            // Assuming SignalR sends 'TaskUpdated' or re-using logic
-            // But simpler to just update local state if I triggered it, and rely on socket for others
-            // Wait, the hook allows custom events? No, I need to update useSignalR if I want real-time updates for details.
-            // For now, let's just update local state on save and rely on fetchBoard or socket.
-            // Wait, existing useSignalR doesn't support TaskUpdated. I should add it.
-            // But for now, let's just handle local update.
+        onTaskUpdated: (task: TaskCardType) => {
             handleTaskUpdated(task);
         },
         onMemberJoined: (member: BoardMember) => {
@@ -637,7 +631,7 @@ export default function BoardPage() {
     return (
         <Box
             style={{
-                height: 'calc(100vh - 76px)',
+                flex: 1,
                 background: activeTheme.gradient,
                 overflow: 'hidden',
                 display: 'flex',

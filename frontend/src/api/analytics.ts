@@ -9,7 +9,35 @@ export interface BoardAnalytics {
     userTimeData: Record<string, number>;
 }
 
+export interface WorkspaceActivity {
+    username: string;
+    action: string;
+    details: string;
+    taskTitle: string;
+    boardName: string;
+    timestamp: string;
+}
+
+export interface WorkspaceAnalytics {
+    workspaceId: number;
+    totalBoards: number;
+    totalMembers: number;
+    totalTasks: number;
+    completedTasks: number;
+    pendingTasks: number;
+    overdueTasks: number;
+    tasksByPriority: Record<string, number>;
+    tasksByAssignee: Record<string, number>;
+    tasksPerBoard: Record<string, number>;
+    recentActivity: WorkspaceActivity[];
+}
+
 export const getBoardAnalytics = async (boardId: number): Promise<BoardAnalytics> => {
     const { data } = await api.get<BoardAnalytics>(`/analytics/board/${boardId}`);
+    return data;
+};
+
+export const getWorkspaceAnalytics = async (workspaceId: number): Promise<WorkspaceAnalytics> => {
+    const { data } = await api.get<WorkspaceAnalytics>(`/analytics/workspace/${workspaceId}`);
     return data;
 };

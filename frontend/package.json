@@ -18,6 +18,7 @@
     "@mantine/notifications": "^8.3.15",
     "@mantine/tiptap": "^8.3.15",
     "@microsoft/signalr": "^10.0.0",
+    "@supabase/supabase-js": "^2.78.0",
     "@tabler/icons-react": "^3.36.1",
     "@tiptap/extension-highlight": "^3.20.0",
     "@tiptap/extension-link": "^3.20.0",

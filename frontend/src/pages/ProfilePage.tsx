@@ -209,7 +209,7 @@ export default function ProfilePage() {
 
     if (loading) {
         return (
-            <Center style={{ minHeight: '100vh', background: '#1d2125' }}>
+            <Center style={{ minHeight: '100%', background: '#1d2125' }}>
                 <Loader color="violet" size="lg" />
             </Center>
         );
@@ -220,7 +220,7 @@ export default function ProfilePage() {
     return (
         <Box
             style={{
-                minHeight: 'calc(100vh - 76px)',
+                minHeight: '100%',
                 background: '#0a0a0b', // Deep minimalist dark mode
                 color: 'white',
                 display: 'flex',
@@ -237,7 +237,7 @@ export default function ProfilePage() {
                         background: '#121214',
                         borderRight: '1px solid rgba(255,255,255,0.05)',
                         padding: '40px 24px',
-                        minHeight: 'calc(100vh - 76px)',
+                        minHeight: '100%',
                         display: 'flex',
                         flexDirection: 'column',
                         position: 'sticky',
