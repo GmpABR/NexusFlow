@@ -7,10 +7,13 @@ export interface BoardAnalytics {
     pendingTasks: number;
     burnDownData: Record<string, number>;
     userTimeData: Record<string, number>;
+    averageLeadTimeDays: number;
+    averageCycleTimeDays: number;
 }
 
 export interface WorkspaceActivity {
     username: string;
+    avatarUrl?: string | null;
     action: string;
     details: string;
     taskTitle: string;
@@ -30,6 +33,8 @@ export interface WorkspaceAnalytics {
     tasksByAssignee: Record<string, number>;
     tasksPerBoard: Record<string, number>;
     recentActivity: WorkspaceActivity[];
+    averageLeadTimeDays: number;
+    averageCycleTimeDays: number;
 }
 
 export const getBoardAnalytics = async (boardId: number): Promise<BoardAnalytics> => {

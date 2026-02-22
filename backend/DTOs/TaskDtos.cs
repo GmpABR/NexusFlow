@@ -13,6 +13,7 @@ public class CreateTaskDto
     public int? StoryPoints { get; set; }
     public int? AssigneeId { get; set; } // legacy single (kept for backwards compat)
     public List<int>? AssigneeIds { get; set; } // multi-assignee
+    public List<int>? LabelIds { get; set; } // labels
     public string? Tags { get; set; }
 
     [Required]
@@ -29,6 +30,7 @@ public class UpdateTaskDto
     public int? StoryPoints { get; set; }
     public int? AssigneeId { get; set; } // legacy single (kept for backwards compat)
     public List<int>? AssigneeIds { get; set; } // multi-assignee (authoritative)
+    public List<int>? LabelIds { get; set; } // labels
     public string? Tags { get; set; }
 }
 
@@ -56,6 +58,9 @@ public class TaskCardDto
 
     // Multi-Assignees
     public ICollection<AssigneeDto> Assignees { get; set; } = new List<AssigneeDto>();
+
+    // Labels
+    public ICollection<LabelDto> Labels { get; set; } = new List<LabelDto>();
 
     // Attachments
     public ICollection<AttachmentDto> Attachments { get; set; } = new List<AttachmentDto>();
@@ -100,6 +105,7 @@ public class AssigneeDto
 {
     public int UserId { get; set; }
     public string Username { get; set; } = string.Empty;
+    public string? AvatarUrl { get; set; }
 }
 
 public class AttachmentDto

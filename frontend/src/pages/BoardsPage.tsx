@@ -16,7 +16,8 @@ import {
     Flex,
     Stack,
     NavLink,
-    Divider
+    Divider,
+    useComputedColorScheme
 } from '@mantine/core';
 import {
     IconPlus,
@@ -33,6 +34,7 @@ import { BOARD_THEMES, type ThemeColor } from '../constants/themes';
 
 export default function BoardsPage() {
     const navigate = useNavigate();
+    const computedColorScheme = useComputedColorScheme('dark');
     const [boards, setBoards] = useState<BoardSummary[]>([]);
     const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
     const [loading, setLoading] = useState(true);
@@ -119,31 +121,32 @@ export default function BoardsPage() {
         <Box
             style={{
                 minHeight: '100%',
-                background: '#0a0a0b', // Deep minimalist dark mode
-                color: 'white',
+                background: computedColorScheme === 'dark' ? '#0a0a0b' : '#f1f3f5',
+                color: computedColorScheme === 'dark' ? 'white' : 'black',
             }}
         >
             <Flex align="stretch">
                 {/* ─── NEW SIDEBAR (FULL HEIGHT DRAW) ─── */}
                 <Box
                     style={{
-                        width: 280,
+                        width: 300,
                         flexShrink: 0,
-                        background: '#121214', // Solid dark for the sidebar
-                        borderRight: '1px solid rgba(255,255,255,0.05)',
-                        padding: '40px 24px',
+                        background: computedColorScheme === 'dark' ? '#121214' : 'white',
+                        borderRight: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+                        padding: '30px 20px',
                         minHeight: '100%',
                         display: 'flex',
                         flexDirection: 'column',
                         position: 'sticky',
-                        top: 0
+                        top: 0,
+                        zIndex: 10
                     }}
                 >
 
-                    <Divider my="md" color="rgba(255,255,255,0.1)" />
+                    <Divider my="md" color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} />
 
                     <Group justify="space-between" mb="md" px={4}>
-                        <Text size="sm" fw={800} c="gray.4" tt="uppercase" lts={1}>
+                        <Text size="sm" fw={800} c={computedColorScheme === 'dark' ? 'gray.4' : 'gray.6'} tt="uppercase" lts={1}>
                             Workspaces
                         </Text>
                         <ActionIcon
@@ -209,7 +212,7 @@ export default function BoardsPage() {
                         fullWidth
                         onClick={() => setOpenedWorkspaceModal(true)}
                         mt="auto"
-                        style={{ border: '1px dashed rgba(255,255,255,0.1)' }}
+                        style={{ border: `1px dashed ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.2)'}` }}
                     >
                         Create Workspace
                     </Button>
@@ -227,8 +230,8 @@ export default function BoardsPage() {
                             background: 'linear-gradient(135deg, rgba(124, 58, 237, 0.15) 0%, rgba(56, 189, 248, 0.05) 100%)',
                             position: 'relative',
                             overflow: 'hidden',
-                            border: '1px solid rgba(255,255,255,0.05)',
-                            boxShadow: 'inset 0 0 100px rgba(124, 58, 237, 0.05)'
+                            border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)'}`,
+                            boxShadow: computedColorScheme === 'dark' ? 'inset 0 0 100px rgba(124, 58, 237, 0.05)' : 'none'
                         }}
                     >
                         {/* Decorative aura balls */}
@@ -240,13 +243,13 @@ export default function BoardsPage() {
                                 order={1}
                                 size={48}
                                 fw={800}
-                                c="white"
+                                c={computedColorScheme === 'dark' ? 'white' : 'dark'}
                                 mb="xs"
                                 style={{ letterSpacing: -1.5 }}
                             >
                                 Good evening, <Text span variant="gradient" gradient={{ from: 'violet', to: 'cyan' }} inherit>{user?.username || 'User'}</Text>
                             </Title>
-                            <Text c="gray.4" size="lg" mb="xl" fw={500}>
+                            <Text c={computedColorScheme === 'dark' ? 'gray.4' : 'gray.7'} size="lg" mb="xl" fw={500}>
                                 Here's what's happening with your projects today.
                             </Text>
 
@@ -259,7 +262,7 @@ export default function BoardsPage() {
                                     boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
                                 }}>
                                     <Text size="sm" c="violet.3" fw={700} tt="uppercase" lts={1}>Active Boards</Text>
-                                    <Text fz={38} fw={800} c="white" style={{ lineHeight: 1 }}>{boards.length}</Text>
+                                    <Text fz={38} fw={800} c={computedColorScheme === 'dark' ? 'white' : 'dark'} style={{ lineHeight: 1 }}>{boards.length}</Text>
                                 </Paper>
                                 <Paper p="lg" radius="xl" style={{
                                     background: 'rgba(255, 255, 255, 0.03)',
@@ -269,7 +272,7 @@ export default function BoardsPage() {
                                     boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
                                 }}>
                                     <Text size="sm" c="blue.3" fw={700} tt="uppercase" lts={1}>Pending Tasks</Text>
-                                    <Text fz={38} fw={800} c="white" style={{ lineHeight: 1 }}>12</Text> {/* Mock data for now */}
+                                    <Text fz={38} fw={800} c={computedColorScheme === 'dark' ? 'white' : 'dark'} style={{ lineHeight: 1 }}>12</Text> {/* Mock data for now */}
                                 </Paper>
                             </Group>
                         </Box>
@@ -277,7 +280,7 @@ export default function BoardsPage() {
 
                     {/* Recent Boards - Horizontal Scroll Strips */}
                     <Box mb={60}>
-                        <Title order={3} size="h4" c="white" fw={700} mb="lg">Recently Viewed</Title>
+                        <Title order={3} size="h4" c={computedColorScheme === 'dark' ? 'white' : 'dark'} fw={700} mb="lg">Recently Viewed</Title>
                         <Flex gap="md" style={{ overflowX: 'auto', paddingBottom: 10 }}>
                             {boards.slice(0, 4).map(board => (
                                 <Paper
@@ -286,8 +289,8 @@ export default function BoardsPage() {
                                     radius="md"
                                     style={{
                                         minWidth: 260,
-                                        background: 'rgba(255,255,255,0.03)',
-                                        border: '1px solid rgba(255,255,255,0.05)',
+                                        background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.03)' : 'white',
+                                        border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)'}`,
                                         cursor: 'pointer',
                                         transition: 'all 0.2s ease',
                                     }}
@@ -298,7 +301,7 @@ export default function BoardsPage() {
                                     }}
                                     onMouseLeave={(e) => {
                                         e.currentTarget.style.transform = 'translateY(0)';
-                                        e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                                        e.currentTarget.style.background = computedColorScheme === 'dark' ? 'rgba(255,255,255,0.03)' : 'white';
                                     }}
                                 >
                                     <Group mb="xs" justify="space-between">
@@ -312,7 +315,7 @@ export default function BoardsPage() {
                                         />
                                         <IconLayoutDashboard size={14} color="gray" />
                                     </Group>
-                                    <Text fw={600} c="white" size="lg" mb={4}>{board.name}</Text>
+                                    <Text fw={600} c={computedColorScheme === 'dark' ? 'white' : 'dark'} size="lg" mb={4}>{board.name}</Text>
                                     <Text size="xs" c="dimmed">
                                         {workspaces.find(w => w.id === board.workspaceId)?.name || 'Personal'}
                                     </Text>
@@ -321,10 +324,10 @@ export default function BoardsPage() {
                         </Flex>
                     </Box>
 
-                    <Divider my="xl" color="dark.4" />
+                    <Divider my="xl" color={computedColorScheme === 'dark' ? 'dark.4' : 'gray.2'} />
 
                     <Group mb="xl" justify="space-between" align="center">
-                        <Title order={3} size="h4" c="white" fw={700}>Your Workspaces</Title>
+                        <Title order={3} size="h4" c={computedColorScheme === 'dark' ? 'white' : 'dark'} fw={700}>Your Workspaces</Title>
                         <Button
                             variant="light"
                             color="violet"
@@ -342,7 +345,7 @@ export default function BoardsPage() {
                         <Box>
                             {workspaces.length === 0 ? (
                                 <Box ta="center" mt={40}>
-                                    <Title order={3} c="white">No workspaces yet</Title>
+                                    <Title order={3} c={computedColorScheme === 'dark' ? 'white' : 'dark'}>No workspaces yet</Title>
                                     <Button
                                         mt="md"
                                         color="violet"
@@ -363,8 +366,9 @@ export default function BoardsPage() {
                                                 p="xl"
                                                 radius="lg"
                                                 style={{
-                                                    background: '#1A1B1E',
-                                                    border: '1px solid rgba(255,255,255,0.08)'
+                                                    background: computedColorScheme === 'dark' ? '#1A1B1E' : 'white',
+                                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
+                                                    boxShadow: '0 8px 32px rgba(0,0,0,0.03)'
                                                 }}
                                             >
                                                 <Group mb="lg" justify="space-between">
@@ -373,7 +377,7 @@ export default function BoardsPage() {
                                                             <Text fw={700} size="sm">{workspace.name[0]}</Text>
                                                         </ThemeIcon>
                                                         <Box>
-                                                            <Title order={4} size="h4" c="white">{workspace.name}</Title>
+                                                            <Title order={4} size="h4" c={computedColorScheme === 'dark' ? 'white' : 'dark'}>{workspace.name}</Title>
                                                             <Text size="xs" c="dimmed">Workspace</Text>
                                                         </Box>
                                                     </Group>
@@ -402,7 +406,7 @@ export default function BoardsPage() {
                                                 </Group>
 
                                                 {workspaceBoards.length === 0 ? (
-                                                    <Text c="dimmed" ta="center" py="lg" size="sm" style={{ border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 8 }}>
+                                                    <Text c="dimmed" ta="center" py="lg" size="sm" style={{ border: `1px dashed ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.15)'}`, borderRadius: 8 }}>
                                                         No boards. <Text span c="violet" style={{ cursor: 'pointer' }} onClick={() => {
                                                             setSelectedWorkspaceId(workspace.id.toString());
                                                             setModalOpen(true);
@@ -418,8 +422,8 @@ export default function BoardsPage() {
                                                                 onClick={() => navigate(`/boards/${board.id}`)}
                                                                 style={{
                                                                     cursor: 'pointer',
-                                                                    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                                                                    border: '1px solid rgba(255,255,255,0.05)',
+                                                                    backgroundColor: computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8f9fa',
+                                                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)'}`,
                                                                     transition: 'all 0.2s ease',
                                                                 }}
                                                                 onMouseEnter={(e) => {
@@ -430,8 +434,8 @@ export default function BoardsPage() {
                                                                 }}
                                                                 onMouseLeave={(e) => {
                                                                     e.currentTarget.style.transform = 'translateY(0)';
-                                                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.03)';
-                                                                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)';
+                                                                    e.currentTarget.style.backgroundColor = computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8f9fa';
+                                                                    e.currentTarget.style.borderColor = computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)';
                                                                     e.currentTarget.style.boxShadow = 'none';
                                                                 }}
                                                             >
@@ -447,14 +451,14 @@ export default function BoardsPage() {
                                                                     <Box />
                                                                 </Group>
 
-                                                                <Text fw={700} size="lg" c="white" mb={4}>{board.name}</Text>
+                                                                <Text fw={700} size="lg" c={computedColorScheme === 'dark' ? 'white' : 'dark'} mb={4}>{board.name}</Text>
                                                                 <Text size="sm" c="dimmed" mb="lg">Updated recently</Text>
 
                                                                 <Group justify="space-between" align="center">
                                                                     {/* Mock Members Area */}
                                                                     <Group gap={-8}>
-                                                                        <Box style={{ width: 28, height: 28, borderRadius: '50%', background: '#7950f2', border: '2px solid #1A1B1E', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 'bold' }}>A</Box>
-                                                                        <Box style={{ width: 28, height: 28, borderRadius: '50%', background: '#228be6', border: '2px solid #1A1B1E', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 'bold' }}>B</Box>
+                                                                        <Box style={{ width: 28, height: 28, borderRadius: '50%', background: '#7950f2', border: `2px solid ${computedColorScheme === 'dark' ? '#1A1B1E' : '#ffffff'}`, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 'bold' }}>A</Box>
+                                                                        <Box style={{ width: 28, height: 28, borderRadius: '50%', background: '#228be6', border: `2px solid ${computedColorScheme === 'dark' ? '#1A1B1E' : '#ffffff'}`, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 'bold' }}>B</Box>
                                                                     </Group>
                                                                     <Text size="xs" fw={600} c="dimmed">Open Tasks: {Math.floor(Math.random() * 10)}</Text>
                                                                 </Group>
@@ -480,8 +484,8 @@ export default function BoardsPage() {
                                                         onClick={() => navigate(`/boards/${board.id}`)}
                                                         style={{
                                                             cursor: 'pointer',
-                                                            backgroundColor: '#25262b',
-                                                            borderColor: '#373A40',
+                                                            backgroundColor: computedColorScheme === 'dark' ? '#25262b' : 'white',
+                                                            borderColor: computedColorScheme === 'dark' ? '#373A40' : '#e9ecef',
                                                             transition: 'transform 0.2s ease, box-shadow 0.2s ease',
                                                         }}
                                                         onMouseEnter={(e) => {
@@ -492,11 +496,11 @@ export default function BoardsPage() {
                                                         onMouseLeave={(e) => {
                                                             e.currentTarget.style.transform = 'translateY(0)';
                                                             e.currentTarget.style.boxShadow = 'none';
-                                                            e.currentTarget.style.borderColor = '#373A40';
+                                                            e.currentTarget.style.borderColor = computedColorScheme === 'dark' ? '#373A40' : '#e9ecef';
                                                         }}
                                                     >
                                                         <Group mb="sm" justify="space-between" align="start">
-                                                            <Text fw={600} size="md" c="white" lineClamp={1} style={{ flex: 1 }}>{board.name}</Text>
+                                                            <Text fw={700} size="md" c={computedColorScheme === 'dark' ? 'white' : 'dark'}>{board.name}</Text>
                                                             <Box
                                                                 style={{
                                                                     width: 8,
@@ -527,8 +531,8 @@ export default function BoardsPage() {
                 centered
                 radius="lg"
                 styles={{
-                    content: { background: '#1a1b1e' },
-                    header: { background: '#1a1b1e' },
+                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white' },
+                    header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white' },
                 }}
             >
                 <Select
@@ -552,8 +556,8 @@ export default function BoardsPage() {
                             style={{
                                 cursor: 'pointer',
                                 backgroundColor: value.background,
-                                border: selectedTheme === key ? '2px solid white' : 'none',
-                                boxShadow: selectedTheme === key ? '0 0 0 2px #000' : 'none'
+                                border: selectedTheme === key ? `2px solid ${computedColorScheme === 'dark' ? 'white' : 'black'}` : 'none',
+                                boxShadow: selectedTheme === key ? `0 0 0 2px ${computedColorScheme === 'dark' ? '#000' : '#fff'}` : 'none'
                             }}
                             onClick={() => setSelectedTheme(key as ThemeColor)}
                         >
@@ -568,7 +572,7 @@ export default function BoardsPage() {
                     value={newBoardName}
                     onChange={(e) => setNewBoardName(e.currentTarget.value)}
                     mb="md"
-                    styles={{ input: { background: 'rgba(0,0,0,0.4)' } }}
+                    styles={{ input: { background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.4)' : '#f1f3f5' } }}
                     onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
                 />
                 <Group justify="flex-end">
@@ -594,8 +598,8 @@ export default function BoardsPage() {
                 centered
                 radius="lg"
                 styles={{
-                    content: { background: '#1a1b1e' },
-                    header: { background: '#1a1b1e' },
+                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white' },
+                    header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white' },
                 }}
             >
                 <TextInput

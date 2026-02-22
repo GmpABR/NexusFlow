@@ -95,7 +95,7 @@ public class BoardService : IBoardService
                         IsTimerRunning = t.TimeLogs.Any(tl => tl.StoppedAt == null),
                         // Multi-assignees
                         Assignees = t.Assignees
-                            .Select(ta => new AssigneeDto { UserId = ta.UserId, Username = ta.User.Username })
+                            .Select(ta => new AssigneeDto { UserId = ta.UserId, Username = ta.User.Username, AvatarUrl = ta.User.AvatarUrl })
                             .ToList(),
                         // Attachments
                         Attachments = t.Attachments
@@ -119,8 +119,22 @@ public class BoardService : IBoardService
                             Title = s.Title,
                             IsCompleted = s.IsCompleted,
                             TaskCardId = s.TaskCardId
+                        }).ToList(),
+                        Labels = t.Labels.Select(tl => new LabelDto
+                        {
+                            Id = tl.Label.Id,
+                            Name = tl.Label.Name,
+                            Color = tl.Label.Color,
+                            BoardId = tl.Label.BoardId
                         }).ToList()
                     }).ToList()
+                }).ToList(),
+                Labels = b.Labels.Select(l => new LabelDto
+                {
+                    Id = l.Id,
+                    Name = l.Name,
+                    Color = l.Color,
+                    BoardId = l.BoardId
                 }).ToList(),
                 Members = b.Members.Where(m => m.Status == "Accepted").Select(m => new BoardMemberDto
                 {
@@ -129,10 +143,10 @@ public class BoardService : IBoardService
                     Username = m.User.Username,
                     Email = m.User.Email,
                     Role = m.Role,
-                    JoinedAt = m.JoinedAt
+                    JoinedAt = m.JoinedAt,
+                    AvatarUrl = m.User.AvatarUrl
                 }).ToList(),
-                UserRole = b.OwnerId == userId ? "Owner" : (b.Members.FirstOrDefault(m => m.UserId == userId).Role ?? "Member") 
-                // Note: FirstOrDefault might cause issues if user is WorkspaceMember but not BoardMember. 
+                UserRole = b.OwnerId == userId ? "Owner" : (b.Members.Where(m => m.UserId == userId).Select(m => m.Role).FirstOrDefault() ?? "Member") 
                 // Handle null coalescing properly.
             })
             .FirstOrDefaultAsync();
@@ -150,7 +164,8 @@ public class BoardService : IBoardService
                     Username = owner.Username,
                     Email = owner.Email,
                     Role = "Owner",
-                    JoinedAt = boardDto.CreatedAt
+                    JoinedAt = boardDto.CreatedAt,
+                    AvatarUrl = owner.AvatarUrl
                 });
             }
 
@@ -173,7 +188,8 @@ public class BoardService : IBoardService
                             Username = wm.User.Username,
                             Email = wm.User.Email,
                             Role = wm.Role,
-                            JoinedAt = wm.JoinedAt
+                            JoinedAt = wm.JoinedAt,
+                            AvatarUrl = wm.User.AvatarUrl
                         });
                     }
                 }
@@ -229,7 +245,8 @@ public class BoardService : IBoardService
                 Username = m.User.Username,
                 Email = m.User.Email,
                 Role = m.Role,
-                JoinedAt = m.JoinedAt
+                JoinedAt = m.JoinedAt,
+                AvatarUrl = m.User.AvatarUrl
             })
             .ToListAsync();
     }
@@ -265,7 +282,8 @@ public class BoardService : IBoardService
                 Username = user.Username,
                 Email = user.Email,
                 Role = existing.Role,
-                JoinedAt = existing.JoinedAt
+                JoinedAt = existing.JoinedAt,
+                AvatarUrl = user.AvatarUrl
             };
         }
 
@@ -287,7 +305,8 @@ public class BoardService : IBoardService
             Username = user.Username,
             Email = user.Email,
             Role = member.Role,
-            JoinedAt = member.JoinedAt
+            JoinedAt = member.JoinedAt,
+            AvatarUrl = user.AvatarUrl
         };
     }
 
@@ -365,7 +384,7 @@ public class BoardService : IBoardService
 
         var isMember = board.OwnerId == userId 
             || board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
-            || (board.Workspace?.Members?.Any(wm => wm.UserId == userId && wm.Status == "Accepted") == true);
+            || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted"));
 
         if (!isMember) throw new UnauthorizedAccessException("User is not a member of this board");
 
@@ -404,7 +423,7 @@ public class BoardService : IBoardService
 
         var isMember = board.OwnerId == userId 
             || board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
-            || (board.Workspace?.Members?.Any(wm => wm.UserId == userId && wm.Status == "Accepted") == true);
+            || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted"));
 
         if (!isMember) return false;
 
@@ -444,7 +463,7 @@ public class BoardService : IBoardService
 
         var isMember = board.OwnerId == userId 
             || board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
-            || (board.Workspace?.Members?.Any(wm => wm.UserId == userId && wm.Status == "Accepted") == true);
+            || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted"));
 
         if (!isMember) return false;
 
@@ -476,7 +495,7 @@ public class BoardService : IBoardService
 
         var isMember = board.OwnerId == userId 
             || board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
-            || (board.Workspace?.Members?.Any(wm => wm.UserId == userId && wm.Status == "Accepted") == true);
+            || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted"));
 
         if (!isMember) return null;
 

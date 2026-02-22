@@ -46,6 +46,16 @@ public class TaskService : ITaskService
             await _db.SaveChangesAsync();
         }
 
+        // Sync labels
+        if (dto.LabelIds != null && dto.LabelIds.Count > 0)
+        {
+            foreach (var lid in dto.LabelIds.Distinct())
+            {
+                _db.TaskLabels.Add(new TaskLabel { TaskCardId = task.Id, LabelId = lid });
+            }
+            await _db.SaveChangesAsync();
+        }
+
         await LogActivity(task.Id, userId, "Created", $"Task created in column {task.ColumnId}");
 
         return await MapToDto(task);
@@ -87,6 +97,18 @@ public class TaskService : ITaskService
             foreach (var uid in dto.AssigneeIds.Distinct())
             {
                 _db.TaskAssignees.Add(new TaskAssignee { TaskCardId = taskId, UserId = uid });
+            }
+            await _db.SaveChangesAsync();
+        }
+
+        // Sync labels (full replace)
+        if (dto.LabelIds != null)
+        {
+            var existing = await _db.TaskLabels.Where(tl => tl.TaskCardId == taskId).ToListAsync();
+            _db.TaskLabels.RemoveRange(existing);
+            foreach (var lid in dto.LabelIds.Distinct())
+            {
+                _db.TaskLabels.Add(new TaskLabel { TaskCardId = taskId, LabelId = lid });
             }
             await _db.SaveChangesAsync();
         }
@@ -458,6 +480,10 @@ public class TaskService : ITaskService
         {
             await _db.Entry(task).Collection(t => t.TimeLogs).LoadAsync();
         }
+        if (task.Labels == null)
+        {
+            await _db.Entry(task).Collection(t => t.Labels).LoadAsync();
+        }
 
         // Load Assignees with User
         var assignees = await _db.TaskAssignees
@@ -470,6 +496,12 @@ public class TaskService : ITaskService
             .Where(a => a.TaskCardId == task.Id)
             .Include(a => a.UploadedBy)
             .OrderByDescending(a => a.UploadedAt)
+            .ToListAsync();
+
+        // Load Labels with Label entity
+        var taskLabels = await _db.TaskLabels
+            .Where(tl => tl.TaskCardId == task.Id)
+            .Include(tl => tl.Label)
             .ToListAsync();
 
         return new TaskCardDto
@@ -488,8 +520,8 @@ public class TaskService : ITaskService
             AssigneeName = task.Assignee?.Username,
             AssigneeAvatar = null,
             Tags = task.Tags,
-            TotalTimeSpentMinutes = task.TimeLogs.Where(tl => tl.DurationMinutes.HasValue).Sum(tl => tl.DurationMinutes!.Value),
-            IsTimerRunning = task.TimeLogs.Any(tl => tl.StoppedAt == null),
+            TotalTimeSpentMinutes = (task.TimeLogs ?? new List<TimeLog>()).Where(tl => tl.DurationMinutes.HasValue).Sum(tl => tl.DurationMinutes!.Value),
+            IsTimerRunning = (task.TimeLogs ?? new List<TimeLog>()).Any(tl => tl.StoppedAt == null),
             Assignees = assignees.Select(ta => new AssigneeDto { UserId = ta.UserId, Username = ta.User.Username }).ToList(),
             Attachments = attachments.Select(a => new AttachmentDto
             {
@@ -504,14 +536,66 @@ public class TaskService : ITaskService
                 FileSizeBytes = a.FileSizeBytes,
                 UploadedAt = a.UploadedAt
             }).ToList(),
-            Subtasks = task.Subtasks.Select(s => new SubtaskDto 
+            Subtasks = (task.Subtasks ?? new List<Subtask>()).Select(s => new SubtaskDto 
             { 
                 Id = s.Id, 
                 Title = s.Title, 
                 IsCompleted = s.IsCompleted,
                 TaskCardId = s.TaskCardId
-            }).OrderBy(s => s.Id).ToList()
+            }).OrderBy(s => s.Id).ToList(),
+            Labels = taskLabels.Select(tl => new LabelDto
+            {
+                Id = tl.Label.Id,
+                Name = tl.Label.Name,
+                Color = tl.Label.Color,
+                BoardId = tl.Label.BoardId
+            }).ToList()
         };
+    }
+
+    // Label Methods Implementation
+    public async Task<bool> AddLabelToTaskAsync(int taskId, int labelId, int userId)
+    {
+        var existing = await _db.TaskLabels.AnyAsync(tl => tl.TaskCardId == taskId && tl.LabelId == labelId);
+        if (existing) return true;
+
+        _db.TaskLabels.Add(new TaskLabel { TaskCardId = taskId, LabelId = labelId });
+        await _db.SaveChangesAsync();
+
+        var label = await _db.Labels.FindAsync(labelId);
+        await LogActivity(taskId, userId, "Label Added", $"Added label: {label?.Name ?? "Unknown"}");
+
+        return true;
+    }
+
+    public async Task<bool> RemoveLabelFromTaskAsync(int taskId, int labelId, int userId)
+    {
+        var taskLabel = await _db.TaskLabels.FindAsync(taskId, labelId);
+        if (taskLabel == null) return false;
+
+        _db.TaskLabels.Remove(taskLabel);
+        await _db.SaveChangesAsync();
+
+        var label = await _db.Labels.FindAsync(labelId);
+        await LogActivity(taskId, userId, "Label Removed", $"Removed label: {label?.Name ?? "Unknown"}");
+
+        return true;
+    }
+
+    public async Task<bool> SetTaskLabelsAsync(int taskId, List<int> labelIds, int userId)
+    {
+        var existing = await _db.TaskLabels.Where(tl => tl.TaskCardId == taskId).ToListAsync();
+        _db.TaskLabels.RemoveRange(existing);
+
+        foreach (var lid in labelIds.Distinct())
+        {
+            _db.TaskLabels.Add(new TaskLabel { TaskCardId = taskId, LabelId = lid });
+        }
+
+        await _db.SaveChangesAsync();
+        await LogActivity(taskId, userId, "Labels Updated", "Updated task labels");
+
+        return true;
     }
 
     // Attachment Methods

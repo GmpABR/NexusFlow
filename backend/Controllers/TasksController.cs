@@ -149,6 +149,54 @@ public class TasksController : ControllerBase
         return Ok(activity);
     }
 
+    [HttpPost("{id}/labels")]
+    public async Task<IActionResult> SetLabels(int id, [FromBody] List<int> labelIds)
+    {
+        var result = await _taskService.SetTaskLabelsAsync(id, labelIds, GetUserId());
+        if (!result) return NotFound();
+
+        var task = await _taskService.GetTaskByIdAsync(id);
+        if (task != null)
+        {
+            await _hubContext.Clients.Group($"board_{task.BoardId}")
+                .SendAsync("TaskUpdated", task);
+        }
+
+        return Ok(task);
+    }
+
+    [HttpPost("{id}/labels/{labelId}")]
+    public async Task<IActionResult> AddLabel(int id, int labelId)
+    {
+        var result = await _taskService.AddLabelToTaskAsync(id, labelId, GetUserId());
+        if (!result) return NotFound();
+
+        var task = await _taskService.GetTaskByIdAsync(id);
+        if (task != null)
+        {
+            await _hubContext.Clients.Group($"board_{task.BoardId}")
+                .SendAsync("TaskUpdated", task);
+        }
+
+        return Ok(task);
+    }
+
+    [HttpDelete("{id}/labels/{labelId}")]
+    public async Task<IActionResult> RemoveLabel(int id, int labelId)
+    {
+        var result = await _taskService.RemoveLabelFromTaskAsync(id, labelId, GetUserId());
+        if (!result) return NotFound();
+
+        var task = await _taskService.GetTaskByIdAsync(id);
+        if (task != null)
+        {
+            await _hubContext.Clients.Group($"board_{task.BoardId}")
+                .SendAsync("TaskUpdated", task);
+        }
+
+        return NoContent();
+    }
+
     private int GetUserId()
     {
         var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 

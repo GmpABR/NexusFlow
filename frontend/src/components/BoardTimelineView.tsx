@@ -1,5 +1,5 @@
 
-import { Paper, Title, Group, Text, Badge, Stack, Box, ScrollArea, ThemeIcon } from '@mantine/core';
+import { Paper, Title, Group, Text, Badge, Stack, Box, ScrollArea, ThemeIcon, useComputedColorScheme } from '@mantine/core';
 import { type BoardDetail } from '../api/boards';
 import { IconClock, IconCalendarCheck } from '@tabler/icons-react';
 import dayjs from 'dayjs';
@@ -10,6 +10,7 @@ interface BoardTimelineViewProps {
 }
 
 export default function BoardTimelineView({ board, onTaskClick }: BoardTimelineViewProps) {
+    const computedColorScheme = useComputedColorScheme('dark');
     if (!board || !board.columns) return null;
     const allTasks = board.columns.flatMap(col => col.taskCards.map(task => ({
         ...task,
@@ -35,19 +36,20 @@ export default function BoardTimelineView({ board, onTaskClick }: BoardTimelineV
             p="md"
             radius="lg"
             style={{
-                background: 'rgba(20, 21, 23, 0.75)',
+                background: computedColorScheme === 'dark' ? 'rgba(20, 21, 23, 0.75)' : 'rgba(255, 255, 255, 0.9)',
                 backdropFilter: 'blur(16px)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'}`,
                 height: '100%',
                 display: 'flex',
-                flexDirection: 'column'
+                flexDirection: 'column',
+                boxShadow: computedColorScheme === 'light' ? '0 8px 32px rgba(0,0,0,0.05)' : 'none'
             }}
         >
             <Group p="md" mb="md">
                 <ThemeIcon variant="light" color="violet" size="lg">
                     <IconClock size={20} />
                 </ThemeIcon>
-                <Title order={4} c="white">Cronograma do Projeto</Title>
+                <Title order={4} c={computedColorScheme === 'dark' ? 'white' : 'black'}>Cronograma do Projeto</Title>
             </Group>
 
             <ScrollArea style={{ flex: 1 }} p="md">
@@ -66,24 +68,24 @@ export default function BoardTimelineView({ board, onTaskClick }: BoardTimelineV
                                         p="md"
                                         radius="md"
                                         style={{
-                                            background: 'rgba(255,255,255,0.03)',
-                                            border: '1px solid rgba(255,255,255,0.05)',
+                                            background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.03)' : 'white',
+                                            border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
                                             transition: 'transform 0.2s ease, background 0.2s ease',
                                             cursor: 'pointer'
                                         }}
                                         onClick={() => onTaskClick(task)}
                                         onMouseEnter={(e) => {
-                                            e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                                            e.currentTarget.style.background = computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : '#f8f9fa';
                                             e.currentTarget.style.transform = 'translateX(4px)';
                                         }}
                                         onMouseLeave={(e) => {
-                                            e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                                            e.currentTarget.style.background = computedColorScheme === 'dark' ? 'rgba(255,255,255,0.03)' : 'white';
                                             e.currentTarget.style.transform = 'translateX(0)';
                                         }}
                                     >
                                         <Group justify="space-between" wrap="nowrap">
                                             <Box style={{ flex: 1 }}>
-                                                <Text size="sm" fw={600} c="white">{task.title}</Text>
+                                                <Text size="sm" fw={600} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{task.title}</Text>
                                                 <Group gap={8} mt={4}>
                                                     <Badge size="xs" variant="light" color="blue">{task.columnName}</Badge>
                                                     {task.dueDate && (

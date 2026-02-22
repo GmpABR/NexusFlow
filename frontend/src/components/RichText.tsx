@@ -6,7 +6,7 @@ import TextAlign from '@tiptap/extension-text-align';
 import Superscript from '@tiptap/extension-superscript';
 import SubScript from '@tiptap/extension-subscript';
 import Placeholder from '@tiptap/extension-placeholder';
-import { Menu, Loader, Tooltip, Group, Modal, TextInput, Button, Stack } from '@mantine/core';
+import { Menu, Loader, Tooltip, Group, Modal, TextInput, Button, Stack, useComputedColorScheme } from '@mantine/core';
 import { IconPlus, IconSparkles, IconWand, IconArrowRight, IconBriefcase, IconMessageCircle } from '@tabler/icons-react';
 import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
@@ -22,6 +22,7 @@ interface RichTextProps {
 }
 
 export default function RichText({ content, onChange, editable = true }: RichTextProps) {
+    const computedColorScheme = useComputedColorScheme('dark');
     const [isAILoading, setIsAILoading] = useState(false);
     const [customPromptOpen, setCustomPromptOpen] = useState(false);
     const [customPrompt, setCustomPrompt] = useState('');
@@ -109,9 +110,43 @@ export default function RichText({ content, onChange, editable = true }: RichTex
     if (!editor) return null;
 
     return (
-        <RichTextEditor editor={editor}>
+        <RichTextEditor
+            editor={editor}
+            styles={{
+                root: {
+                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : '#dee2e6'}`,
+                    borderRadius: 8,
+                    overflow: 'hidden'
+                },
+                toolbar: {
+                    background: (computedColorScheme === 'dark' ? '#25262b' : '#f8f9fa') + ' !important',
+                    borderBottom: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : '#dee2e6'} !important`,
+                },
+                content: {
+                    background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white',
+                    color: computedColorScheme === 'dark' ? 'white' : 'black',
+                    minHeight: 120,
+                },
+                control: {
+                    background: 'transparent !important',
+                    border: 'none !important',
+                    color: (computedColorScheme === 'dark' ? '#c1c2c5' : '#495057') + ' !important',
+                    '&:hover': {
+                        background: (computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)') + ' !important'
+                    },
+                    '& svg': {
+                        color: (computedColorScheme === 'dark' ? '#c1c2c5' : '#495057') + ' !important',
+                    }
+                }
+            }}
+        >
             {editable && (
-                <RichTextEditor.Toolbar>
+                <RichTextEditor.Toolbar
+                    style={{
+                        background: computedColorScheme === 'dark' ? '#25262b' : '#f8f9fa',
+                        borderBottom: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : '#dee2e6'}`,
+                    }}
+                >
                     {/* Main Bar - Essentials Only */}
                     <RichTextEditor.ControlsGroup>
                         <RichTextEditor.Bold />
@@ -137,9 +172,9 @@ export default function RichText({ content, onChange, editable = true }: RichTex
                                     <RichTextEditor.Control
                                         disabled={isAILoading}
                                         style={{
-                                            backgroundColor: 'rgba(124, 58, 237, 0.1)',
+                                            backgroundColor: computedColorScheme === 'dark' ? 'rgba(124, 58, 237, 0.1)' : 'rgba(124, 58, 237, 0.05)',
                                             borderColor: 'rgba(124, 58, 237, 0.3)',
-                                            color: '#a78bfa'
+                                            color: computedColorScheme === 'dark' ? '#a78bfa' : '#5c7cfa'
                                         }}
                                     >
                                         {isAILoading ? <Loader size={14} color="violet" /> : <IconSparkles size={18} />}
@@ -147,8 +182,8 @@ export default function RichText({ content, onChange, editable = true }: RichTex
                                 </Tooltip>
                             </Menu.Target>
 
-                            <Menu.Dropdown bg="#1a1b1e" style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
-                                <Menu.Label>AI Features</Menu.Label>
+                            <Menu.Dropdown bg={computedColorScheme === 'dark' ? "#1a1b1e" : "white"} style={{ border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : '#dee2e6'}` }}>
+                                <Menu.Label c={computedColorScheme === 'dark' ? 'dimmed' : 'gray.6'}>AI Features</Menu.Label>
                                 <Menu.Item
                                     leftSection={<IconSparkles size={14} />}
                                     onClick={() => handleAIEnchant('enhance')}
@@ -192,7 +227,7 @@ export default function RichText({ content, onChange, editable = true }: RichTex
                                     <IconPlus size={18} stroke={2.5} />
                                 </RichTextEditor.Control>
                             </Menu.Target>
-                            <Menu.Dropdown bg="#1a1b1e" style={{ border: '1px solid rgba(255,255,255,0.1)', padding: '4px' }}>
+                            <Menu.Dropdown bg={computedColorScheme === 'dark' ? "#1a1b1e" : "white"} style={{ border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : '#dee2e6'}`, padding: '4px' }}>
                                 <Group gap={4} p={4} justify="center">
                                     <RichTextEditor.Control title="Strikethrough" onClick={() => editor.chain().focus().toggleStrike().run()}>
                                         <RichTextEditor.Strikethrough />
@@ -212,13 +247,29 @@ export default function RichText({ content, onChange, editable = true }: RichTex
 
             <RichTextEditor.Content />
 
-            <Modal opened={customPromptOpen} onClose={() => setCustomPromptOpen(false)} title="Custom AI Instruction" centered>
+            <Modal
+                opened={customPromptOpen}
+                onClose={() => setCustomPromptOpen(false)}
+                title="Custom AI Instruction"
+                centered
+                styles={{
+                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                }}
+            >
                 <Stack>
                     <TextInput
                         placeholder="e.g., 'Translate to Spanish', 'Make it sound like a pirate'"
                         value={customPrompt}
                         onChange={(e) => setCustomPrompt(e.target.value)}
                         data-autofocus
+                        styles={{
+                            input: {
+                                background: computedColorScheme === 'dark' ? '#25262b' : 'white',
+                                color: computedColorScheme === 'dark' ? 'white' : 'black',
+                                borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'
+                            }
+                        }}
                     />
                     <Group justify="flex-end">
                         <Button variant="default" onClick={() => setCustomPromptOpen(false)}>Cancel</Button>

@@ -21,6 +21,7 @@ import {
     Menu,
     ActionIcon,
     ThemeIcon,
+    useComputedColorScheme,
 } from '@mantine/core';
 import { IconLayoutBoard, IconUsers, IconPlus, IconArrowLeft, IconCheck, IconPalette, IconChartBar } from '@tabler/icons-react';
 import WorkspaceOverview from '../components/WorkspaceOverview';
@@ -32,6 +33,7 @@ import { searchUsers, type UserSummary } from '../api/users';
 import { BOARD_THEMES, type ThemeColor } from '../constants/themes';
 
 export default function WorkspaceDetailsPage() {
+    const computedColorScheme = useComputedColorScheme('dark');
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -157,7 +159,7 @@ export default function WorkspaceDetailsPage() {
     if (!workspace) return null;
 
     return (
-        <Box style={{ minHeight: '100%', background: '#141517' }}>
+        <Box style={{ minHeight: '100%', background: computedColorScheme === 'dark' ? '#141517' : '#f8f9fa' }}>
             <Container size="lg" py="xl">
                 <Button
                     variant="subtle"
@@ -171,7 +173,7 @@ export default function WorkspaceDetailsPage() {
 
                 <Group justify="space-between" mb="xl">
                     <div>
-                        <Title c="white">{workspace.name}</Title>
+                        <Title c={computedColorScheme === 'dark' ? 'white' : 'black'}>{workspace.name}</Title>
                         <Text c="dimmed">{workspace.description}</Text>
                     </div>
                 </Group>
@@ -183,7 +185,13 @@ export default function WorkspaceDetailsPage() {
                     radius="md"
                     color="violet"
                 >
-                    <Tabs.List mb="lg" style={{ background: '#25262b', padding: 4, borderRadius: 8, border: '1px solid #373A40' }}>
+                    <Tabs.List mb="lg" style={{
+                        background: computedColorScheme === 'dark' ? '#25262b' : 'white',
+                        padding: 4,
+                        borderRadius: 8,
+                        border: `1px solid ${computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'}`,
+                        boxShadow: computedColorScheme === 'light' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none'
+                    }}>
                         <Tabs.Tab value="overview" leftSection={<IconChartBar size={16} />}>Overview</Tabs.Tab>
                         <Tabs.Tab value="boards" leftSection={<IconLayoutBoard size={16} />}>Boards</Tabs.Tab>
                         <Tabs.Tab value="members" leftSection={<IconUsers size={16} />}>Members</Tabs.Tab>
@@ -208,8 +216,8 @@ export default function WorkspaceDetailsPage() {
                                         onClick={() => navigate(`/boards/${board.id}`)}
                                         style={{
                                             cursor: 'pointer',
-                                            background: '#25262b',
-                                            borderColor: '#373A40',
+                                            background: computedColorScheme === 'dark' ? '#25262b' : 'white',
+                                            borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6',
                                             transition: 'all 0.2s ease',
                                         }}
                                         onMouseEnter={(e) => {
@@ -228,7 +236,7 @@ export default function WorkspaceDetailsPage() {
                                             marginBottom: 12
                                         }} />
                                         <Group justify="space-between" mb="xs" align="flex-start">
-                                            <Text fw={600} size="lg" c="white" style={{ flex: 1 }}>{board.name}</Text>
+                                            <Text fw={600} size="lg" c={computedColorScheme === 'dark' ? 'white' : 'black'} style={{ flex: 1 }}>{board.name}</Text>
 
                                             {/* Theme Switcher - stopPropagation to prevent navigation */}
                                             {(board.role === 'Owner') && (
@@ -282,7 +290,7 @@ export default function WorkspaceDetailsPage() {
 
                     <Tabs.Panel value="members">
                         <Group justify="space-between" mb="md">
-                            <Title order={4} c="white">Workspace Members</Title>
+                            <Title order={4} c={computedColorScheme === 'dark' ? 'white' : 'black'}>Workspace Members</Title>
                             <Button
                                 leftSection={<IconPlus size={16} />}
                                 color="violet"
@@ -300,15 +308,15 @@ export default function WorkspaceDetailsPage() {
                                     shadow="sm"
                                     withBorder
                                     style={{
-                                        background: '#25262b',
-                                        borderColor: '#373A40'
+                                        background: computedColorScheme === 'dark' ? '#25262b' : 'white',
+                                        borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'
                                     }}
                                 >
                                     <Group justify="space-between">
                                         <Group>
                                             <Avatar color="violet" radius="xl" size="md">{member.username.slice(0, 2).toUpperCase()}</Avatar>
                                             <div>
-                                                <Text c="white" fw={500} size="sm">{member.username}</Text>
+                                                <Text c={computedColorScheme === 'dark' ? 'white' : 'black'} fw={500} size="sm">{member.username}</Text>
                                                 <Text c="dimmed" size="xs" tt="capitalize">{member.role}</Text>
                                             </div>
                                         </Group>
@@ -341,8 +349,8 @@ export default function WorkspaceDetailsPage() {
                     onClose={() => setInviteModalOpen(false)}
                     title="Add Member to Workspace"
                     styles={{
-                        content: { background: '#25262b', color: 'white' },
-                        header: { background: '#25262b', color: 'white' },
+                        content: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                        header: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
                     }}
                 >
                     <Stack>
@@ -368,8 +376,8 @@ export default function WorkspaceDetailsPage() {
                     title="Remove Member"
                     centered
                     styles={{
-                        content: { background: '#25262b', color: 'white' },
-                        header: { background: '#25262b', color: 'white' },
+                        content: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                        header: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
                     }}
                 >
                     <Text size="sm" mb="lg">

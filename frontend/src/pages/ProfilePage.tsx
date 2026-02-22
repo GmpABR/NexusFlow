@@ -9,9 +9,10 @@ import {
     IconEdit, IconCheck, IconX, IconUser, IconHome, IconSettings,
     IconAt, IconCalendar, IconBriefcase, IconBuilding,
     IconMapPin, IconCamera, IconLink, IconUpload,
-    IconLogout,
+    IconLogout, IconSun, IconMoon, IconPalette
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
+import { useMantineColorScheme, useComputedColorScheme, SegmentedControl, Center as MantineCenter } from '@mantine/core';
 import { getMe, updateProfile, type UserProfile } from '../api/users';
 
 function getInitials(name: string) {
@@ -49,6 +50,8 @@ function EditableField({
         }
     };
 
+    const computedColorScheme = useComputedColorScheme('dark');
+
     return (
         <Box>
             <Text
@@ -71,7 +74,13 @@ function EditableField({
                             minRows={2}
                             maxRows={5}
                             autoFocus
-                            styles={{ input: { background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: 'white' } }}
+                            styles={{
+                                input: {
+                                    background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                                    borderColor: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+                                    color: computedColorScheme === 'dark' ? 'white' : 'black'
+                                }
+                            }}
                             onKeyDown={e => { if (e.key === 'Escape') setEditing(false); }}
                         />
                     ) : (
@@ -80,7 +89,13 @@ function EditableField({
                             onChange={e => setDraft(e.currentTarget.value)}
                             placeholder={placeholder}
                             autoFocus
-                            styles={{ input: { background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: 'white' } }}
+                            styles={{
+                                input: {
+                                    background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                                    borderColor: computedColorScheme === 'dark' ? 'rgba(255,255,255,1)' : 'rgba(0,0,0,0.1)',
+                                    color: computedColorScheme === 'dark' ? 'white' : 'black'
+                                }
+                            }}
                             onKeyDown={e => {
                                 if (e.key === 'Enter') handleSave();
                                 if (e.key === 'Escape') setEditing(false);
@@ -98,8 +113,8 @@ function EditableField({
                 <Group justify="space-between" gap={8} style={{ cursor: 'pointer' }}
                     onClick={() => { setDraft(value ?? ''); setEditing(true); }}>
                     <Group gap={12}>
-                        <Box style={{ color: 'rgba(255,255,255,0.4)', display: 'flex' }}>{icon}</Box>
-                        <Text size="sm" c={value ? 'white' : 'dimmed'} fw={value ? 500 : 400}>
+                        <Box style={{ color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)', display: 'flex' }}>{icon}</Box>
+                        <Text size="sm" c={value ? (computedColorScheme === 'dark' ? 'white' : 'dark') : 'dimmed'} fw={value ? 500 : 400}>
                             {value || placeholder}
                         </Text>
                     </Group>
@@ -114,6 +129,8 @@ function EditableField({
 
 export default function ProfilePage() {
     const navigate = useNavigate();
+    const { setColorScheme } = useMantineColorScheme();
+    const computedColorScheme = useComputedColorScheme('dark');
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -136,10 +153,16 @@ export default function ProfilePage() {
                 setUsernameDraft(p.username);
                 setAvatarUrlDraft(p.avatarUrl ?? '');
                 setAvatarPreview(p.avatarUrl ?? '');
+
+                // Set initial theme if different from default
+                // Only if p.themePreference exists and is different from computed (initial)
+                if ((p.themePreference === 'light' || p.themePreference === 'dark') && p.themePreference !== computedColorScheme) {
+                    setColorScheme(p.themePreference as 'light' | 'dark');
+                }
             })
             .catch(() => notifications.show({ title: 'Error', message: 'Failed to load profile.', color: 'red' }))
             .finally(() => setLoading(false));
-    }, []);
+    }, []); // Empty dependency array as getMe and initial setup should run once
 
     // Shared save helper
     const save = async (updates: Parameters<typeof updateProfile>[0]) => {
@@ -169,7 +192,13 @@ export default function ProfilePage() {
     const saveAvatar = async () => {
         setSavingAvatar(true);
         try {
-            await save({ avatarUrl: avatarUrlDraft.trim() || undefined });
+            const updated = await save({ avatarUrl: avatarUrlDraft.trim() || undefined });
+            const stored = localStorage.getItem('user');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                parsed.avatarUrl = updated.avatarUrl;
+                localStorage.setItem('user', JSON.stringify(parsed));
+            }
             notifications.show({ title: 'Avatar updated!', message: 'Profile picture saved.', color: 'green' });
             setAvatarMode('none');
         } catch {
@@ -209,7 +238,7 @@ export default function ProfilePage() {
 
     if (loading) {
         return (
-            <Center style={{ minHeight: '100%', background: '#1d2125' }}>
+            <Center style={{ minHeight: '100%', background: computedColorScheme === 'dark' ? '#1d2125' : '#f8f9fa' }}>
                 <Loader color="violet" size="lg" />
             </Center>
         );
@@ -221,8 +250,8 @@ export default function ProfilePage() {
         <Box
             style={{
                 minHeight: '100%',
-                background: '#0a0a0b', // Deep minimalist dark mode
-                color: 'white',
+                background: computedColorScheme === 'dark' ? '#0a0a0b' : '#f1f3f5',
+                color: computedColorScheme === 'dark' ? 'white' : 'black',
                 display: 'flex',
                 flexDirection: 'column'
             }}
@@ -234,8 +263,8 @@ export default function ProfilePage() {
                     style={{
                         width: 280,
                         flexShrink: 0,
-                        background: '#121214',
-                        borderRight: '1px solid rgba(255,255,255,0.05)',
+                        background: computedColorScheme === 'dark' ? '#121214' : 'white',
+                        borderRight: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
                         padding: '40px 24px',
                         minHeight: '100%',
                         display: 'flex',
@@ -252,7 +281,7 @@ export default function ProfilePage() {
                                 size={120}
                                 radius={120}
                                 color="violet"
-                                style={{ border: '3px solid rgba(255,255,255,0.1)', fontSize: 32 }}
+                                style={{ border: `3px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`, fontSize: 32 }}
                             >
                                 {getInitials(profile?.username ?? 'U')}
                             </Avatar>
@@ -286,7 +315,7 @@ export default function ProfilePage() {
                                         size="xs"
                                         variant="outline"
                                         color="gray"
-                                        style={{ borderColor: 'rgba(255,255,255,0.1)' }}
+                                        style={{ borderColor: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
                                         leftSection={<IconUpload size={13} />}
                                         onClick={() => fileInputRef.current?.click()}
                                     >
@@ -298,7 +327,7 @@ export default function ProfilePage() {
                                         size="xs"
                                         variant="outline"
                                         color="gray"
-                                        style={{ borderColor: 'rgba(255,255,255,0.1)' }}
+                                        style={{ borderColor: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
                                         leftSection={<IconLink size={13} />}
                                         onClick={() => setAvatarMode('url')}
                                     >
@@ -330,7 +359,7 @@ export default function ProfilePage() {
                                     }}
                                     size="xs"
                                     autoFocus
-                                    styles={{ input: { background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: 'white' } }}
+                                    styles={{ input: { background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', borderColor: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', color: computedColorScheme === 'dark' ? 'white' : 'black' } }}
                                 />
                                 <Group gap={6}>
                                     <Button size="xs" color="violet" loading={savingAvatar} onClick={saveAvatar}>Save</Button>
@@ -352,17 +381,17 @@ export default function ProfilePage() {
                             </Stack>
                         )}
 
-                        <Divider w="100%" color="rgba(255,255,255,0.05)" />
+                        <Divider w="100%" color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
 
                         {/* Username display */}
                         <Stack gap={2} align="center" style={{ width: '100%' }}>
-                            <Text fw={700} size="lg" c="white">{profile?.username}</Text>
+                            <Text fw={700} size="lg" c={computedColorScheme === 'dark' ? 'white' : 'dark'}>{profile?.username}</Text>
                             <Text size="xs" c="dimmed">{profile?.email}</Text>
                             {profile?.jobTitle && <Text size="xs" c="dimmed">{profile.jobTitle}</Text>}
                         </Stack>
                     </Stack>
 
-                    <Divider w="100%" mb="xl" color="rgba(255,255,255,0.05)" />
+                    <Divider w="100%" mb="xl" color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
 
                     {/* Quick nav matching BoardsPage style */}
                     <Stack gap={10}>
@@ -406,12 +435,12 @@ export default function ProfilePage() {
                             p="xl"
                             radius="xl"
                             style={{
-                                background: 'rgba(255, 255, 255, 0.02)',
-                                border: '1px solid rgba(255,255,255,0.05)',
-                                boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+                                background: computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : 'white',
+                                border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+                                boxShadow: computedColorScheme === 'dark' ? '0 8px 32px rgba(0,0,0,0.1)' : '0 8px 32px rgba(0,0,0,0.05)'
                             }}
                         >
-                            <Title order={4} c="white" mb="xl" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <Title order={4} c={computedColorScheme === 'dark' ? 'white' : 'dark'} mb="xl" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                 <ThemeIcon size="md" variant="light" color="violet" radius="md"><IconUser size={16} /></ThemeIcon>
                                 About you
                             </Title>
@@ -422,9 +451,19 @@ export default function ProfilePage() {
                                     icon={<IconUser size={15} />}
                                     value={profile?.fullName}
                                     placeholder="Add your full name"
-                                    onSave={async v => { const u = await save({ fullName: v }); setProfile(u); }}
+                                    onSave={async v => {
+                                        const u = await save({ fullName: v });
+                                        setProfile(u);
+                                        const stored = localStorage.getItem('user');
+                                        if (stored) {
+                                            const parsed = JSON.parse(stored);
+                                            parsed.fullName = u.fullName;
+                                            localStorage.setItem('user', JSON.stringify(parsed));
+                                            window.dispatchEvent(new Event('profile-updated'));
+                                        }
+                                    }}
                                 />
-                                <Divider color="rgba(255,255,255,0.05)" />
+                                <Divider color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
                                 <EditableField
                                     label="Job title"
                                     icon={<IconBriefcase size={15} />}
@@ -432,7 +471,7 @@ export default function ProfilePage() {
                                     placeholder="Add your job title"
                                     onSave={async v => { const u = await save({ jobTitle: v }); setProfile(u); }}
                                 />
-                                <Divider color="rgba(255,255,255,0.05)" />
+                                <Divider color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
                                 <EditableField
                                     label="Department"
                                     icon={<IconBuilding size={15} />}
@@ -440,7 +479,7 @@ export default function ProfilePage() {
                                     placeholder="Add your department"
                                     onSave={async v => { const u = await save({ department: v }); setProfile(u); }}
                                 />
-                                <Divider color="rgba(255,255,255,0.05)" />
+                                <Divider color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
                                 <EditableField
                                     label="Organization"
                                     icon={<IconBuilding size={15} />}
@@ -448,7 +487,7 @@ export default function ProfilePage() {
                                     placeholder="Add your organization"
                                     onSave={async v => { const u = await save({ organization: v }); setProfile(u); }}
                                 />
-                                <Divider color="rgba(255,255,255,0.05)" />
+                                <Divider color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
                                 <EditableField
                                     label="Based in"
                                     icon={<IconMapPin size={15} />}
@@ -456,7 +495,7 @@ export default function ProfilePage() {
                                     placeholder="Add your location"
                                     onSave={async v => { const u = await save({ location: v }); setProfile(u); }}
                                 />
-                                <Divider color="rgba(255,255,255,0.05)" />
+                                <Divider color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
                                 <EditableField
                                     label="Bio"
                                     icon={<IconUser size={15} />}
@@ -473,12 +512,12 @@ export default function ProfilePage() {
                             p="xl"
                             radius="xl"
                             style={{
-                                background: 'rgba(255, 255, 255, 0.02)',
-                                border: '1px solid rgba(255,255,255,0.05)',
-                                boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
+                                background: computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : 'white',
+                                border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+                                boxShadow: computedColorScheme === 'dark' ? '0 8px 32px rgba(0,0,0,0.1)' : '0 8px 32px rgba(0,0,0,0.05)'
                             }}
                         >
-                            <Title order={4} c="white" mb="xl" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <Title order={4} c={computedColorScheme === 'dark' ? 'white' : 'dark'} mb="xl" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                 <ThemeIcon size="md" variant="light" color="violet" radius="md"><IconAt size={16} /></ThemeIcon>
                                 Account Settings
                             </Title>
@@ -497,7 +536,13 @@ export default function ProfilePage() {
                                                 onChange={e => setUsernameDraft(e.currentTarget.value)}
                                                 size="sm"
                                                 style={{ flex: 1 }}
-                                                styles={{ input: { background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.1)', color: 'white' } }}
+                                                styles={{
+                                                    input: {
+                                                        background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                                                        borderColor: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+                                                        color: computedColorScheme === 'dark' ? 'white' : 'black'
+                                                    }
+                                                }}
                                                 onKeyDown={e => {
                                                     if (e.key === 'Enter') saveUsername();
                                                     if (e.key === 'Escape') { setEditingUsername(false); setUsernameDraft(profile?.username ?? ''); }
@@ -515,8 +560,8 @@ export default function ProfilePage() {
                                     ) : (
                                         <Group justify="space-between">
                                             <Group gap={12}>
-                                                <IconUser size={18} color="rgba(255,255,255,0.4)" />
-                                                <Text size="sm" c="white" fw={500}>{profile?.username}</Text>
+                                                <IconUser size={18} color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'} />
+                                                <Text size="sm" c={computedColorScheme === 'dark' ? 'white' : 'dark'} fw={500}>{profile?.username}</Text>
                                             </Group>
                                             <Tooltip label="Edit username">
                                                 <ActionIcon variant="subtle" color="gray" size="sm"
@@ -528,7 +573,7 @@ export default function ProfilePage() {
                                     )}
                                 </Box>
 
-                                <Divider color="rgba(255,255,255,0.05)" />
+                                <Divider color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
 
                                 {/* Email */}
                                 <Box>
@@ -537,13 +582,13 @@ export default function ProfilePage() {
                                         Email
                                     </Text>
                                     <Group gap={12}>
-                                        <IconAt size={18} color="rgba(255,255,255,0.4)" />
-                                        <Text size="sm" c="white" fw={500}>{profile?.email}</Text>
+                                        <IconAt size={18} color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'} />
+                                        <Text size="sm" c={computedColorScheme === 'dark' ? 'white' : 'dark'} fw={500}>{profile?.email}</Text>
                                         <Badge size="xs" variant="light" color="gray" ml="auto">Read-only</Badge>
                                     </Group>
                                 </Box>
 
-                                <Divider color="rgba(255,255,255,0.05)" />
+                                <Divider color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
 
                                 {/* Member since */}
                                 <Box>
@@ -552,13 +597,76 @@ export default function ProfilePage() {
                                         Member Since
                                     </Text>
                                     <Group gap={12}>
-                                        <IconCalendar size={18} color="rgba(255,255,255,0.4)" />
-                                        <Text size="sm" c="white" fw={500}>
+                                        <IconCalendar size={18} color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'} />
+                                        <Text size="sm" c={computedColorScheme === 'dark' ? 'white' : 'dark'} fw={500}>
                                             {profile ? new Date(profile.createdAt).toLocaleDateString('en-GB', {
                                                 day: '2-digit', month: 'long', year: 'numeric'
                                             }) : '—'}
                                         </Text>
                                     </Group>
+                                </Box>
+                            </Stack>
+                        </Paper>
+
+                        {/* ── Appearance ── */}
+                        <Paper
+                            p="xl"
+                            radius="xl"
+                            style={{
+                                background: computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : 'white',
+                                border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+                                boxShadow: computedColorScheme === 'dark' ? '0 8px 32px rgba(0,0,0,0.1)' : '0 8px 32px rgba(0,0,0,0.05)'
+                            }}
+                        >
+                            <Title order={4} c={computedColorScheme === 'dark' ? 'white' : 'dark'} mb="xl" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <ThemeIcon size="md" variant="light" color="violet" radius="md"><IconPalette size={16} /></ThemeIcon>
+                                Appearance
+                            </Title>
+
+                            <Stack gap="md">
+                                <Box>
+                                    <Text size="xs" c="dimmed" mb={12} fw={600}
+                                        style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                        Interface Theme
+                                    </Text>
+                                    <SegmentedControl
+                                        value={computedColorScheme}
+                                        onChange={async (value) => {
+                                            setColorScheme(value as 'light' | 'dark');
+                                            try {
+                                                await save({ themePreference: value });
+                                            } catch {
+                                                notifications.show({ title: 'Error', message: 'Failed to save theme preference.', color: 'red' });
+                                            }
+                                        }}
+                                        data={[
+                                            {
+                                                value: 'light',
+                                                label: (
+                                                    <MantineCenter style={{ gap: 10 }}>
+                                                        <IconSun size={16} />
+                                                        <span>Light</span>
+                                                    </MantineCenter>
+                                                ),
+                                            },
+                                            {
+                                                value: 'dark',
+                                                label: (
+                                                    <MantineCenter style={{ gap: 10 }}>
+                                                        <IconMoon size={16} />
+                                                        <span>Dark</span>
+                                                    </MantineCenter>
+                                                ),
+                                            },
+                                        ]}
+                                        fullWidth
+                                        color="violet"
+                                        radius="md"
+                                        styles={{
+                                            root: { background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.03)' : '#f1f3f5' },
+                                            indicator: { boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }
+                                        }}
+                                    />
                                 </Box>
                             </Stack>
                         </Paper>

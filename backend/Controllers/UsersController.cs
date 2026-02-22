@@ -61,6 +61,7 @@ public class UsersController : ControllerBase
             Organization = user.Organization,
             Location = user.Location,
             Bio = user.Bio,
+            ThemePreference = user.ThemePreference,
             CreatedAt = user.CreatedAt
         });
     }
@@ -90,6 +91,7 @@ public class UsersController : ControllerBase
         if (dto.Organization != null) user.Organization = dto.Organization.Trim();
         if (dto.Location != null) user.Location = dto.Location.Trim();
         if (dto.Bio != null) user.Bio = dto.Bio.Trim();
+        if (dto.ThemePreference != null) user.ThemePreference = dto.ThemePreference.Trim();
 
         await _context.SaveChangesAsync();
 

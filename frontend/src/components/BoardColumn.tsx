@@ -1,5 +1,5 @@
 import { useState, memo, useRef, useEffect } from 'react';
-import { Text, Group, Badge, TextInput, ActionIcon, Box, Menu } from '@mantine/core';
+import { Text, Group, Badge, TextInput, ActionIcon, Box, Menu, useComputedColorScheme } from '@mantine/core';
 import { IconPlus, IconDots, IconTrash, IconPencil } from '@tabler/icons-react';
 import { Droppable } from '@hello-pangea/dnd';
 import TaskCard from './TaskCard';
@@ -40,6 +40,7 @@ const BoardColumn = memo(function BoardColumn({
 }: Props) {
     const [newTaskTitle, setNewTaskTitle] = useState('');
     const [showInput, setShowInput] = useState(false);
+    const computedColorScheme = useComputedColorScheme('dark');
 
     // Rename state
     const [isRenaming, setIsRenaming] = useState(false);
@@ -94,11 +95,11 @@ const BoardColumn = memo(function BoardColumn({
                 style={{
                     position: 'absolute',
                     inset: 0,
-                    background: 'rgba(20, 21, 23, 0.95)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    background: computedColorScheme === 'dark' ? 'rgba(20, 21, 23, 0.95)' : 'rgba(255, 255, 255, 0.8)',
+                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}`,
                     borderRadius: 20,
                     zIndex: 0,
-                    boxShadow: '0 12px 48px rgba(0,0,0,0.4)',
+                    boxShadow: computedColorScheme === 'dark' ? '0 12px 48px rgba(0,0,0,0.4)' : '0 12px 48px rgba(0,0,0,0.05)',
                 }}
             />
 
@@ -146,14 +147,14 @@ const BoardColumn = memo(function BoardColumn({
                             <Text
                                 fw={700}
                                 size="md"
-                                c="white"
+                                c={computedColorScheme === 'dark' ? 'white' : 'dark'}
                                 style={{ letterSpacing: '0.2px', cursor: 'pointer' }}
                                 onDoubleClick={() => setIsRenaming(true)}
                             >
                                 {column.name}
                             </Text>
                         )}
-                        <Badge variant="filled" color="dark" size="md" radius="sm" styles={{ root: { background: 'rgba(255,255,255,0.1)' } }}>
+                        <Badge variant="filled" color={computedColorScheme === 'dark' ? 'dark' : 'gray'} size="md" radius="sm" styles={{ root: { background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', color: computedColorScheme === 'dark' ? 'white' : 'black' } }}>
                             {visibleTaskIds
                                 ? `${column.taskCards.filter(t => visibleTaskIds.has(t.id)).length}/${column.taskCards.length}`
                                 : column.taskCards.length}
@@ -237,7 +238,7 @@ const BoardColumn = memo(function BoardColumn({
                             ref={addTaskInputRef}
                             autoFocus
                             size="xs"
-                            styles={{ input: { background: 'rgba(0,0,0,0.5)' } }}
+                            styles={{ input: { background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.5)' : '#f8f9fa' } }}
                             rightSection={
                                 <ActionIcon size="sm" variant="subtle" color="violet" onClick={handleAdd}>
                                     <IconPlus size={14} />
@@ -258,16 +259,16 @@ const BoardColumn = memo(function BoardColumn({
                             border: '1px solid transparent',
                         }}
                         onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLElement).style.background = 'rgba(255, 255, 255, 0.05)';
-                            (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                            (e.currentTarget as HTMLElement).style.background = computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)';
+                            (e.currentTarget as HTMLElement).style.borderColor = computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
                         }}
                         onMouseLeave={(e) => {
                             (e.currentTarget as HTMLElement).style.background = 'transparent';
                             (e.currentTarget as HTMLElement).style.borderColor = 'transparent';
                         }}
                     >
-                        <IconPlus size={18} color="white" style={{ opacity: 0.8 }} />
-                        <Text size="sm" fw={600} c="white" opacity={0.7}>Add task</Text>
+                        <IconPlus size={18} color={computedColorScheme === 'dark' ? 'white' : 'black'} style={{ opacity: 0.8 }} />
+                        <Text size="sm" fw={600} c={computedColorScheme === 'dark' ? 'white' : 'dark'} opacity={0.7}>Add task</Text>
                     </Group>
                 )}
             </Box>

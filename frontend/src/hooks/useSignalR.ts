@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { HubConnectionBuilder, HubConnection, LogLevel } from '@microsoft/signalr';
 import type { TaskCard, BoardMember } from '../api/boards';
+import type { Label } from '../api/labels';
 
 const HUB_URL = 'http://localhost:5145/hubs/board';
 
@@ -11,6 +12,9 @@ export function useSignalR(boardId: number | null, callbacks: {
     onTaskUpdated?: (task: TaskCard) => void;
     onMemberJoined?: (member: BoardMember) => void;
     onMemberRemoved?: (userId: number) => void;
+    onLabelCreated?: (label: Label) => void;
+    onLabelUpdated?: (label: Label) => void;
+    onLabelDeleted?: (labelId: number) => void;
 }) {
     const connectionRef = useRef<HubConnection | null>(null);
     const callbacksRef = useRef(callbacks);
@@ -57,6 +61,18 @@ export function useSignalR(boardId: number | null, callbacks: {
 
         connection.on('MemberRemoved', (userId: number) => {
             callbacksRef.current.onMemberRemoved?.(userId);
+        });
+
+        connection.on('LabelCreated', (label: Label) => {
+            callbacksRef.current.onLabelCreated?.(label);
+        });
+
+        connection.on('LabelUpdated', (label: Label) => {
+            callbacksRef.current.onLabelUpdated?.(label);
+        });
+
+        connection.on('LabelDeleted', (labelId: number) => {
+            callbacksRef.current.onLabelDeleted?.(labelId);
         });
 
         connection

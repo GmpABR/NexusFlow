@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
-    Grid, Paper, Text, Group, Stack, RingProgress, SimpleGrid,
-    ThemeIcon, List, Badge, ScrollArea, Loader, Center
+    Grid, Paper, Text, Group, Stack, RingProgress, SimpleGrid, Avatar,
+    ThemeIcon, List, Badge, ScrollArea, Loader, Center, useComputedColorScheme
 } from '@mantine/core';
 import {
     IconLayoutBoard, IconUsers, IconListCheck, IconAlertCircle,
-    IconCalendar, IconUser, IconActivity
+    IconCalendar, IconActivity
 } from '@tabler/icons-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 import { getWorkspaceAnalytics, type WorkspaceAnalytics } from '../api/analytics';
@@ -16,6 +16,7 @@ interface WorkspaceOverviewProps {
 }
 
 export default function WorkspaceOverview({ workspaceId }: WorkspaceOverviewProps) {
+    const computedColorScheme = useComputedColorScheme('dark');
     const [data, setData] = useState<WorkspaceAnalytics | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -82,11 +83,13 @@ export default function WorkspaceOverview({ workspaceId }: WorkspaceOverviewProp
                 {/* Completion Progress & Priority Distribution */}
                 <Grid.Col span={{ base: 12, md: 5 }}>
                     <Stack gap="lg">
-                        <Paper p="xl" radius="md" withBorder style={{ background: 'rgba(255,255,255,0.03)' }}>
+                        <Paper p="xl" radius="md" withBorder style={{
+                            background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.03)' : 'white',
+                        }}>
                             <Group justify="space-between">
                                 <Stack gap={0}>
                                     <Text size="sm" c="dimmed" fw={600} tt="uppercase">Overall Progress</Text>
-                                    <Text fz={32} fw={800} c="white">{completionRate}%</Text>
+                                    <Text fz={32} fw={800} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{completionRate}%</Text>
                                     <Text size="xs" c="dimmed">{data.completedTasks} / {data.totalTasks} tasks completed</Text>
                                 </Stack>
                                 <RingProgress
@@ -103,17 +106,28 @@ export default function WorkspaceOverview({ workspaceId }: WorkspaceOverviewProp
                             </Group>
                         </Paper>
 
-                        <Paper p="xl" radius="md" withBorder style={{ background: 'rgba(255,255,255,0.03)' }}>
+                        <Paper p="xl" radius="md" withBorder style={{
+                            background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.03)' : 'white'
+                        }}>
                             <Text size="sm" c="dimmed" fw={600} tt="uppercase" mb="lg">Tasks by Priority</Text>
                             <div style={{ height: 200 }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={priorityData} layout="vertical">
                                         <XAxis type="number" hide />
                                         <YAxis dataKey="name" type="category" width={80} axisLine={false} tickLine={false} style={{ fontSize: 12, fill: '#94a3b8' }} />
-                                        <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ background: '#1a1b1e', border: '1px solid #373a40', borderRadius: 8 }} />
+                                        <Tooltip
+                                            cursor={{ fill: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)' }}
+                                            contentStyle={{
+                                                background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white',
+                                                border: `1px solid ${computedColorScheme === 'dark' ? '#373a40' : '#dee2e6'} `,
+                                                borderRadius: 8,
+                                                color: computedColorScheme === 'dark' ? 'white' : 'black'
+                                            }}
+                                            itemStyle={{ color: computedColorScheme === 'dark' ? 'white' : 'black' }}
+                                        />
                                         <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20}>
                                             {priorityData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                                <Cell key={`cell - ${index} `} fill={entry.color} />
                                             ))}
                                         </Bar>
                                     </BarChart>
@@ -125,27 +139,33 @@ export default function WorkspaceOverview({ workspaceId }: WorkspaceOverviewProp
 
                 {/* Recent Activity */}
                 <Grid.Col span={{ base: 12, md: 7 }}>
-                    <Paper p="xl" radius="md" withBorder style={{ background: 'rgba(255,255,255,0.03)', height: '100%' }}>
+                    <Paper p="xl" radius="md" withBorder style={{
+                        background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.03)' : 'white',
+                        height: '100%'
+                    }}>
                         <Group mb="lg">
                             <ThemeIcon variant="light" color="violet">
                                 <IconActivity size={18} />
                             </ThemeIcon>
-                            <Text fw={700}>Recent Activity</Text>
+                            <Text fw={700} c={computedColorScheme === 'dark' ? 'white' : 'black'}>Recent Activity</Text>
                         </Group>
 
                         <ScrollArea h={400}>
                             {data.recentActivity.length === 0 ? (
                                 <Text c="dimmed" ta="center" py="xl">No recent activity found.</Text>
                             ) : (
-                                <List spacing="sm" size="sm" center icon={null} styles={{ item: { color: '#94a3b8' } }}>
+                                <List spacing="sm" size="sm" center icon={null} styles={{ item: { color: computedColorScheme === 'dark' ? '#94a3b8' : '#4b5563' } }}>
                                     {data.recentActivity.map((act, i) => (
-                                        <List.Item key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 12 }}>
+                                        <List.Item key={i} style={{
+                                            borderBottom: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} `,
+                                            paddingBottom: 12
+                                        }}>
                                             <Group gap="xs" align="flex-start" wrap="nowrap">
-                                                <Avatar size="sm" radius="xl" color="violet" variant="light">
+                                                <Avatar src={act.avatarUrl} size="sm" radius="xl" color="violet" variant="light">
                                                     {act.username.slice(0, 2).toUpperCase()}
                                                 </Avatar>
                                                 <Stack gap={2}>
-                                                    <Text size="sm" c="white">
+                                                    <Text size="sm" c={computedColorScheme === 'dark' ? 'white' : 'black'}>
                                                         <Text span fw={700}>{act.username}</Text> {act.action} <Text span fw={600} c="violet.3">{act.taskTitle}</Text>
                                                     </Text>
                                                     <Group gap={8}>
@@ -170,15 +190,16 @@ export default function WorkspaceOverview({ workspaceId }: WorkspaceOverviewProp
 }
 
 function StatCard({ title, value, icon, color, highlight }: { title: string; value: number; icon: React.ReactNode; color: string; highlight?: boolean }) {
+    const computedColorScheme = useComputedColorScheme('dark');
     return (
         <Paper p="lg" radius="md" withBorder style={{
-            background: 'rgba(255,255,255,0.03)',
-            borderLeft: `4px solid ${highlight ? '#f87171' : 'transparent'}`
+            background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.03)' : 'white',
+            borderLeft: `4px solid ${highlight ? '#f87171' : 'transparent'} `
         }}>
             <Group justify="space-between">
                 <div>
                     <Text size="xs" c="dimmed" fw={700} tt="uppercase" lts={1}>{title}</Text>
-                    <Text fz={28} fw={800} c="white">{value}</Text>
+                    <Text fz={28} fw={800} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{value}</Text>
                 </div>
                 <ThemeIcon size={48} radius="md" variant="light" color={color}>
                     {icon}
@@ -188,21 +209,4 @@ function StatCard({ title, value, icon, color, highlight }: { title: string; val
     );
 }
 
-function Avatar({ children, size, radius, color, variant }: any) {
-    // Simpler avatar since I don't want to rely on the main Avatar component if it causes issues, 
-    // but Mantine's Avatar should be fine.
-    return (
-        <Center style={{
-            width: size === 'sm' ? 32 : 40,
-            height: size === 'sm' ? 32 : 40,
-            borderRadius: radius === 'xl' ? '50%' : 8,
-            background: 'rgba(124, 58, 237, 0.1)',
-            color: '#7c6fe0',
-            fontSize: 12,
-            fontWeight: 700,
-            flexShrink: 0
-        }}>
-            {children}
-        </Center>
-    );
-}
+

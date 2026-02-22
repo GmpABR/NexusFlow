@@ -22,4 +22,5 @@ public class Board
     // Navigation
     public ICollection<Column> Columns { get; set; } = new List<Column>();
     public ICollection<BoardMember> Members { get; set; } = new List<BoardMember>();
+    public ICollection<Label> Labels { get; set; } = new List<Label>();
 }

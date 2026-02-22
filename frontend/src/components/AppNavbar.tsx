@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
     Box, Group, Text, TextInput, ActionIcon, Avatar, Menu,
-    Tooltip, Kbd, Badge, Stack, Divider,
+    Tooltip, Kbd, Badge, Stack, Divider, useComputedColorScheme,
 } from '@mantine/core';
 import {
     IconSearch, IconLayoutDashboard, IconListCheck,
@@ -39,10 +39,11 @@ interface SearchResult {
 export default function AppNavbar() {
     const navigate = useNavigate();
     const location = useLocation();
+    const computedColorScheme = useComputedColorScheme('dark');
 
-    const storedUser = JSON.parse(localStorage.getItem('user') ?? '{}');
-    const username: string = storedUser?.username ?? 'User';
-    const avatarUrl: string = storedUser?.avatarUrl ?? '';
+    const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user') ?? '{}'));
+    const username = user?.username ?? 'User';
+    const avatarUrl = user?.avatarUrl ?? '';
 
     // Data caches
     const [myTasks, setMyTasks] = useState<MyTask[]>([]);
@@ -55,6 +56,21 @@ export default function AppNavbar() {
     const [searchOpen, setSearchOpen] = useState(false);
     const [loadingCards, setLoadingCards] = useState(false);
     const searchRef = useRef<HTMLInputElement>(null);
+
+    // Sync from storage
+    useEffect(() => {
+        const handleStorage = () => {
+            setUser(JSON.parse(localStorage.getItem('user') ?? '{}'));
+        };
+        window.addEventListener('storage', handleStorage);
+        // Also listen for custom profile-update event if we want intra-tab sync
+        window.addEventListener('profile-updated', handleStorage);
+
+        return () => {
+            window.removeEventListener('storage', handleStorage);
+            window.removeEventListener('profile-updated', handleStorage);
+        };
+    }, []);
 
     // Load tasks + boards on mount
     useEffect(() => {
@@ -162,14 +178,14 @@ export default function AppNavbar() {
         <Box
             style={{
                 height: 76,
-                background: '#1d2125',
-                borderBottom: '1px solid #2c333a',
+                background: computedColorScheme === 'dark' ? '#1d2125' : '#ffffff',
+                borderBottom: `1px solid ${computedColorScheme === 'dark' ? '#2c333a' : '#e9ecef'}`,
                 display: 'flex',
                 alignItems: 'center',
                 paddingInline: 20,
                 gap: 12,
                 zIndex: 1000,
-                boxShadow: '0 2px 16px rgba(0,0,0,0.5)',
+                boxShadow: computedColorScheme === 'dark' ? '0 2px 16px rgba(0,0,0,0.5)' : '0 2px 16px rgba(0,0,0,0.05)',
                 flexShrink: 0,
             }}
         >
@@ -235,8 +251,10 @@ export default function AppNavbar() {
                             </ActionIcon>
                         ) : (
                             <Kbd size="xs" style={{
-                                background: '#282e33', color: '#9fadbc',
-                                border: '1px solid #3b4754', fontSize: 12, borderRadius: 4, height: 24, display: 'flex', alignItems: 'center'
+                                background: computedColorScheme === 'dark' ? '#282e33' : '#e9ecef',
+                                color: computedColorScheme === 'dark' ? '#9fadbc' : '#495057',
+                                border: `1px solid ${computedColorScheme === 'dark' ? '#3b4754' : '#dee2e6'}`,
+                                fontSize: 12, borderRadius: 4, height: 24, display: 'flex', alignItems: 'center'
                             }}>/</Kbd>
                         )
                     }
@@ -251,9 +269,9 @@ export default function AppNavbar() {
                     radius="md"
                     styles={{
                         input: {
-                            background: '#282e33',
-                            color: '#b6c2cf',
-                            border: '1px solid #3b4754',
+                            background: computedColorScheme === 'dark' ? '#282e33' : '#f1f3f5',
+                            color: computedColorScheme === 'dark' ? '#b6c2cf' : '#1d2125',
+                            border: `1px solid ${computedColorScheme === 'dark' ? '#3b4754' : '#dee2e6'}`,
                             borderRadius: 8,
                             fontSize: 16,
                             height: 50,
@@ -273,10 +291,10 @@ export default function AppNavbar() {
                             top: 'calc(100% + 6px)',
                             left: 0,
                             right: 0,
-                            background: '#21262d',
-                            border: '1px solid #30363d',
+                            background: computedColorScheme === 'dark' ? '#21262d' : 'white',
+                            border: `1px solid ${computedColorScheme === 'dark' ? '#30363d' : '#dee2e6'}`,
                             borderRadius: 10,
-                            boxShadow: '0 12px 32px rgba(0,0,0,0.6)',
+                            boxShadow: computedColorScheme === 'dark' ? '0 12px 32px rgba(0,0,0,0.6)' : '0 12px 32px rgba(0,0,0,0.1)',
                             overflow: 'hidden',
                             zIndex: 2000,
                         }}
@@ -296,10 +314,10 @@ export default function AppNavbar() {
                                         py={9}
                                         style={{
                                             cursor: 'pointer',
-                                            borderBottom: i < results.length - 1 ? '1px solid #30363d' : 'none',
+                                            borderBottom: i < results.length - 1 ? `1px solid ${computedColorScheme === 'dark' ? '#30363d' : '#f1f3f5'}` : 'none',
                                             transition: 'background 0.1s',
                                         }}
-                                        onMouseEnter={e => (e.currentTarget.style.background = '#161b22')}
+                                        onMouseEnter={e => (e.currentTarget.style.background = computedColorScheme === 'dark' ? '#161b22' : '#f8f9fa')}
                                         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                                         onMouseDown={() => handleResultClick(r)}
                                     >
@@ -312,8 +330,8 @@ export default function AppNavbar() {
                                                         : <IconCreditCard size={14} />}
                                                 </Box>
                                                 <Box style={{ minWidth: 0 }}>
-                                                    <Text size="sm" c="#e6edf3" fw={500} truncate>{r.title}</Text>
-                                                    <Text size="xs" c="#8b949e" truncate>{r.subtitle}</Text>
+                                                    <Text size="sm" c={computedColorScheme === 'dark' ? '#e6edf3' : '#1d2125'} fw={500} truncate>{r.title}</Text>
+                                                    <Text size="xs" c={computedColorScheme === 'dark' ? '#8b949e' : '#868e96'} truncate>{r.subtitle}</Text>
                                                 </Box>
                                             </Group>
                                             <Group gap={8} style={{ flexShrink: 0 }}>
@@ -360,9 +378,9 @@ export default function AppNavbar() {
                     zIndex={2500}
                     transitionProps={{ duration: 100, transition: 'pop-top-right' }}
                     styles={{
-                        dropdown: { background: '#21262d', border: '1px solid #30363d', borderRadius: 12 },
-                        item: { color: 'white', borderRadius: 6, fontSize: 13, fontWeight: 500 },
-                        label: { color: '#909296', fontSize: 11 },
+                        dropdown: { background: computedColorScheme === 'dark' ? '#21262d' : 'white', border: `1px solid ${computedColorScheme === 'dark' ? '#30363d' : '#dee2e6'}`, borderRadius: 12 },
+                        item: { color: computedColorScheme === 'dark' ? 'white' : 'black', borderRadius: 6, fontSize: 13, fontWeight: 500 },
+                        label: { color: computedColorScheme === 'dark' ? '#909296' : 'dimmed', fontSize: 11 },
                     }}
                 >
                     <Menu.Target>
@@ -376,7 +394,7 @@ export default function AppNavbar() {
                                 transition: 'background 0.1s',
                             }}
                             onMouseEnter={e => {
-                                (e.currentTarget as HTMLElement).style.background = '#2c333a';
+                                (e.currentTarget as HTMLElement).style.background = computedColorScheme === 'dark' ? '#2c333a' : '#f1f3f5';
                             }}
                             onMouseLeave={e => {
                                 (e.currentTarget as HTMLElement).style.background = 'transparent';
@@ -395,10 +413,10 @@ export default function AppNavbar() {
                     </Menu.Target>
                     <Menu.Dropdown>
                         <Box px="md" py={12}>
-                            <Text size="sm" c="white" fw={700} style={{ lineHeight: 1.2 }}>{username}</Text>
-                            <Text size="xs" c="#8b949e" mt={2}>NexusFlow account</Text>
+                            <Text size="sm" c={computedColorScheme === 'dark' ? 'white' : 'dark'} fw={700} style={{ lineHeight: 1.2 }}>{username}</Text>
+                            <Text size="xs" c={computedColorScheme === 'dark' ? '#8b949e' : 'dimmed'} mt={2}>NexusFlow account</Text>
                         </Box>
-                        <Divider color="#30363d" />
+                        <Divider color={computedColorScheme === 'dark' ? '#30363d' : '#f1f3f5'} />
                         <Menu.Item leftSection={<IconUser size={15} />} onClick={() => navigate('/profile')}>
                             Profile
                         </Menu.Item>
@@ -408,7 +426,7 @@ export default function AppNavbar() {
                         <Menu.Item leftSection={<IconListCheck size={15} />} onClick={() => navigate('/my-tasks')}>
                             My Tasks
                         </Menu.Item>
-                        <Divider color="#30363d" my={4} />
+                        <Divider color={computedColorScheme === 'dark' ? '#30363d' : '#f1f3f5'} my={4} />
                         <Menu.Item leftSection={<IconLogout size={15} />} color="red" onClick={handleSignOut}>
                             Sign Out
                         </Menu.Item>

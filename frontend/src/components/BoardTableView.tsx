@@ -1,5 +1,5 @@
 
-import { Table, Paper, Text, Badge, ScrollArea } from '@mantine/core';
+import { Table, Paper, Text, Badge, ScrollArea, useComputedColorScheme } from '@mantine/core';
 import { type BoardDetail } from '../api/boards';
 
 interface BoardTableViewProps {
@@ -7,6 +7,7 @@ interface BoardTableViewProps {
 }
 
 export default function BoardTableView({ board }: BoardTableViewProps) {
+    const computedColorScheme = useComputedColorScheme('dark');
     if (!board || !board.columns) return null;
     const allTasks = board.columns.flatMap(col => col.taskCards.map(task => ({
         ...task,
@@ -18,31 +19,32 @@ export default function BoardTableView({ board }: BoardTableViewProps) {
             p="md"
             radius="lg"
             style={{
-                background: 'rgba(20, 21, 23, 0.75)',
+                background: computedColorScheme === 'dark' ? 'rgba(20, 21, 23, 0.75)' : 'rgba(255, 255, 255, 0.9)',
                 backdropFilter: 'blur(16px)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'}`,
                 height: '100%',
                 display: 'flex',
                 flexDirection: 'column',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                boxShadow: computedColorScheme === 'light' ? '0 8px 32px rgba(0,0,0,0.05)' : 'none'
             }}
         >
             <ScrollArea scrollbars="y" style={{ flex: 1 }}>
                 <Table variant="simple" verticalSpacing="sm">
                     <Table.Thead>
                         <Table.Tr>
-                            <Table.Th style={{ color: 'rgba(255,255,255,0.6)' }}>Título</Table.Th>
-                            <Table.Th style={{ color: 'rgba(255,255,255,0.6)' }}>Status</Table.Th>
-                            <Table.Th style={{ color: 'rgba(255,255,255,0.6)' }}>Prioridade</Table.Th>
-                            <Table.Th style={{ color: 'rgba(255,255,255,0.6)' }}>Responsável</Table.Th>
-                            <Table.Th style={{ color: 'rgba(255,255,255,0.6)' }}>Pontos</Table.Th>
+                            <Table.Th style={{ color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>Título</Table.Th>
+                            <Table.Th style={{ color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>Status</Table.Th>
+                            <Table.Th style={{ color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>Prioridade</Table.Th>
+                            <Table.Th style={{ color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>Responsável</Table.Th>
+                            <Table.Th style={{ color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>Pontos</Table.Th>
                         </Table.Tr>
                     </Table.Thead>
                     <Table.Tbody>
                         {allTasks.map((task) => (
-                            <Table.Tr key={task.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                            <Table.Tr key={task.id} style={{ borderBottom: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
                                 <Table.Td>
-                                    <Text size="sm" fw={500} c="white">{task.title}</Text>
+                                    <Text size="sm" fw={500} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{task.title}</Text>
                                 </Table.Td>
                                 <Table.Td>
                                     <Badge variant="light" color="blue" size="xs">{task.columnName}</Badge>

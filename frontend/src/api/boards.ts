@@ -1,5 +1,6 @@
 import api from './axios';
 import type { Subtask } from './tasks';
+import type { Label } from './labels';
 
 export interface BoardSummary {
     id: number;
@@ -29,18 +30,20 @@ export interface TaskCard {
     description: string | null;
     order: number;
     columnId: number;
+    boardId: number;
     createdAt: string;
     priority: string;
     dueDate: string | null;
     storyPoints: number | null;
     assigneeId: number | null;
     assigneeName: string | null;
-    assignees?: { userId: number; username: string }[];
+    assignees?: { userId: number; username: string; avatarUrl?: string | null }[];
     tags: string | null;
     totalTimeSpentMinutes: number;
     isTimerRunning: boolean;
     subtasks?: Subtask[];
     attachments?: Attachment[];
+    labels?: Label[];
 }
 
 export interface Column {
@@ -70,6 +73,7 @@ export interface BoardDetail {
     workspaceId: number | null;
     columns: Column[];
     members: BoardMember[];
+    labels: Label[];
     userRole: string;
 }
 

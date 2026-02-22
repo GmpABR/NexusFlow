@@ -4,6 +4,7 @@ using Backend.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Diagnostics;
 
 namespace Backend.Controllers;
 
@@ -30,15 +31,19 @@ public class AnalyticsController : ControllerBase
 
         if (!hasAccess) return Forbid();
 
-        // 2. Aggregate Task Data
-        var tasks = await _db.TaskCards
+        // 2. Aggregate Task Data with basic projections
+        var taskData = await _db.TaskCards
             .AsNoTracking()
             .Where(t => t.Column.BoardId == boardId)
-            .Include(t => t.TimeLogs)
-            .ThenInclude(tl => tl.User)
+            .Select(t => new {
+                t.Id,
+                t.ColumnId,
+                t.CreatedAt,
+                TimeLogs = t.TimeLogs.Select(tl => new { tl.DurationMinutes, Username = tl.User.Username })
+            })
             .ToListAsync();
 
-        int totalTasks = tasks.Count;
+        int totalTasks = taskData.Count;
         
         // Let's assume the right-most column means "Done", or any column named "Done" / "Completed"
         // Since we don't have a strict strict "Done" flag on the Task itself mapping to Agile,
@@ -49,29 +54,21 @@ public class AnalyticsController : ControllerBase
             .Select(c => c.Id)
             .ToListAsync();
 
-        int completedTasks = tasks.Count(t => doneColumnIds.Contains(t.ColumnId));
+        int completedTasks = taskData.Count(t => doneColumnIds.Contains(t.ColumnId));
         int pendingTasks = totalTasks - completedTasks;
 
         // 3. User Time Tracking Aggregation
-        var userTimeData = new Dictionary<string, int>();
-        foreach (var task in tasks)
-        {
-            foreach (var log in task.TimeLogs.Where(tl => tl.DurationMinutes.HasValue))
-            {
-                var username = log.User?.Username ?? "Unknown";
-                if (!userTimeData.ContainsKey(username))
-                {
-                    userTimeData[username] = 0;
-                }
-                userTimeData[username] += log.DurationMinutes!.Value;
-            }
-        }
+        var userTimeData = taskData
+            .SelectMany(t => t.TimeLogs)
+            .Where(tl => tl.DurationMinutes.HasValue)
+            .GroupBy(tl => tl.Username ?? "Unknown")
+            .ToDictionary(g => g.Key, g => g.Sum(tl => tl.DurationMinutes!.Value));
 
         // 4. Burn Down Chart Data (Tasks remaining over the last 7 days)
         var burnDownData = new Dictionary<string, int>();
+        var now = DateTime.UtcNow.Date;
 
         // Approximate completion date for currently done tasks as their latest activity timestamp
-        // If they have no activity, we just use their CreatedAt date as a fallback.
         var doneTaskDates = await _db.TaskActivities
             .AsNoTracking()
             .Where(a => a.TaskCard.Column.BoardId == boardId && doneColumnIds.Contains(a.TaskCard.ColumnId))
@@ -81,32 +78,64 @@ public class AnalyticsController : ControllerBase
 
         for (int i = 6; i >= 0; i--)
         {
-            var date = DateTime.UtcNow.Date.AddDays(-i);
+            var date = now.AddDays(-i);
             
             int pendingOnDate = 0;
-            foreach (var task in tasks)
+            foreach (var task in taskData)
             {
-                // Was it created by the end of 'date'?
-                if (task.CreatedAt.Date <= date.Date)
+                if (task.CreatedAt.Date <= date)
                 {
                     if (doneColumnIds.Contains(task.ColumnId))
                     {
-                        // It's currently done. Was it done AFTER 'date'?
                         var doneDate = doneTaskDates.ContainsKey(task.Id) ? doneTaskDates[task.Id] : task.CreatedAt;
-                        if (doneDate.Date > date.Date)
-                        {
-                            pendingOnDate++; // It was still pending on this date
-                        }
+                        if (doneDate.Date > date) pendingOnDate++;
                     }
                     else
                     {
-                        // It's not done yet, so it was pending on 'date'
                         pendingOnDate++;
                     }
                 }
             }
-            
             burnDownData[date.ToString("MMM dd")] = pendingOnDate;
+        }
+
+        // 5. Lead & Cycle Time Calculations
+        // Optimized: Fetch only necessary activities
+        var boardActivities = await _db.TaskActivities
+            .AsNoTracking()
+            .Where(a => a.TaskCard.Column.BoardId == boardId && (a.Action == "Moved" || a.Action == "Created"))
+            .Select(a => new { a.TaskCardId, a.Action, a.Timestamp, a.Details })
+            .ToListAsync();
+
+        var activityByTask = boardActivities
+            .GroupBy(a => a.TaskCardId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(a => a.Timestamp).ToList());
+
+        var firstColumn = await _db.Columns
+            .Where(c => c.BoardId == boardId)
+            .OrderBy(c => c.Order)
+            .Select(c => new { c.Id, c.Name })
+            .FirstOrDefaultAsync();
+
+        var leadTimes = new List<double>();
+        var cycleTimes = new List<double>();
+
+        foreach (var task in taskData)
+        {
+            if (doneColumnIds.Contains(task.ColumnId))
+            {
+                var doneDate = doneTaskDates.ContainsKey(task.Id) ? doneTaskDates[task.Id] : task.CreatedAt;
+                leadTimes.Add(Math.Max(0, (doneDate - task.CreatedAt).TotalDays));
+
+                DateTime workStartedDate = task.CreatedAt;
+                if (activityByTask.ContainsKey(task.Id))
+                {
+                    var firstMove = activityByTask[task.Id]
+                        .FirstOrDefault(a => a.Action == "Moved" && !a.Details.Contains($"to {firstColumn?.Name}"));
+                    if (firstMove != null) workStartedDate = firstMove.Timestamp;
+                }
+                cycleTimes.Add(Math.Max(0, (doneDate - workStartedDate).TotalDays));
+            }
         }
 
         var dto = new BoardAnalyticsDto
@@ -116,7 +145,9 @@ public class AnalyticsController : ControllerBase
             CompletedTasks = completedTasks,
             PendingTasks = pendingTasks,
             UserTimeData = userTimeData,
-            BurnDownData = burnDownData
+            BurnDownData = burnDownData,
+            AverageLeadTimeDays = leadTimes.Any() ? Math.Round(leadTimes.Average(), 1) : 0,
+            AverageCycleTimeDays = cycleTimes.Any() ? Math.Round(cycleTimes.Average(), 1) : 0
         };
 
         return Ok(dto);
@@ -206,6 +237,7 @@ public class AnalyticsController : ControllerBase
             .Select(a => new WorkspaceActivityDto
             {
                 Username = a.User.Username,
+                AvatarUrl = a.User.AvatarUrl,
                 Action = a.Action,
                 Details = a.Details ?? "",
                 TaskTitle = a.TaskCard.Title,
@@ -226,7 +258,9 @@ public class AnalyticsController : ControllerBase
             TasksByPriority = tasksByPriority,
             TasksByAssignee = tasksByAssignee,
             TasksPerBoard = tasksPerBoard,
-            RecentActivity = recentActivity
+            RecentActivity = recentActivity,
+            AverageLeadTimeDays = 0, // Simplified for workspace overview for now
+            AverageCycleTimeDays = 0
         });
     }
 

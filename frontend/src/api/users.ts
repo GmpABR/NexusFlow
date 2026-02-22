@@ -18,6 +18,7 @@ export interface UserProfile {
     organization?: string | null;
     location?: string | null;
     bio?: string | null;
+    themePreference: string;
     createdAt: string;
 }
 
@@ -56,6 +57,7 @@ export const updateProfile = async (updates: Partial<{
     organization: string;
     location: string;
     bio: string;
+    themePreference: string;
 }>): Promise<UserProfile> => {
     const { data } = await api.put<UserProfile>('/users/me', updates);
     return data;

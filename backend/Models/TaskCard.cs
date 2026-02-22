@@ -25,4 +25,5 @@ public class TaskCard
     public ICollection<TimeLog> TimeLogs { get; set; } = new List<TimeLog>();
     public ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();
     public ICollection<TaskAssignee> Assignees { get; set; } = new List<TaskAssignee>();
+    public ICollection<TaskLabel> Labels { get; set; } = new List<TaskLabel>();
 }

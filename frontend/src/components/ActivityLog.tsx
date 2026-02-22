@@ -1,4 +1,4 @@
-import { Avatar, Text, Timeline, ScrollArea } from '@mantine/core';
+import { Avatar, Text, Timeline, ScrollArea, useComputedColorScheme } from '@mantine/core';
 import type { TaskActivity } from '../api/tasks';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -7,6 +7,7 @@ interface ActivityLogProps {
 }
 
 export default function ActivityLog({ activities }: ActivityLogProps) {
+    const computedColorScheme = useComputedColorScheme('dark');
     if (!activities || activities.length === 0) {
         return <Text c="dimmed" fs="italic" size="sm">No activity yet.</Text>;
     }
@@ -28,13 +29,13 @@ export default function ActivityLog({ activities }: ActivityLogProps) {
                             </Avatar>
                         }
                         title={
-                            <Text size="sm" fw={500}>
+                            <Text size="sm" fw={500} c={computedColorScheme === 'dark' ? 'white' : 'black'}>
                                 {activity.user?.username} <Text span c="dimmed" size="xs">({formatDistanceToNow(new Date(activity.timestamp))} ago)</Text>
                             </Text>
                         }
                     >
-                        <Text color="dimmed" size="sm" className="activity-details">
-                            <Text span fw={700} c="blue.4">{activity.action}</Text>: {activity.details}
+                        <Text c="dimmed" size="sm" className="activity-details">
+                            <Text span fw={700} c={computedColorScheme === 'dark' ? 'blue.4' : 'blue.7'}>{activity.action}</Text>: {activity.details}
                         </Text>
                     </Timeline.Item>
                 ))}

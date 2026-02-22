@@ -12,6 +12,9 @@ public class BoardAnalyticsDto
 
     // For Time Tracking: Username -> Total Minutes Logged
     public Dictionary<string, int> UserTimeData { get; set; } = new Dictionary<string, int>();
+
+    public double AverageLeadTimeDays { get; set; }
+    public double AverageCycleTimeDays { get; set; }
 }
 
 public class WorkspaceAnalyticsDto
@@ -27,11 +30,15 @@ public class WorkspaceAnalyticsDto
     public Dictionary<string, int> TasksByAssignee { get; set; } = new();
     public Dictionary<string, int> TasksPerBoard { get; set; } = new();
     public List<WorkspaceActivityDto> RecentActivity { get; set; } = new();
+
+    public double AverageLeadTimeDays { get; set; }
+    public double AverageCycleTimeDays { get; set; }
 }
 
 public class WorkspaceActivityDto
 {
     public string Username { get; set; } = string.Empty;
+    public string? AvatarUrl { get; set; }
     public string Action { get; set; } = string.Empty;
     public string Details { get; set; } = string.Empty;
     public string TaskTitle { get; set; } = string.Empty;

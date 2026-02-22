@@ -1,5 +1,5 @@
 
-import { Paper, Title, Group, Text, Badge, Box, ScrollArea, SimpleGrid, Card, Divider, Stack } from '@mantine/core';
+import { Paper, Title, Group, Text, Badge, Box, ScrollArea, SimpleGrid, Card, Divider, Stack, useComputedColorScheme } from '@mantine/core';
 import { DatePicker } from '@mantine/dates';
 import { type BoardDetail } from '../api/boards';
 import dayjs from 'dayjs';
@@ -11,6 +11,7 @@ interface BoardCalendarViewProps {
 }
 
 export default function BoardCalendarView({ board, onTaskClick }: BoardCalendarViewProps) {
+    const computedColorScheme = useComputedColorScheme('dark');
     if (!board || !board.columns) return null;
     const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
 
@@ -34,24 +35,25 @@ export default function BoardCalendarView({ board, onTaskClick }: BoardCalendarV
                 p="md"
                 radius="lg"
                 style={{
-                    background: 'rgba(20, 21, 23, 0.75)',
+                    background: computedColorScheme === 'dark' ? 'rgba(20, 21, 23, 0.75)' : 'rgba(255, 255, 255, 0.9)',
                     backdropFilter: 'blur(16px)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'}`,
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'center'
+                    alignItems: 'center',
+                    boxShadow: computedColorScheme === 'light' ? '0 8px 32px rgba(0,0,0,0.05)' : 'none'
                 }}
             >
-                <Title order={4} c="white" mb="md">Calendário de Prazos</Title>
+                <Title order={4} c={computedColorScheme === 'dark' ? 'white' : 'black'} mb="md">Calendário de Prazos</Title>
                 <DatePicker
                     value={selectedDate}
                     onChange={(val: any) => setSelectedDate(val)}
                     size="md"
                     styles={{
-                        calendarHeader: { color: 'white' },
-                        calendarHeaderControl: { color: 'white' },
-                        day: { color: 'rgba(255,255,255,0.8)', fontSize: '1.1rem' },
-                        weekday: { color: 'rgba(255,255,255,0.4)' },
+                        calendarHeader: { color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                        calendarHeaderControl: { color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                        day: { color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)', fontSize: '1.1rem' },
+                        weekday: { color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)' },
                     }}
                     renderDay={(date: any) => {
                         const d = date instanceof Date ? date : new Date(date);
@@ -83,16 +85,17 @@ export default function BoardCalendarView({ board, onTaskClick }: BoardCalendarV
                 p="md"
                 radius="lg"
                 style={{
-                    background: 'rgba(20, 21, 23, 0.75)',
+                    background: computedColorScheme === 'dark' ? 'rgba(20, 21, 23, 0.75)' : 'rgba(255, 255, 255, 0.9)',
                     backdropFilter: 'blur(16px)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'}`,
                     display: 'flex',
                     flexDirection: 'column',
-                    overflow: 'hidden'
+                    overflow: 'hidden',
+                    boxShadow: computedColorScheme === 'light' ? '0 8px 32px rgba(0,0,0,0.05)' : 'none'
                 }}
             >
                 <Group justify="space-between" mb="md">
-                    <Title order={4} c="white">
+                    <Title order={4} c={computedColorScheme === 'dark' ? 'white' : 'black'}>
                         {selectedDate ? dayjs(selectedDate).format('DD [de] MMMM') : 'Selecione uma data'}
                     </Title>
                     <Badge variant="light" color="violet">{tasksForSelectedDate.length} tarefas</Badge>
@@ -108,15 +111,15 @@ export default function BoardCalendarView({ board, onTaskClick }: BoardCalendarV
                                 p="sm"
                                 radius="md"
                                 style={{
-                                    background: 'rgba(255,255,255,0.03)',
-                                    border: '1px solid rgba(255,255,255,0.05)',
+                                    background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.03)' : 'white',
+                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
                                     cursor: 'pointer'
                                 }}
                                 onClick={() => onTaskClick(task)}
                             >
                                 <Group justify="space-between" wrap="nowrap">
                                     <Box style={{ flex: 1 }}>
-                                        <Text size="sm" fw={600} c="white" lineClamp={1}>{task.title}</Text>
+                                        <Text size="sm" fw={600} c={computedColorScheme === 'dark' ? 'white' : 'black'} lineClamp={1}>{task.title}</Text>
                                         <Text size="xs" c="dimmed">{task.columnName}</Text>
                                     </Box>
                                     <Badge

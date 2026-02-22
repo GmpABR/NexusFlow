@@ -19,6 +19,8 @@ public class AppDbContext : DbContext
     public DbSet<TimeLog> TimeLogs { get; set; }
     public DbSet<Attachment> Attachments { get; set; }
     public DbSet<TaskAssignee> TaskAssignees { get; set; }
+    public DbSet<Label> Labels { get; set; }
+    public DbSet<TaskLabel> TaskLabels { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -164,6 +166,31 @@ public class AppDbContext : DbContext
                   .WithMany()
                   .HasForeignKey(ta => ta.UserId)
                   .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // Label -> Board
+        modelBuilder.Entity<Label>(entity =>
+        {
+            entity.HasOne(l => l.Board)
+                  .WithMany(b => b.Labels)
+                  .HasForeignKey(l => l.BoardId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // TaskLabel (TaskCard <-> Label many-to-many)
+        modelBuilder.Entity<TaskLabel>(entity =>
+        {
+            entity.HasKey(tl => new { tl.TaskCardId, tl.LabelId });
+
+            entity.HasOne(tl => tl.TaskCard)
+                  .WithMany(tc => tc.Labels)
+                  .HasForeignKey(tl => tl.TaskCardId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(tl => tl.Label)
+                  .WithMany(l => l.TaskLabels)
+                  .HasForeignKey(tl => tl.LabelId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

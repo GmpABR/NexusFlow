@@ -1,29 +1,35 @@
-import { Modal, TextInput, Select, MultiSelect, NumberInput, Button, Group, Badge, TagsInput, Stack, Text, Progress, Checkbox, ActionIcon, ScrollArea, Loader } from '@mantine/core';
+import { Modal, Avatar, TextInput, Select, MultiSelect, NumberInput, Button, Group, Badge, TagsInput, Stack, Text, Progress, Checkbox, ActionIcon, ScrollArea, Loader, Menu, Box, Popover, ColorInput, useComputedColorScheme } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
 import { useEffect, useState, useRef } from 'react';
 import type { TaskCard, Attachment } from '../api/boards';
+import type { Label } from '../api/labels';
 import { updateTask, createSubtask, updateSubtask, deleteSubtask, type Subtask, getTaskActivities, type TaskActivity, addComment, registerAttachment, deleteAttachment } from '../api/tasks';
 import { startTimer, stopTimer } from '../api/timelogs';
 import { notifications } from '@mantine/notifications';
-import { IconCalendar, IconUser, IconTag, IconTrash, IconMessageCircle, IconClock, IconPlayerPlay, IconPlayerStop, IconAlertCircle, IconPaperclip, IconDownload, IconUpload } from '@tabler/icons-react';
+import { IconCalendar, IconUser, IconTag, IconTrash, IconMessageCircle, IconClock, IconPlayerPlay, IconPlayerStop, IconAlertCircle, IconPaperclip, IconDownload, IconUpload, IconX, IconPlus } from '@tabler/icons-react';
 import '@mantine/dates/styles.css';
 import dayjs from 'dayjs';
 import RichText from './RichText';
 import ActivityLog from './ActivityLog';
 import { uploadTaskAttachment, removeTaskAttachment } from '../api/storage';
+import { createLabel } from '../api/labels';
 
 interface TaskDetailModalProps {
     opened: boolean;
     onClose: () => void;
     task: TaskCard | null;
     members: BoardMember[];
+    boardLabels: Label[];
     onTaskUpdated: (task: TaskCard) => void;
 }
 
 type BoardMember = import('../api/boards').BoardMember;
 
-export default function TaskDetailModal({ opened, onClose, task, members, onTaskUpdated }: TaskDetailModalProps) {
+export default function TaskDetailModal({ opened, onClose, task, members, boardLabels, onTaskUpdated }: TaskDetailModalProps) {
+    const computedColorScheme = useComputedColorScheme('dark');
+    const [labelSearch, setLabelSearch] = useState('');
+
     const form = useForm({
         initialValues: {
             title: '',
@@ -34,7 +40,8 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
             assigneeId: null as string | null,
             assigneeIds: [] as string[],
             tags: [] as string[],
-            subtasks: [] as Subtask[]
+            subtasks: [] as Subtask[],
+            labelIds: [] as string[]
         },
     });
 
@@ -64,7 +71,8 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                 assigneeId: task.assigneeId ? task.assigneeId.toString() : null,
                 assigneeIds: task.assignees?.map(a => a.userId.toString()) ?? (task.assigneeId ? [task.assigneeId.toString()] : []),
                 tags: task.tags ? task.tags.split(',') : [],
-                subtasks: task.subtasks || []
+                subtasks: task.subtasks || [],
+                labelIds: task.labels?.map(l => l.id.toString()) || []
             });
 
             setAttachments(task.attachments ?? []);
@@ -217,7 +225,8 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                 storyPoints: values.storyPoints,
                 assigneeId: (assigneeId && !isNaN(assigneeId)) ? assigneeId : null,
                 assigneeIds,
-                tags: values.tags.length > 0 ? values.tags.join(',') : null
+                tags: values.tags.length > 0 ? values.tags.join(',') : null,
+                labelIds: values.labelIds.map(Number)
             });
             onTaskUpdated(updatedTask);
             notifications.show({ title: 'Success', message: 'Task updated', color: 'green' });
@@ -289,10 +298,11 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
             size={1100}
             centered
             styles={{
-                content: { background: '#1a1b1e', color: 'white' },
-                header: { background: '#1a1b1e', color: 'white' },
-                body: { background: '#1a1b1e', padding: 0 }
+                content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                body: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', padding: 0 }
             }}
+            zIndex={2000}
         >
             <div style={{ display: 'flex', minHeight: 520 }}>
 
@@ -306,7 +316,15 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                                 placeholder="Task title"
                                 required
                                 {...form.getInputProps('title')}
-                                styles={{ input: { background: '#25262b', color: 'white', borderColor: '#373A40', fontSize: '1.2rem', fontWeight: 600 } }}
+                                styles={{
+                                    input: {
+                                        background: computedColorScheme === 'dark' ? '#25262b' : 'white',
+                                        color: computedColorScheme === 'dark' ? 'white' : 'black',
+                                        borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6',
+                                        fontSize: '1.2rem',
+                                        fontWeight: 600
+                                    }
+                                }}
                             />
 
                             <Stack gap={2} align="center">
@@ -361,7 +379,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                                         <Text
                                             size="sm"
                                             td={subtask.isCompleted ? 'line-through' : 'none'}
-                                            c={subtask.isCompleted ? 'dimmed' : 'white'}
+                                            c={subtask.isCompleted ? 'dimmed' : (computedColorScheme === 'dark' ? 'white' : 'black')}
                                             style={{ flex: 1 }}
                                         >
                                             {subtask.title}
@@ -381,7 +399,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') { e.preventDefault(); handleAddSubtask(); }
                                     }}
-                                    styles={{ input: { background: '#25262b', color: 'white', borderColor: '#373A40' } }}
+                                    styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
                                 />
                                 <Button size="sm" color="violet" onClick={handleAddSubtask} disabled={!newSubtaskTitle.trim() || isAddingSubtask} type="button">
                                     {isAddingSubtask ? 'Adding...' : 'Add'}
@@ -394,13 +412,14 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                                 label="Priority"
                                 data={['Low', 'Medium', 'High', 'Urgent']}
                                 {...form.getInputProps('priority')}
-                                styles={{ input: { background: '#25262b', color: 'white', borderColor: '#373A40' } }}
+                                comboboxProps={{ zIndex: 3000 }}
+                                styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
                             />
                             <NumberInput
                                 label="Story Points"
                                 min={0}
                                 {...form.getInputProps('storyPoints')}
-                                styles={{ input: { background: '#25262b', color: 'white', borderColor: '#373A40' } }}
+                                styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
                             />
                         </Group>
 
@@ -413,25 +432,139 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                                 leftSection={<IconCalendar size={16} color={dueDateStatus === 'overdue' ? '#ff6b6b' : dueDateStatus === 'due-soon' ? '#fbbf24' : undefined} />}
                                 clearable
                                 {...form.getInputProps('dueDate')}
+                                popoverProps={{ zIndex: 3000 }}
                                 styles={{
                                     input: {
-                                        background: '#25262b',
-                                        color: 'white',
-                                        borderColor: dueDateStatus === 'overdue' ? 'rgba(255,107,107,0.5)' : dueDateStatus === 'due-soon' ? 'rgba(251,191,36,0.4)' : '#373A40',
+                                        background: computedColorScheme === 'dark' ? '#25262b' : 'white',
+                                        color: computedColorScheme === 'dark' ? 'white' : 'black',
+                                        borderColor: dueDateStatus === 'overdue' ? 'rgba(255,107,107,0.5)' : dueDateStatus === 'due-soon' ? 'rgba(251,191,36,0.4)' : (computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'),
                                     }
                                 }}
                             />
                             <MultiSelect
                                 label="Assignees"
                                 placeholder="Pick members"
-                                data={members.map(m => ({ value: m.userId.toString(), label: m.username }))}
+                                data={members.map(m => ({ value: m.userId.toString(), label: m.username, avatarUrl: m.avatarUrl }))}
                                 leftSection={<IconUser size={16} />}
                                 clearable
                                 searchable
                                 {...form.getInputProps('assigneeIds')}
-                                styles={{ input: { background: '#25262b', color: 'white', borderColor: '#373A40' } }}
+                                comboboxProps={{ zIndex: 3000 }}
+                                renderOption={({ option }) => {
+                                    const m = members.find(mbr => mbr.userId.toString() === option.value);
+                                    return (
+                                        <Group gap="sm">
+                                            <Avatar src={m?.avatarUrl} size="xs" radius="xl">
+                                                {option.label.slice(0, 2).toUpperCase()}
+                                            </Avatar>
+                                            <Text size="sm">{option.label}</Text>
+                                        </Group>
+                                    );
+                                }}
+                                styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
                             />
                         </Group>
+
+                        {/* Labels Section */}
+                        <Stack gap={6} mb="md">
+                            <Text size="sm" fw={500}>Labels</Text>
+                            <Group gap={8} wrap="wrap">
+                                {form.values.labelIds.map(id => {
+                                    const label = boardLabels.find(l => l.id.toString() === id);
+                                    if (!label) return null;
+                                    return (
+                                        <Badge
+                                            key={id}
+                                            variant="filled"
+                                            size="sm"
+                                            radius="xs"
+                                            styles={{
+                                                root: { backgroundColor: label.color, height: 20 },
+                                                label: { color: 'white', fontWeight: 700 }
+                                            }}
+                                            rightSection={
+                                                <ActionIcon
+                                                    size={14}
+                                                    color="white"
+                                                    variant="transparent"
+                                                    onClick={() => {
+                                                        const newIds = form.values.labelIds.filter(lid => lid !== id);
+                                                        form.setFieldValue('labelIds', newIds);
+                                                    }}
+                                                >
+                                                    <IconX size={10} />
+                                                </ActionIcon>
+                                            }
+                                        >
+                                            {label.name}
+                                        </Badge>
+                                    );
+                                })}
+
+                                <Menu position="bottom-start" shadow="md" withinPortal closeOnItemClick={false}>
+                                    <Menu.Target>
+                                        <ActionIcon variant="light" color="gray" radius="xl" size="sm">
+                                            <IconPlus size={14} />
+                                        </ActionIcon>
+                                    </Menu.Target>
+                                    <Menu.Dropdown styles={{ dropdown: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', border: `1px solid ${computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'}`, width: 220, zIndex: 3000 } }}>
+                                        <Box p="xs">
+                                            <Text size="xs" fw={700} c="dimmed" mb={8} style={{ textTransform: 'uppercase' }}>Select Label</Text>
+                                            <TextInput
+                                                placeholder="Search labels..."
+                                                size="xs"
+                                                value={labelSearch}
+                                                onChange={(e) => setLabelSearch(e.currentTarget.value)}
+                                                mb={4}
+                                                autoFocus
+                                                styles={{ input: { background: computedColorScheme === 'dark' ? '#1a1b1e' : '#f8f9fa', color: computedColorScheme === 'dark' ? 'white' : 'black' } }}
+                                            />
+                                        </Box>
+                                        <ScrollArea.Autosize mah={200} offsetScrollbars>
+                                            <Stack gap={4} p="xs">
+                                                {boardLabels
+                                                    .filter(l => l.name.toLowerCase().includes(labelSearch.toLowerCase()))
+                                                    .map(label => (
+                                                        <Group
+                                                            key={label.id}
+                                                            gap="xs"
+                                                            style={{
+                                                                padding: '4px 8px',
+                                                                borderRadius: 4,
+                                                                cursor: 'pointer',
+                                                                background: form.values.labelIds.includes(label.id.toString()) ? (computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)') : 'transparent'
+                                                            }}
+                                                            onClick={() => {
+                                                                const idStr = label.id.toString();
+                                                                const current = form.values.labelIds;
+                                                                if (current.includes(idStr)) {
+                                                                    form.setFieldValue('labelIds', current.filter(cid => cid !== idStr));
+                                                                } else {
+                                                                    form.setFieldValue('labelIds', [...current, idStr]);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <Box style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: label.color }} />
+                                                            <Text size="sm" style={{ flex: 1 }} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{label.name}</Text>
+                                                            {form.values.labelIds.includes(label.id.toString()) && <Badge size="xs" variant="dot" color="blue">Selected</Badge>}
+                                                        </Group>
+                                                    ))}
+                                            </Stack>
+                                        </ScrollArea.Autosize>
+
+                                        <Menu.Divider />
+                                        <div style={{ padding: 8 }}>
+                                            <CreateNewLabelPopover boardId={task.boardId} onCreated={(newLabel) => {
+                                                const currentIds = form.values.labelIds;
+                                                if (!currentIds.includes(newLabel.id.toString())) {
+                                                    form.setFieldValue('labelIds', [...currentIds, newLabel.id.toString()]);
+                                                }
+                                            }} />
+                                        </div>
+                                    </Menu.Dropdown>
+                                </Menu>
+                            </Group>
+                        </Stack>
 
                         {/* Attachments Section */}
                         <Stack gap={6} mb="md">
@@ -472,9 +605,9 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                                         return (
                                             <Group key={att.id} gap={8} style={{
                                                 padding: '6px 8px',
-                                                background: 'rgba(255,255,255,0.04)',
+                                                background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8f9fa',
                                                 borderRadius: 6,
-                                                border: '1px solid rgba(255,255,255,0.07)'
+                                                border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.07)' : '#dee2e6'}`
                                             }}>
                                                 {isImage ? (
                                                     <img
@@ -492,7 +625,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                                                     </div>
                                                 )}
                                                 <Stack gap={1} style={{ flex: 1, minWidth: 0 }}>
-                                                    <Text size="xs" fw={600} c="white" truncate>{att.fileName}</Text>
+                                                    <Text size="xs" fw={600} c={computedColorScheme === 'dark' ? 'white' : 'black'} truncate>{att.fileName}</Text>
                                                     <Text size="xs" c="dimmed">{sizeKb} KB · {att.uploadedByUsername}</Text>
                                                 </Stack>
                                                 <Group gap={4}>
@@ -527,11 +660,11 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                             leftSection={<IconTag size={16} />}
                             mb="xl"
                             {...form.getInputProps('tags')}
-                            styles={{ input: { background: '#25262b', color: 'white', borderColor: '#373A40' } }}
+                            styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
                         />
 
                         <Group justify="flex-end" mt="md" pb="lg">
-                            <Button variant="default" onClick={onClose} styles={{ root: { background: 'transparent', color: 'white', borderColor: '#373A40' } }}>
+                            <Button variant="default" onClick={onClose} styles={{ root: { background: 'transparent', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}>
                                 Cancel
                             </Button>
                             <Button type="submit" color="violet">Save Changes</Button>
@@ -543,13 +676,13 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                 <div style={{
                     width: 340,
                     flexShrink: 0,
-                    borderLeft: '1px solid #2C2E33',
-                    background: '#16171a',
+                    borderLeft: `1px solid ${computedColorScheme === 'dark' ? '#2C2E33' : '#dee2e6'}`,
+                    background: computedColorScheme === 'dark' ? '#16171a' : '#f9fafb',
                     display: 'flex',
                     flexDirection: 'column',
                 }}>
                     {/* Sidebar header */}
-                    <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid #2C2E33' }}>
+                    <div style={{ padding: '14px 16px 12px', borderBottom: `1px solid ${computedColorScheme === 'dark' ? '#2C2E33' : '#dee2e6'}` }}>
                         <Group gap={8}>
                             <IconMessageCircle size={14} color="#6c757d" />
                             <Text
@@ -569,7 +702,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                     </ScrollArea>
 
                     {/* Add Comment Input */}
-                    <div style={{ padding: '12px 16px', borderTop: '1px solid #2C2E33', background: '#1a1b1e' }}>
+                    <div style={{ padding: '12px 16px', borderTop: `1px solid ${computedColorScheme === 'dark' ? '#2C2E33' : '#dee2e6'}`, background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white' }}>
                         <TextInput
                             placeholder="Write a comment..."
                             value={newComment}
@@ -577,7 +710,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, onTask
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter') { e.preventDefault(); handleAddComment(); }
                             }}
-                            styles={{ input: { background: '#25262b', color: 'white', borderColor: '#373A40' } }}
+                            styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
                             rightSection={
                                 <ActionIcon
                                     size={28}
@@ -605,4 +738,61 @@ function getPriorityColor(priority: string | undefined) {
         case 'Low': return 'blue';
         default: return 'gray';
     }
+}
+
+function CreateNewLabelPopover({ boardId, onCreated }: { boardId: number, onCreated: (label: Label) => void }) {
+    const computedColorScheme = useComputedColorScheme('dark');
+    const [opened, setOpened] = useState(false);
+    const [name, setName] = useState('');
+    const [color, setColor] = useState('#4c6ef5');
+    const [loading, setLoading] = useState(false);
+
+    const handleCreate = async () => {
+        if (!name.trim()) return;
+        setLoading(true);
+        try {
+            const label = await createLabel(boardId, { name, color });
+            onCreated(label);
+            setName('');
+            setOpened(false);
+            notifications.show({ title: 'Success', message: 'Label created', color: 'green' });
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to create label', color: 'red' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <Popover opened={opened} onChange={setOpened} position="bottom" withArrow shadow="md" zIndex={3000} withinPortal={false}>
+            <Popover.Target>
+                <Button size="xs" variant="subtle" fullWidth leftSection={<IconPlus size={14} />} onClick={() => setOpened(o => !o)}>
+                    Create New Label
+                </Button>
+            </Popover.Target>
+            <Popover.Dropdown styles={{ dropdown: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', border: `1px solid ${computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'}` } }}>
+                <Stack gap="xs">
+                    <TextInput
+                        label="Label Name"
+                        placeholder="e.g. Bug"
+                        value={name}
+                        onChange={(e) => setName(e.currentTarget.value)}
+                        size="xs"
+                        styles={{ input: { background: computedColorScheme === 'dark' ? '#1a1b1e' : '#f8f9fa', color: computedColorScheme === 'dark' ? 'white' : 'black' } }}
+                    />
+                    <ColorInput
+                        label="Color"
+                        value={color}
+                        onChange={setColor}
+                        size="xs"
+                        popoverProps={{ zIndex: 3001, withinPortal: false }}
+                        styles={{ input: { background: computedColorScheme === 'dark' ? '#1a1b1e' : '#f8f9fa', color: computedColorScheme === 'dark' ? 'white' : 'black' } }}
+                    />
+                    <Button size="xs" color="violet" onClick={handleCreate} loading={loading} disabled={!name.trim()}>
+                        Create Label
+                    </Button>
+                </Stack>
+            </Popover.Dropdown>
+        </Popover>
+    );
 }

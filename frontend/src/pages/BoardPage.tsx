@@ -17,6 +17,7 @@ import {
     ThemeIcon,
     Menu,
     Autocomplete,
+    useComputedColorScheme
 } from '@mantine/core';
 import {
     IconUserPlus,
@@ -59,6 +60,7 @@ import {
 } from '../api/boards';
 import { searchUsers, type UserSummary } from '../api/users';
 import { createTask, moveTask, deleteTask } from '../api/tasks';
+import { type Label } from '../api/labels';
 import { useSignalR } from '../hooks/useSignalR';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import BoardColumn from '../components/BoardColumn';
@@ -78,6 +80,7 @@ type ViewMode = 'board' | 'table' | 'calendar' | 'dashboard' | 'timeline' | 'map
 export default function BoardPage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const computedColorScheme = useComputedColorScheme('dark');
 
     const boardId = id ? parseInt(id) : null;
 
@@ -322,6 +325,35 @@ export default function BoardPage() {
                 return {
                     ...prev,
                     members: (prev.members || []).filter((m) => m.userId !== userId),
+                };
+            });
+        },
+        onLabelCreated: (label: Label) => {
+            setBoard((prev) => {
+                if (!prev) return prev;
+                const exists = prev.labels.some(l => l.id === label.id);
+                if (exists) return prev;
+                return {
+                    ...prev,
+                    labels: [...prev.labels, label]
+                };
+            });
+        },
+        onLabelUpdated: (label: Label) => {
+            setBoard((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    labels: prev.labels.map(l => l.id === label.id ? label : l)
+                };
+            });
+        },
+        onLabelDeleted: (labelId: number) => {
+            setBoard((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    labels: prev.labels.filter(l => l.id !== labelId)
                 };
             });
         },
@@ -611,7 +643,7 @@ export default function BoardPage() {
 
     if (loading) {
         return (
-            <Center style={{ minHeight: '100vh', background: '#000' }}>
+            <Center style={{ minHeight: '100vh', background: computedColorScheme === 'dark' ? '#000' : '#f8f9fa' }}>
                 <Loader color="violet" size="lg" />
             </Center>
         );
@@ -619,8 +651,8 @@ export default function BoardPage() {
 
     if (!board) {
         return (
-            <Center style={{ minHeight: '100vh', background: '#000' }}>
-                <Text c="dimmed">Board not found.</Text>
+            <Center style={{ minHeight: '100vh', background: computedColorScheme === 'dark' ? '#000' : '#f8f9fa' }}>
+                <Text c={computedColorScheme === 'dark' ? 'dimmed' : 'gray.6'}>Board not found.</Text>
             </Center>
         );
     }
@@ -639,7 +671,7 @@ export default function BoardPage() {
             }}
         >
             {/* Header Area */}
-            <Box px="xl" py="lg" style={{ background: 'rgba(0,0,0,0.2)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <Box px="xl" py="lg" style={{ background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.1)', backdropFilter: 'blur(12px)', borderBottom: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}` }}>
                 <Group justify="space-between">
                     <Group gap="xl" align="center">
                         <Box>
@@ -649,7 +681,7 @@ export default function BoardPage() {
                                     Workspace
                                 </Text>
                                 <Text c="white" size="sm" opacity={0.3}>/</Text>
-                                <Menu shadow="md" width={220} radius="md" styles={{ dropdown: { background: '#1a1b1e', border: '1px solid rgba(255,255,255,0.1)' } }}>
+                                <Menu shadow="md" width={220} radius="md" styles={{ dropdown: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}` } }}>
                                     <Menu.Target>
                                         <Button
                                             variant="subtle"
@@ -684,7 +716,7 @@ export default function BoardPage() {
                                         input: {
                                             fontWeight: 800,
                                             fontSize: 'var(--mantine-font-size-2xl)',
-                                            background: 'rgba(255,255,255,0.1)',
+                                            background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
                                             color: 'white',
                                             border: 'none',
                                             paddingLeft: 8,
@@ -697,7 +729,12 @@ export default function BoardPage() {
                                     c="white"
                                     fw={800}
                                     size="2rem"
-                                    style={{ letterSpacing: '-1px', cursor: 'pointer', lineHeight: 1.1 }}
+                                    style={{
+                                        letterSpacing: '-1px',
+                                        cursor: 'pointer',
+                                        lineHeight: 1.1,
+                                        textShadow: computedColorScheme === 'light' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
+                                    }}
                                     onDoubleClick={() => {
                                         setEditedTitle(board.name);
                                         setIsEditingTitle(true);
@@ -712,7 +749,7 @@ export default function BoardPage() {
                         <Group gap="md">
                             <Avatar.Group spacing="md">
                                 {members.slice(0, 4).map(m => (
-                                    <Avatar key={m.userId} radius="xl" size="md" title={m.username || 'User'} color="indigo">
+                                    <Avatar key={m.userId} src={m.avatarUrl} radius="xl" size="md" title={m.username || 'User'} color="indigo">
                                         {(m.username || '?').slice(0, 2).toUpperCase()}
                                     </Avatar>
                                 ))}
@@ -725,8 +762,8 @@ export default function BoardPage() {
 
                     <Group gap="md">
                         <Button
-                            variant="white"
-                            color="dark"
+                            variant={computedColorScheme === 'dark' ? 'default' : 'white'}
+                            color={computedColorScheme === 'dark' ? 'gray' : 'dark'}
                             size="md"
                             radius="md"
                             leftSection={<IconChartBar size={20} />}
@@ -736,8 +773,8 @@ export default function BoardPage() {
                             Analytics
                         </Button>
                         <Button
-                            variant="white"
-                            color="dark"
+                            variant={computedColorScheme === 'dark' ? 'default' : 'white'}
+                            color={computedColorScheme === 'dark' ? 'gray' : 'dark'}
                             size="md"
                             radius="md"
                             leftSection={<IconUserPlus size={20} />}
@@ -746,7 +783,7 @@ export default function BoardPage() {
                         >
                             Compartilhar
                         </Button>
-                        <ActionIcon variant="subtle" color="white" size="xl" onClick={() => navigate('/boards')}>
+                        <ActionIcon variant="subtle" c={computedColorScheme === 'dark' ? 'white' : 'dark'} size="xl" onClick={() => navigate('/boards')}>
                             <IconLogout size={24} />
                         </ActionIcon>
                     </Group>
@@ -803,7 +840,13 @@ export default function BoardPage() {
                                     {/* Add List Button */}
                                     <Box style={{ minWidth: 320, maxWidth: 360 }}>
                                         {isAddingList ? (
-                                            <Paper p="sm" style={{ background: 'rgba(20, 21, 23, 0.85)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: 12 }}>
+                                            <Paper p="sm" style={{
+                                                background: computedColorScheme === 'dark' ? 'rgba(20, 21, 23, 0.85)' : 'rgba(255, 255, 255, 0.95)',
+                                                backdropFilter: 'blur(12px)',
+                                                border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}`,
+                                                borderRadius: 12,
+                                                boxShadow: computedColorScheme === 'light' ? '0 8px 24px rgba(0,0,0,0.08)' : 'none'
+                                            }}>
                                                 <TextInput
                                                     placeholder="Enter list title..."
                                                     value={newListTitle}
@@ -814,7 +857,13 @@ export default function BoardPage() {
                                                         if (e.key === 'Escape') setIsAddingList(false);
                                                     }}
                                                     mb="sm"
-                                                    styles={{ input: { background: 'rgba(0,0,0,0.5)', color: 'white' } }}
+                                                    styles={{
+                                                        input: {
+                                                            background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.5)' : 'white',
+                                                            color: computedColorScheme === 'dark' ? 'white' : 'black',
+                                                            border: computedColorScheme === 'light' ? '1px solid #dee2e6' : 'none'
+                                                        }
+                                                    }}
                                                 />
                                                 <Group gap="xs">
                                                     <Button size="xs" color="violet" onClick={handleAddList}>Add List</Button>
@@ -831,11 +880,12 @@ export default function BoardPage() {
                                                 leftSection={<IconPlus size={18} />}
                                                 style={{
                                                     height: 56,
-                                                    background: 'rgba(255, 255, 255, 0.05)',
+                                                    background: computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.3)',
                                                     backdropFilter: 'blur(4px)',
                                                     justifyContent: 'flex-start',
                                                     color: 'white',
-                                                    border: '1px solid rgba(255,255,255,0.1)'
+                                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.4)'}`,
+                                                    textShadow: computedColorScheme === 'light' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
                                                 }}
                                                 onClick={() => setIsAddingList(true)}
                                             >
@@ -866,7 +916,7 @@ export default function BoardPage() {
                                         style={{
                                             background: snapshot.isDraggingOver
                                                 ? 'linear-gradient(135deg, #ef4444, #dc2626)'
-                                                : 'rgba(20, 21, 23, 0.8)',
+                                                : (computedColorScheme === 'dark' ? 'rgba(20, 21, 23, 0.8)' : 'rgba(255, 255, 255, 0.9)'),
                                             backdropFilter: 'blur(12px)',
                                             border: `1px solid ${snapshot.isDraggingOver ? '#fca5a5' : 'rgba(55, 58, 64, 0.5)'}`,
                                             borderRadius: 32,
@@ -876,8 +926,8 @@ export default function BoardPage() {
                                             gap: 12,
                                             boxShadow: snapshot.isDraggingOver
                                                 ? '0 0 32px rgba(239, 68, 68, 0.6)'
-                                                : '0 8px 32px rgba(0,0,0,0.4)',
-                                            color: snapshot.isDraggingOver ? 'white' : '#909296',
+                                                : (computedColorScheme === 'dark' ? '0 8px 32px rgba(0,0,0,0.4)' : '0 8px 32px rgba(0,0,0,0.1)'),
+                                            color: snapshot.isDraggingOver ? 'white' : (computedColorScheme === 'dark' ? '#909296' : '#495057'),
                                             transition: 'all 0.2s ease',
                                             scale: snapshot.isDraggingOver ? 1.1 : 1,
                                         }}
@@ -912,7 +962,7 @@ export default function BoardPage() {
                             <ThemeIcon size={64} radius="xl" variant="light" color="violet">
                                 <IconRotate size={32} />
                             </ThemeIcon>
-                            <Text fw={600} c="white" size="lg">{viewMode.charAt(0).toUpperCase() + viewMode.slice(1)} View</Text>
+                            <Text fw={600} c={computedColorScheme === 'dark' ? 'white' : 'black'} size="lg">{viewMode.charAt(0).toUpperCase() + viewMode.slice(1)} View</Text>
                             <Text c="dimmed">This view is currently under development.</Text>
                             <Button variant="subtle" color="violet" onClick={() => setViewMode('board')}>Back to Board</Button>
                         </Stack>
@@ -929,12 +979,12 @@ export default function BoardPage() {
                     bottom: 20,
                     left: '50%',
                     transform: 'translateX(-50%)',
-                    background: 'rgba(20, 21, 23, 0.85)',
+                    background: computedColorScheme === 'dark' ? 'rgba(20, 21, 23, 0.85)' : 'rgba(255, 255, 255, 0.9)',
                     backdropFilter: 'blur(16px)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)'}`,
                     borderRadius: 16,
                     zIndex: 1000,
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                    boxShadow: computedColorScheme === 'dark' ? '0 8px 32px rgba(0,0,0,0.4)' : '0 8px 32px rgba(0,0,0,0.08)',
                 }}
             >
                 <Group gap="lg" px="md" py={4}>
@@ -965,8 +1015,8 @@ export default function BoardPage() {
                 radius="lg"
                 size="md"
                 styles={{
-                    content: { background: '#1a1b1e' },
-                    header: { background: '#1a1b1e' },
+                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
                 }}
             >
                 {
@@ -991,8 +1041,8 @@ export default function BoardPage() {
                                                     p="sm"
                                                     radius="md"
                                                     style={{
-                                                        background: 'rgba(255,255,255,0.03)',
-                                                        border: '1px solid rgba(255,255,255,0.05)',
+                                                        background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                                                        border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
                                                         cursor: 'pointer'
                                                     }}
                                                     onClick={() => {
@@ -1010,7 +1060,7 @@ export default function BoardPage() {
                                                                     background: BOARD_THEMES[b.themeColor as ThemeColor]?.background || '#3b82f6'
                                                                 }}
                                                             />
-                                                            <Text size="sm" fw={500}>{b.name}</Text>
+                                                            <Text size="sm" fw={500} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{b.name}</Text>
                                                         </Group>
                                                         <Badge size="xs" variant="dot" color="violet">{b.role}</Badge>
                                                     </Group>
@@ -1038,8 +1088,8 @@ export default function BoardPage() {
                                                 p="sm"
                                                 radius="md"
                                                 style={{
-                                                    background: 'rgba(255,255,255,0.03)',
-                                                    border: '1px solid rgba(255,255,255,0.05)',
+                                                    background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
                                                     cursor: 'pointer'
                                                 }}
                                                 onClick={() => {
@@ -1085,7 +1135,17 @@ export default function BoardPage() {
                 }
                 size="md"
                 centered
-                styles={{ header: { background: '#1a1b1e', borderBottom: '1px solid rgba(255,255,255,0.1)' }, content: { background: '#1a1b1e' } }}
+                styles={{
+                    header: {
+                        background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white',
+                        color: computedColorScheme === 'dark' ? 'white' : 'black',
+                        borderBottom: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`
+                    },
+                    content: {
+                        background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white',
+                        color: computedColorScheme === 'dark' ? 'white' : 'black'
+                    }
+                }}
             >
                 <Stack gap="md">
                     {/* Invite form (owner only) */}
@@ -1104,7 +1164,12 @@ export default function BoardPage() {
                                     }}
                                     rightSection={searchLoading ? <Loader size="xs" /> : null}
                                     style={{ flex: 1 }}
-                                    styles={{ input: { background: 'rgba(0,0,0,0.4)' } }}
+                                    styles={{
+                                        input: {
+                                            background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.4)' : 'white',
+                                            color: computedColorScheme === 'dark' ? 'white' : 'black'
+                                        }
+                                    }}
                                     onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
                                 />
                                 <Button
@@ -1128,13 +1193,14 @@ export default function BoardPage() {
                                 p="sm"
                                 radius="md"
                                 style={{
-                                    background: 'rgba(255,255,255,0.03)',
-                                    border: '1px solid rgba(55, 58, 64, 0.3)',
+                                    background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(55, 58, 64, 0.3)' : 'rgba(0, 0, 0, 0.05)'}`,
                                 }}
                             >
                                 <Group justify="space-between">
                                     <Group gap="sm">
                                         <Avatar
+                                            src={m.avatarUrl}
                                             size="md"
                                             radius="xl"
                                             color={m.role === 'Owner' ? 'violet' : 'teal'}
@@ -1142,7 +1208,7 @@ export default function BoardPage() {
                                             {(m.username || '?').slice(0, 2).toUpperCase()}
                                         </Avatar>
                                         <div>
-                                            <Text size="sm" fw={500} c="white">{m.username}</Text>
+                                            <Text size="sm" fw={500} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{m.username}</Text>
                                             <Text size="xs" c="dimmed">{m.email}</Text>
                                         </div>
                                     </Group>
@@ -1185,6 +1251,7 @@ export default function BoardPage() {
                 onClose={() => setTaskModalOpen(false)}
                 task={selectedTask}
                 members={members}
+                boardLabels={board.labels || []}
                 onTaskUpdated={handleTaskUpdated}
             />
 

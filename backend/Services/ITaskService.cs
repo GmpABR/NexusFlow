@@ -30,4 +30,9 @@ public interface ITaskService
     Task<List<AttachmentDto>> GetAttachmentsAsync(int taskId);
     Task<AttachmentDto> AddAttachmentAsync(int taskId, CreateAttachmentDto dto, int userId);
     Task<bool> DeleteAttachmentAsync(int attachmentId, int userId);
+
+    // Label Methods
+    Task<bool> AddLabelToTaskAsync(int taskId, int labelId, int userId);
+    Task<bool> RemoveLabelFromTaskAsync(int taskId, int labelId, int userId);
+    Task<bool> SetTaskLabelsAsync(int taskId, List<int> labelIds, int userId);
 }

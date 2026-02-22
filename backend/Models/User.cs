@@ -13,6 +13,7 @@ public class User
     public string? Organization { get; set; }
     public string? Location { get; set; }
     public string? Bio { get; set; }
+    public string ThemePreference { get; set; } = "dark";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation

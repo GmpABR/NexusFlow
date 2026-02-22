@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Paper, Text, Group, ActionIcon, Badge, Avatar, Stack, Menu, Tooltip } from '@mantine/core';
+import { Paper, Text, Group, ActionIcon, Badge, Avatar, Stack, Menu, Tooltip, useComputedColorScheme } from '@mantine/core';
 import { IconPaperclip } from '@tabler/icons-react';
 import { IconCalendar, IconClock, IconStar, IconGripVertical, IconDots, IconTrash } from '@tabler/icons-react';
 import { Draggable } from '@hello-pangea/dnd';
@@ -21,7 +21,7 @@ function getDueDateStatus(dueDate: string | null | undefined): DueDateStatus {
 const STATUS_COLOR: Record<NonNullable<DueDateStatus>, string> = {
     overdue: '#ff6b6b',
     'due-soon': '#fbbf24',
-    upcoming: 'rgba(255,255,255,0.35)',
+    upcoming: 'rgba(128,128,128,0.5)',
 };
 
 const STATUS_LABEL: Record<NonNullable<DueDateStatus>, string> = {
@@ -38,6 +38,7 @@ interface Props {
 }
 
 const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick }: Props) {
+    const computedColorScheme = useComputedColorScheme('dark');
     const priorityColor =
         task.priority === 'Urgent' ? 'red' :
             task.priority === 'High' ? 'orange' :
@@ -62,24 +63,24 @@ const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick }: Prop
                         ...provided.draggableProps.style,
                         cursor: 'pointer',
                         background: dueDateStatus === 'overdue'
-                            ? 'rgba(255, 107, 107, 0.06)'
-                            : 'rgba(255, 255, 255, 0.04)',
+                            ? (computedColorScheme === 'dark' ? 'rgba(255, 107, 107, 0.08)' : 'rgba(255, 107, 107, 0.05)')
+                            : (computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#ffffff'),
                         border: dueDateStatus === 'overdue'
                             ? '1px solid rgba(255, 107, 107, 0.35)'
                             : dueDateStatus === 'due-soon'
                                 ? '1px solid rgba(251, 191, 36, 0.25)'
-                                : '1px solid rgba(255, 255, 255, 0.08)',
+                                : `1px solid ${computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'}`,
                         boxShadow: dueDateStatus === 'overdue'
                             ? '0 0 0 1px rgba(255, 107, 107, 0.15) inset'
-                            : 'none',
+                            : (computedColorScheme === 'dark' ? 'none' : '0 2px 4px rgba(0,0,0,0.02)'),
                     }}
                 >
                     <Stack gap={8}>
                         {/* Row 1: Handle, Title and Assignee/Menu */}
                         <Group justify="space-between" align="start" wrap="nowrap">
                             <Group gap={8} style={{ flex: 1, minWidth: 0 }}>
-                                <IconGripVertical size={14} color="rgba(255,255,255,0.2)" style={{ flexShrink: 0 }} />
-                                <Text size="sm" fw={700} c="white" style={{ flex: 1, lineHeight: 1.3 }}>
+                                <IconGripVertical size={14} color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'} style={{ flexShrink: 0 }} />
+                                <Text size="sm" fw={700} c={computedColorScheme === 'dark' ? 'white' : 'dark'} style={{ flex: 1, lineHeight: 1.3 }}>
                                     {task.title}
                                 </Text>
                             </Group>
@@ -100,8 +101,9 @@ const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick }: Prop
                                             {visible.map(a => (
                                                 <Tooltip key={a.userId} label={a.username} withinPortal position="top">
                                                     <Avatar
+                                                        src={(a as any).avatarUrl}
                                                         size={20} radius="xl" color="indigo"
-                                                        styles={{ root: { border: '1px solid rgba(255,255,255,0.15)', marginLeft: -4 } }}
+                                                        styles={{ root: { border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'}`, marginLeft: -4 } }}
                                                     >
                                                         {a.username.slice(0, 2).toUpperCase()}
                                                     </Avatar>
@@ -109,7 +111,7 @@ const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick }: Prop
                                             ))}
                                             {overflow > 0 && (
                                                 <Avatar size={20} radius="xl" color="gray"
-                                                    styles={{ root: { border: '1px solid rgba(255,255,255,0.15)', marginLeft: -4 } }}
+                                                    styles={{ root: { border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'}`, marginLeft: -4 } }}
                                                 >
                                                     +{overflow}
                                                 </Avatar>
@@ -120,7 +122,7 @@ const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick }: Prop
                                 {/* Paperclip badge */}
                                 {task.attachments && task.attachments.length > 0 && (
                                     <Group gap={2}>
-                                        <IconPaperclip size={11} color="rgba(255,255,255,0.4)" />
+                                        <IconPaperclip size={11} color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'} />
                                         <Text size="xs" c="dimmed" opacity={0.7}>{task.attachments.length}</Text>
                                     </Group>
                                 )}
@@ -149,6 +151,39 @@ const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick }: Prop
                             </Group>
                         </Group>
 
+                        {/* Labels Section */}
+                        {task.labels && task.labels.length > 0 && (
+                            <Group gap={4} wrap="wrap">
+                                {task.labels.map(label => (
+                                    <Badge
+                                        key={label.id}
+                                        size="xs"
+                                        radius="xs"
+                                        variant="filled"
+                                        styles={{
+                                            root: {
+                                                backgroundColor: label.color,
+                                                height: 14,
+                                                paddingLeft: 4,
+                                                paddingRight: 4,
+                                                minWidth: 32,
+                                                border: 'none'
+                                            },
+                                            label: {
+                                                fontSize: 8,
+                                                fontWeight: 800,
+                                                color: 'white',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: 0.5
+                                            }
+                                        }}
+                                    >
+                                        {label.name}
+                                    </Badge>
+                                ))}
+                            </Group>
+                        )}
+
                         {/* Row 2: Metadata */}
                         <Group justify="space-between" align="center">
                             <Group gap={12}>
@@ -165,14 +200,14 @@ const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick }: Prop
                                 {task.storyPoints !== null && task.storyPoints > 0 && (
                                     <Group gap={4} c="dimmed">
                                         <IconStar size={12} color="#fbbf24" />
-                                        <Text size="xs" fw={700} c="white" opacity={0.6}>{task.storyPoints}</Text>
+                                        <Text size="xs" fw={700} c={computedColorScheme === 'dark' ? 'white' : 'dark'} opacity={0.6}>{task.storyPoints}</Text>
                                     </Group>
                                 )}
 
                                 {task.totalTimeSpentMinutes > 0 && !task.isTimerRunning && (
                                     <Group gap={4} c="dimmed">
                                         <IconClock size={12} color="#4dabf7" />
-                                        <Text size="xs" fw={700} c="white" opacity={0.6}>{Math.floor(task.totalTimeSpentMinutes / 60)}h {task.totalTimeSpentMinutes % 60}m</Text>
+                                        <Text size="xs" fw={700} c={computedColorScheme === 'dark' ? 'white' : 'dark'} opacity={0.6}>{Math.floor(task.totalTimeSpentMinutes / 60)}h {task.totalTimeSpentMinutes % 60}m</Text>
                                     </Group>
                                 )}
 
