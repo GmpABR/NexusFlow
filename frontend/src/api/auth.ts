@@ -4,6 +4,7 @@ export interface AuthResponse {
     token: string;
     username: string;
     userId: number;
+    avatarUrl?: string | null;
 }
 
 export const registerUser = async (username: string, email: string, password: string): Promise<AuthResponse> => {

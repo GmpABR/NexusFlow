@@ -121,11 +121,12 @@ export default function BoardsPage() {
         <Box
             style={{
                 minHeight: '100%',
-                background: computedColorScheme === 'dark' ? '#0a0a0b' : '#f1f3f5',
                 color: computedColorScheme === 'dark' ? 'white' : 'black',
+                display: 'flex',
+                flexDirection: 'column'
             }}
         >
-            <Flex align="stretch">
+            <Flex align="stretch" style={{ flex: 1 }}>
                 {/* ─── NEW SIDEBAR (FULL HEIGHT DRAW) ─── */}
                 <Box
                     style={{

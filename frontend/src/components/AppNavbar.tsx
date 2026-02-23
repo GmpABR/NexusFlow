@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { getMe } from '../api/users';
 import {
     Box, Group, Text, TextInput, ActionIcon, Avatar, Menu,
     Tooltip, Kbd, Badge, Stack, Divider, useComputedColorScheme,
@@ -7,10 +8,13 @@ import {
 import {
     IconSearch, IconLayoutDashboard, IconListCheck,
     IconUser, IconLogout, IconX,
-    IconCalendarEvent, IconCreditCard,
+    IconCalendarEvent, IconCreditCard, IconBell
 } from '@tabler/icons-react';
 import { getMyTasks, type MyTask } from '../api/users';
 import { getBoards, getBoardDetail, type BoardSummary, type TaskCard, type Column } from '../api/boards';
+import { getNotifications } from '../api/notifications';
+import NotificationDrawer from './NotificationDrawer';
+import { useSignalR } from '../hooks/useSignalR';
 
 function getInitials(name: string) {
     const parts = name.trim().split(/\s+/);
@@ -57,6 +61,18 @@ export default function AppNavbar() {
     const [loadingCards, setLoadingCards] = useState(false);
     const searchRef = useRef<HTMLInputElement>(null);
 
+    // Notification state
+    const [notifDrawerOpen, setNotifDrawerOpen] = useState(false);
+    const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+
+    // SignalR for real-time notifications
+    useSignalR(null, {
+        onNotificationReceived: () => {
+            setUnreadNotifCount(prev => prev + 1);
+            // Optionally show a momentary mantine notification toast here too
+        }
+    });
+
     // Sync from storage
     useEffect(() => {
         const handleStorage = () => {
@@ -76,6 +92,15 @@ export default function AppNavbar() {
     useEffect(() => {
         getMyTasks().then(setMyTasks).catch(() => { });
         getBoards().then(setBoards).catch(() => { });
+        getNotifications().then(data => {
+            setUnreadNotifCount(data.filter(n => !n.isRead).length);
+        }).catch(() => { });
+
+        // Fetch fresh user data to ensure avatar/details are synced
+        getMe().then(p => {
+            localStorage.setItem('user', JSON.stringify(p));
+            setUser(p);
+        }).catch(() => { });
     }, []);
 
     // Lazily fetch all board cards once when user starts searching
@@ -370,6 +395,37 @@ export default function AppNavbar() {
 
             {/* Right side avatar menu */}
             <Group gap={8} style={{ flexShrink: 0, marginLeft: 'auto' }}>
+                <ActionIcon
+                    variant="subtle"
+                    color="gray"
+                    size="xl"
+                    radius="md"
+                    onClick={() => setNotifDrawerOpen(true)}
+                    style={{ position: 'relative' }}
+                >
+                    <IconBell size={22} />
+                    {unreadNotifCount > 0 && (
+                        <Badge
+                            color="red"
+                            variant="filled"
+                            size="xs"
+                            circle
+                            style={{
+                                position: 'absolute',
+                                top: 4,
+                                right: 4,
+                                minWidth: 16,
+                                height: 16,
+                                padding: 0,
+                                border: `2px solid ${computedColorScheme === 'dark' ? '#1d2125' : 'white'}`,
+                                zIndex: 1,
+                            }}
+                        >
+                            {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                        </Badge>
+                    )}
+                </ActionIcon>
+
                 <Menu
                     shadow="xl"
                     width={240}
@@ -433,6 +489,22 @@ export default function AppNavbar() {
                     </Menu.Dropdown>
                 </Menu>
             </Group>
+
+            <NotificationDrawer
+                opened={notifDrawerOpen}
+                onClose={() => {
+                    setNotifDrawerOpen(false);
+                    // Refresh unread count on close
+                    getNotifications().then(data => {
+                        setUnreadNotifCount(data.filter(n => !n.isRead).length);
+                    });
+                }}
+                onNotificationClick={(n) => {
+                    if (n.relatedId) navigate(`/boards/?task=${n.relatedId}`); // Using search query or similar to find task? 
+                    // Actually, usually we'd go to the board and open the modal.
+                    // For now, let's just navigate to the board if we have more info, or just stay.
+                }}
+            />
         </Box >
     );
 }

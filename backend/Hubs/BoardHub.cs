@@ -20,8 +20,23 @@ public class BoardHub : Hub
             .SendAsync("UserLeft", Context.User?.Identity?.Name ?? "Unknown");
     }
 
+    public override async Task OnConnectedAsync()
+    {
+        var userIdStr = Context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!string.IsNullOrEmpty(userIdStr))
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"user_{userIdStr}");
+        }
+        await base.OnConnectedAsync();
+    }
+
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
+        var userIdStr = Context.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (!string.IsNullOrEmpty(userIdStr))
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"user_{userIdStr}");
+        }
         await base.OnDisconnectedAsync(exception);
     }
 }

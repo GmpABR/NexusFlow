@@ -46,7 +46,8 @@ public class AuthService : IAuthService
         {
             Token = GenerateToken(user),
             Username = user.Username,
-            UserId = user.Id
+            UserId = user.Id,
+            AvatarUrl = user.AvatarUrl
         };
     }
 
@@ -60,7 +61,8 @@ public class AuthService : IAuthService
         {
             Token = GenerateToken(user),
             Username = user.Username,
-            UserId = user.Id
+            UserId = user.Id,
+            AvatarUrl = user.AvatarUrl
         };
     }
 

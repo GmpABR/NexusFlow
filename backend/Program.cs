@@ -72,6 +72,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IBoardService, BoardService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 
 // ── Controllers & Swagger ──────────────────────────────────────────────────
 builder.Services.AddControllers();

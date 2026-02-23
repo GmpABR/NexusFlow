@@ -159,6 +159,9 @@ export default function ProfilePage() {
                 if ((p.themePreference === 'light' || p.themePreference === 'dark') && p.themePreference !== computedColorScheme) {
                     setColorScheme(p.themePreference as 'light' | 'dark');
                 }
+
+                // Sync localStorage with fresh profile data
+                localStorage.setItem('user', JSON.stringify(p));
             })
             .catch(() => notifications.show({ title: 'Error', message: 'Failed to load profile.', color: 'red' }))
             .finally(() => setLoading(false));
@@ -198,6 +201,7 @@ export default function ProfilePage() {
                 const parsed = JSON.parse(stored);
                 parsed.avatarUrl = updated.avatarUrl;
                 localStorage.setItem('user', JSON.stringify(parsed));
+                window.dispatchEvent(new Event('profile-updated'));
             }
             notifications.show({ title: 'Avatar updated!', message: 'Profile picture saved.', color: 'green' });
             setAvatarMode('none');
@@ -250,7 +254,6 @@ export default function ProfilePage() {
         <Box
             style={{
                 minHeight: '100%',
-                background: computedColorScheme === 'dark' ? '#0a0a0b' : '#f1f3f5',
                 color: computedColorScheme === 'dark' ? 'white' : 'black',
                 display: 'flex',
                 flexDirection: 'column'

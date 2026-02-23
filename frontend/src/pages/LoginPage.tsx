@@ -27,7 +27,11 @@ export default function LoginPage() {
         try {
             const res = await loginUser(username, password);
             localStorage.setItem('token', res.token);
-            localStorage.setItem('user', JSON.stringify({ username: res.username, userId: res.userId }));
+            localStorage.setItem('user', JSON.stringify({
+                username: res.username,
+                userId: res.userId,
+                avatarUrl: res.avatarUrl
+            }));
             notifications.show({ title: 'Welcome back!', message: `Logged in as ${res.username}`, color: 'green' });
             navigate('/boards');
         } catch {

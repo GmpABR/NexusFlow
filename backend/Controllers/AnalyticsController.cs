@@ -160,6 +160,7 @@ public class AnalyticsController : ControllerBase
 
         // Verify user is a member of this workspace
         var hasAccess = await _db.Workspaces
+            .AsNoTracking()
             .Where(w => w.Id == workspaceId)
             .AnyAsync(w => w.OwnerId == userId || w.Members.Any(m => m.UserId == userId && m.Status == "Accepted"));
 
@@ -167,33 +168,17 @@ public class AnalyticsController : ControllerBase
 
         var now = DateTime.UtcNow;
 
-        // Load all tasks across all boards in this workspace
-        var tasks = await _db.TaskCards
-            .AsNoTracking()
-            .Where(t => t.Column.Board.WorkspaceId == workspaceId)
-            .Select(t => new
-            {
-                t.Id,
-                t.Title,
-                t.Priority,
-                t.DueDate,
-                t.ColumnId,
-                t.CreatedAt,
-                ColumnName = t.Column.Name,
-                BoardId = t.Column.BoardId,
-                BoardName = t.Column.Board.Name,
-                AssigneeUsername = t.Assignee != null ? t.Assignee.Username : null
-            })
-            .ToListAsync();
-
-        // Board count
+        // 1. Efficient Counts (Execute directly in DB)
         var boardCount = await _db.Boards.CountAsync(b => b.WorkspaceId == workspaceId);
+        var memberCount = await _db.WorkspaceMembers.CountAsync(m => m.WorkspaceId == workspaceId && m.Status == "Accepted");
 
-        // Member count
-        var memberCount = await _db.WorkspaceMembers
-            .CountAsync(m => m.WorkspaceId == workspaceId && m.Status == "Accepted");
+        var workspaceTasksQuery = _db.TaskCards
+            .AsNoTracking()
+            .Where(t => t.Column.Board.WorkspaceId == workspaceId);
 
-        // Done column IDs across workspace
+        int totalTasks = await workspaceTasksQuery.CountAsync();
+
+        // Find IDs of columns that count as "Done"
         var doneColumnIds = await _db.Columns
             .AsNoTracking()
             .Where(c => c.Board.WorkspaceId == workspaceId &&
@@ -201,33 +186,34 @@ public class AnalyticsController : ControllerBase
             .Select(c => c.Id)
             .ToListAsync();
 
-        int totalTasks = tasks.Count;
-        int completedTasks = tasks.Count(t => doneColumnIds.Contains(t.ColumnId));
+        int completedTasks = await workspaceTasksQuery.CountAsync(t => doneColumnIds.Contains(t.ColumnId));
         int pendingTasks = totalTasks - completedTasks;
-        int overdueTasks = tasks.Count(t =>
+        
+        int overdueTasks = await workspaceTasksQuery.CountAsync(t =>
             !doneColumnIds.Contains(t.ColumnId) &&
             t.DueDate.HasValue &&
             t.DueDate.Value < now);
 
-        // Tasks by priority
-        var tasksByPriority = tasks
+        // 2. Efficient Groupings (Execute in DB)
+        var tasksByPriority = await workspaceTasksQuery
             .GroupBy(t => t.Priority)
-            .ToDictionary(g => g.Key, g => g.Count());
+            .Select(g => new { g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Key, x => x.Count);
 
-        // Tasks by assignee (top 8)
-        var tasksByAssignee = tasks
-            .Where(t => t.AssigneeUsername != null)
-            .GroupBy(t => t.AssigneeUsername!)
+        var tasksByAssignee = await workspaceTasksQuery
+            .Where(t => t.AssigneeId != null)
+            .GroupBy(t => t.Assignee!.Username)
             .OrderByDescending(g => g.Count())
             .Take(8)
-            .ToDictionary(g => g.Key, g => g.Count());
+            .Select(g => new { g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Key, x => x.Count);
 
-        // Tasks per board
-        var tasksPerBoard = tasks
-            .GroupBy(t => t.BoardName)
-            .ToDictionary(g => g.Key, g => g.Count());
+        var tasksPerBoard = await workspaceTasksQuery
+            .GroupBy(t => t.Column.Board.Name)
+            .Select(g => new { g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Key, x => x.Count);
 
-        // Recent activity (last 7 days)
+        // 3. Recent activity (stays mostly the same, already efficient)
         var recentActivity = await _db.TaskActivities
             .AsNoTracking()
             .Where(a => a.TaskCard.Column.Board.WorkspaceId == workspaceId &&
@@ -259,7 +245,7 @@ public class AnalyticsController : ControllerBase
             TasksByAssignee = tasksByAssignee,
             TasksPerBoard = tasksPerBoard,
             RecentActivity = recentActivity,
-            AverageLeadTimeDays = 0, // Simplified for workspace overview for now
+            AverageLeadTimeDays = 0,
             AverageCycleTimeDays = 0
         });
     }

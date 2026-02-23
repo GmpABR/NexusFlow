@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { HubConnectionBuilder, HubConnection, LogLevel } from '@microsoft/signalr';
 import type { TaskCard, BoardMember } from '../api/boards';
 import type { Label } from '../api/labels';
+import type { Notification } from '../api/notifications';
 
 const HUB_URL = 'http://localhost:5145/hubs/board';
 
@@ -15,14 +16,13 @@ export function useSignalR(boardId: number | null, callbacks: {
     onLabelCreated?: (label: Label) => void;
     onLabelUpdated?: (label: Label) => void;
     onLabelDeleted?: (labelId: number) => void;
+    onNotificationReceived?: (notification: Notification) => void;
 }) {
     const connectionRef = useRef<HubConnection | null>(null);
     const callbacksRef = useRef(callbacks);
     callbacksRef.current = callbacks;
 
     useEffect(() => {
-        if (!boardId) return;
-
         const token = localStorage.getItem('token');
         if (!token) return;
 
@@ -75,15 +75,21 @@ export function useSignalR(boardId: number | null, callbacks: {
             callbacksRef.current.onLabelDeleted?.(labelId);
         });
 
+        connection.on('ReceiveNotification', (notification: Notification) => {
+            callbacksRef.current.onNotificationReceived?.(notification);
+        });
+
         connection
             .start()
             .then(() => {
-                connection.invoke('JoinBoard', boardId.toString());
+                if (boardId) {
+                    connection.invoke('JoinBoard', boardId.toString());
+                }
             })
             .catch((err) => console.error('SignalR connection error:', err));
 
         return () => {
-            if (connection.state === 'Connected') {
+            if (connection.state === 'Connected' && boardId) {
                 connection.invoke('LeaveBoard', boardId.toString()).catch(() => { });
             }
             connection.stop();

@@ -56,6 +56,12 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
     // Comments
     const [newComment, setNewComment] = useState('');
     const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+    const commentInputRef = useRef<HTMLInputElement>(null);
+
+    // Mentions
+    const [mentionOpened, setMentionOpened] = useState(false);
+    const [mentionSearch, setMentionSearch] = useState('');
+    const [mentionIndex, setMentionIndex] = useState(-1);
 
     useEffect(() => {
         if (task) {
@@ -95,6 +101,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
 
         const commentText = newComment;
         setNewComment('');
+        setMentionOpened(false);
 
         // 1. Optimistic Update: instantly append to the feed
         const tempActivity: TaskActivity = {
@@ -269,6 +276,19 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
             notifications.show({ title: 'Error', message: error.response?.data?.message || 'Failed to toggle timer', color: 'red' });
         }
     };
+
+    const handleSelectMember = (username: string) => {
+        const before = newComment.slice(0, mentionIndex);
+        const after = newComment.slice(commentInputRef.current?.selectionStart || (mentionIndex + mentionSearch.length + 1));
+        const updated = `${before}@${username} ${after}`;
+        setNewComment(updated);
+        setMentionOpened(false);
+        setTimeout(() => commentInputRef.current?.focus(), 0);
+    };
+
+    const filteredMembers = members.filter(m =>
+        m.username.toLowerCase().includes(mentionSearch.toLowerCase())
+    );
 
     if (!task) return null;
 
@@ -703,26 +723,83 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
 
                     {/* Add Comment Input */}
                     <div style={{ padding: '12px 16px', borderTop: `1px solid ${computedColorScheme === 'dark' ? '#2C2E33' : '#dee2e6'}`, background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white' }}>
-                        <TextInput
-                            placeholder="Write a comment..."
-                            value={newComment}
-                            onChange={(e) => setNewComment(e.currentTarget.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') { e.preventDefault(); handleAddComment(); }
-                            }}
-                            styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
-                            rightSection={
-                                <ActionIcon
-                                    size={28}
-                                    color="violet"
-                                    variant="filled"
-                                    onClick={handleAddComment}
-                                    disabled={!newComment.trim() || isSubmittingComment}
-                                >
-                                    <IconMessageCircle size={16} />
-                                </ActionIcon>
-                            }
-                        />
+                        <Popover
+                            opened={mentionOpened && filteredMembers.length > 0}
+                            position="top-start"
+                            width="target"
+                            styles={{ dropdown: { padding: 4, background: computedColorScheme === 'dark' ? '#25262b' : 'white', border: `1px solid ${computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'}`, zIndex: 3000 } }}
+                        >
+                            <Popover.Target>
+                                <TextInput
+                                    ref={commentInputRef}
+                                    placeholder="Write a comment..."
+                                    value={newComment}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setNewComment(val);
+                                        const pos = e.target.selectionStart || 0;
+                                        const lastAtPos = val.lastIndexOf('@', pos - 1);
+                                        if (lastAtPos !== -1) {
+                                            const textAfterAt = val.slice(lastAtPos + 1, pos);
+                                            if (!textAfterAt.includes(' ')) {
+                                                setMentionIndex(lastAtPos);
+                                                setMentionSearch(textAfterAt);
+                                                setMentionOpened(true);
+                                                return;
+                                            }
+                                        }
+                                        setMentionOpened(false);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            if (mentionOpened && filteredMembers.length > 0) {
+                                                e.preventDefault();
+                                                handleSelectMember(filteredMembers[0].username);
+                                            } else {
+                                                e.preventDefault();
+                                                handleAddComment();
+                                            }
+                                        }
+                                        if (e.key === 'Escape') setMentionOpened(false);
+                                    }}
+                                    styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
+                                    rightSection={
+                                        <ActionIcon
+                                            size={28}
+                                            color="violet"
+                                            variant="filled"
+                                            onClick={handleAddComment}
+                                            disabled={!newComment.trim() || isSubmittingComment}
+                                        >
+                                            <IconMessageCircle size={16} />
+                                        </ActionIcon>
+                                    }
+                                />
+                            </Popover.Target>
+                            <Popover.Dropdown>
+                                <ScrollArea.Autosize mah={200}>
+                                    <Stack gap={2}>
+                                        {filteredMembers.map(m => (
+                                            <Group
+                                                key={m.userId}
+                                                gap="sm"
+                                                p={6}
+                                                style={{ cursor: 'pointer', borderRadius: 4 }}
+                                                className="mention-item"
+                                                onMouseEnter={(e) => e.currentTarget.style.background = computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}
+                                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                                onClick={() => handleSelectMember(m.username)}
+                                            >
+                                                <Avatar src={m.avatarUrl} size="xs" radius="xl">
+                                                    {m.username.slice(0, 2).toUpperCase()}
+                                                </Avatar>
+                                                <Text size="sm" fw={500}>{m.username}</Text>
+                                            </Group>
+                                        ))}
+                                    </Stack>
+                                </ScrollArea.Autosize>
+                            </Popover.Dropdown>
+                        </Popover>
                     </div>
                 </div>
             </div>

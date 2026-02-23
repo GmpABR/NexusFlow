@@ -11,11 +11,17 @@ body,
 #root {
   height: 100%;
   min-height: 100vh;
-  background-color: var(--mantine-color-body);
+  background-color: #f1f3f5;
   color: var(--mantine-color-text);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+[data-mantine-color-scheme='dark'] html,
+[data-mantine-color-scheme='dark'] body,
+[data-mantine-color-scheme='dark'] #root {
+  background-color: #0a0a0b;
 }
 
 ::selection {

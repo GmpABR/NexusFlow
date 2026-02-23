@@ -8,10 +8,12 @@ namespace Backend.Services;
 public class TaskService : ITaskService
 {
     private readonly AppDbContext _db;
+    private readonly INotificationService _notificationService;
 
-    public TaskService(AppDbContext db)
+    public TaskService(AppDbContext db, INotificationService notificationService)
     {
         _db = db;
+        _notificationService = notificationService;
     }
 
     public async Task<TaskCardDto> CreateTaskAsync(CreateTaskDto dto, int userId)
@@ -57,6 +59,11 @@ public class TaskService : ITaskService
         }
 
         await LogActivity(task.Id, userId, "Created", $"Task created in column {task.ColumnId}");
+
+        if (task.AssigneeId.HasValue && task.AssigneeId != userId)
+        {
+            await _notificationService.CreateNotificationAsync(task.AssigneeId.Value, $"Você foi atribuído à tarefa: {task.Title}", "Assignment", task.Id);
+        }
 
         return await MapToDto(task);
     }
@@ -116,6 +123,12 @@ public class TaskService : ITaskService
         if (changes.Any())
         {
              await LogActivity(taskId, userId, "Updated", string.Join(", ", changes));
+        }
+
+        // Notify new assignee if changed
+        if (dto.AssigneeId.HasValue && dto.AssigneeId != userId && dto.AssigneeId != task.AssigneeId)
+        {
+             await _notificationService.CreateNotificationAsync(dto.AssigneeId.Value, $"Você foi atribuído à tarefa: {task.Title}", "Assignment", taskId);
         }
 
         // Reload to get assignee info if changed
@@ -319,10 +332,31 @@ public class TaskService : ITaskService
         _db.TaskActivities.Add(activity);
         await _db.SaveChangesAsync();
 
+        // Detect mentions @username
+        await DetectMentionsAsync(taskId, text, userId);
+
         // Load the User so we can return the username/avatar
         await _db.Entry(activity).Reference(a => a.User).LoadAsync();
 
         return activity;
+    }
+
+    private async Task DetectMentionsAsync(int taskId, string text, int senderId)
+    {
+        var matches = System.Text.RegularExpressions.Regex.Matches(text, @"@(\w+)");
+        var task = await _db.TaskCards.FindAsync(taskId);
+        var sender = await _db.Users.FindAsync(senderId);
+
+        foreach (System.Text.RegularExpressions.Match match in matches)
+        {
+            var username = match.Groups[1].Value;
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Username.ToLower() == username.ToLower());
+            
+            if (user != null && user.Id != senderId)
+            {
+                await _notificationService.CreateNotificationAsync(user.Id, $"{sender?.Username} mencionou você na tarefa: {task?.Title}", "Mention", taskId);
+            }
+        }
     }
 
     // Time Tracking Methods

@@ -159,7 +159,7 @@ export default function WorkspaceDetailsPage() {
     if (!workspace) return null;
 
     return (
-        <Box style={{ minHeight: '100%', background: computedColorScheme === 'dark' ? '#141517' : '#f8f9fa' }}>
+        <Box style={{ minHeight: '100%' }}>
             <Container size="lg" py="xl">
                 <Button
                     variant="subtle"

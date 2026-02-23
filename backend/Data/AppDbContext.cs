@@ -21,6 +21,7 @@ public class AppDbContext : DbContext
     public DbSet<TaskAssignee> TaskAssignees { get; set; }
     public DbSet<Label> Labels { get; set; }
     public DbSet<TaskLabel> TaskLabels { get; set; }
+    public DbSet<Notification> Notifications { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -190,6 +191,15 @@ public class AppDbContext : DbContext
             entity.HasOne(tl => tl.Label)
                   .WithMany(l => l.TaskLabels)
                   .HasForeignKey(tl => tl.LabelId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Notification -> User
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasOne(n => n.User)
+                  .WithMany() // User doesn't necessarily need a collection of notifications in the model
+                  .HasForeignKey(n => n.UserId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
     }

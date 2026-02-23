@@ -643,7 +643,7 @@ export default function BoardPage() {
 
     if (loading) {
         return (
-            <Center style={{ minHeight: '100vh', background: computedColorScheme === 'dark' ? '#000' : '#f8f9fa' }}>
+            <Center style={{ minHeight: '100%', background: computedColorScheme === 'dark' ? '#0a0a0b' : '#f8f9fa' }}>
                 <Loader color="violet" size="lg" />
             </Center>
         );
@@ -651,7 +651,7 @@ export default function BoardPage() {
 
     if (!board) {
         return (
-            <Center style={{ minHeight: '100vh', background: computedColorScheme === 'dark' ? '#000' : '#f8f9fa' }}>
+            <Center style={{ minHeight: '100%', background: computedColorScheme === 'dark' ? '#0a0a0b' : '#f8f9fa' }}>
                 <Text c={computedColorScheme === 'dark' ? 'dimmed' : 'gray.6'}>Board not found.</Text>
             </Center>
         );
@@ -664,6 +664,7 @@ export default function BoardPage() {
         <Box
             style={{
                 flex: 1,
+                minHeight: '100%',
                 background: activeTheme.gradient,
                 overflow: 'hidden',
                 display: 'flex',

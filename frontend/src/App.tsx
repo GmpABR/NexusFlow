@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useComputedColorScheme } from '@mantine/core';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import BoardsPage from './pages/BoardsPage';
@@ -11,10 +12,17 @@ import AppNavbar from './components/AppNavbar';
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('token');
   if (!token) return <Navigate to="/login" replace />;
+  const computedColorScheme = useComputedColorScheme('dark');
+
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+      background: computedColorScheme === 'dark' ? '#0a0a0b' : '#f1f3f5'
+    }}>
       <AppNavbar />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto' }}>
+      <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         {children}
       </div>
     </div>
