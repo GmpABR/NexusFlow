@@ -2,12 +2,14 @@ import { Modal, Avatar, TextInput, Select, MultiSelect, NumberInput, Button, Gro
 import { DateInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
 import { useEffect, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { TaskCard, Attachment } from '../api/boards';
 import type { Label } from '../api/labels';
 import { updateTask, createSubtask, updateSubtask, deleteSubtask, type Subtask, getTaskActivities, type TaskActivity, addComment, registerAttachment, deleteAttachment } from '../api/tasks';
+import { generateSubtasks, getApiKey } from '../api/ai';
 import { startTimer, stopTimer } from '../api/timelogs';
 import { notifications } from '@mantine/notifications';
-import { IconCalendar, IconUser, IconTag, IconTrash, IconMessageCircle, IconClock, IconPlayerPlay, IconPlayerStop, IconAlertCircle, IconPaperclip, IconDownload, IconUpload, IconX, IconPlus } from '@tabler/icons-react';
+import { IconCalendar, IconUser, IconTag, IconTrash, IconMessageCircle, IconClock, IconPlayerPlay, IconPlayerStop, IconAlertCircle, IconPaperclip, IconDownload, IconUpload, IconX, IconPlus, IconWand } from '@tabler/icons-react';
 import '@mantine/dates/styles.css';
 import dayjs from 'dayjs';
 import RichText from './RichText';
@@ -28,6 +30,7 @@ interface TaskDetailModalProps {
 type BoardMember = import('../api/boards').BoardMember;
 
 export default function TaskDetailModal({ opened, onClose, task, members, boardLabels, boardRole, onTaskUpdated }: TaskDetailModalProps) {
+    const navigate = useNavigate();
     const computedColorScheme = useComputedColorScheme('dark');
     const userStr = localStorage.getItem('user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -56,6 +59,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
 
     const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
     const [isAddingSubtask, setIsAddingSubtask] = useState(false);
+    const [isGeneratingSubtasks, setIsGeneratingSubtasks] = useState(false);
     const [activities, setActivities] = useState<TaskActivity[]>([]);
     const [isActivitiesLoading, setIsActivitiesLoading] = useState(false);
 
@@ -174,6 +178,55 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
         if (!subtasks || subtasks.length === 0) return 0;
         const completed = subtasks.filter(s => s.isCompleted).length;
         return (completed / subtasks.length) * 100;
+    };
+
+    const handleGenerateSubtasks = async () => {
+        if (!task || !form.values.description.trim() || isGeneratingSubtasks) return;
+
+        if (!getApiKey()) {
+            notifications.show({
+                title: 'AI Key Required',
+                message: (
+                    <Stack gap={8}>
+                        <Text size="sm">Please add your OpenRouter API key in your profile settings to use AI features.</Text>
+                        <Button
+                            size="xs"
+                            variant="light"
+                            color="cyan"
+                            onClick={() => {
+                                navigate('/profile#ai-configuration');
+                                notifications.clean();
+                            }}
+                        >
+                            Configure AI Settings
+                        </Button>
+                    </Stack>
+                ),
+                color: 'orange',
+                autoClose: 10000
+            });
+            return;
+        }
+
+        setIsGeneratingSubtasks(true);
+        try {
+            notifications.show({ title: 'AI Generating', message: 'Analyzing description to build subtasks...', color: 'blue' });
+            const subtaskTitles = await generateSubtasks(form.values.description);
+            let currentSubtasks = [...(form.values.subtasks || [])];
+
+            // Sequentially create subtasks for stability, or parallelize
+            for (const title of subtaskTitles) {
+                const newSubtask = await createSubtask(task.id, title);
+                currentSubtasks.push(newSubtask);
+            }
+            form.setFieldValue('subtasks', currentSubtasks);
+            notifications.show({ title: 'AI Breakdown Complete', message: `Added ${subtaskTitles.length} subtasks.`, color: 'green' });
+            fetchActivities(task.id);
+        } catch (error) {
+            notifications.show({ title: 'AI Breakdown Failed', message: 'Could not generate subtasks from description.', color: 'red' });
+        } finally {
+            setIsGeneratingSubtasks(false);
+        }
     };
 
     const handleAddSubtask = async () => {
@@ -417,9 +470,21 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                         <Stack gap={4} mb="md">
                             <Group justify="space-between">
                                 <Text size="sm" fw={500}>Subtasks</Text>
-                                <Text size="xs" c="dimmed">
-                                    {form.values.subtasks?.filter(s => s.isCompleted).length || 0}/{form.values.subtasks?.length || 0}
-                                </Text>
+                                <Group gap="sm">
+                                    <Button
+                                        size="compact-xs"
+                                        variant="light"
+                                        color="violet"
+                                        leftSection={isGeneratingSubtasks ? <Loader size={10} color="violet" /> : <IconWand size={12} />}
+                                        onClick={handleGenerateSubtasks}
+                                        disabled={isGeneratingSubtasks || !form.values.description.trim()}
+                                    >
+                                        AI Breakdown
+                                    </Button>
+                                    <Text size="xs" c="dimmed">
+                                        {form.values.subtasks?.filter(s => s.isCompleted).length || 0}/{form.values.subtasks?.length || 0}
+                                    </Text>
+                                </Group>
                             </Group>
                             <Progress
                                 value={calculateProgress(form.values.subtasks)}

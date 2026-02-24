@@ -81,6 +81,9 @@ namespace Backend.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("IsClosed")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsPrivate")
                         .HasColumnType("boolean");
 
@@ -456,6 +459,9 @@ namespace Backend.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("Location")
+                        .HasColumnType("text");
+
+                    b.Property<string>("OpenRouterApiKey")
                         .HasColumnType("text");
 
                     b.Property<string>("Organization")

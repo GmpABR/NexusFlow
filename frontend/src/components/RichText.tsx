@@ -6,12 +6,13 @@ import TextAlign from '@tiptap/extension-text-align';
 import Superscript from '@tiptap/extension-superscript';
 import SubScript from '@tiptap/extension-subscript';
 import Placeholder from '@tiptap/extension-placeholder';
-import { Menu, Loader, Tooltip, Group, Modal, TextInput, Button, Stack, useComputedColorScheme } from '@mantine/core';
+import { Menu, Loader, Tooltip, Group, Modal, TextInput, Button, Stack, Text, useComputedColorScheme } from '@mantine/core';
 import { IconPlus, IconSparkles, IconWand, IconArrowRight, IconBriefcase, IconMessageCircle } from '@tabler/icons-react';
 import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
 import { useEffect, useState } from 'react';
-import { enhanceText, type AIMode } from '../api/ai';
+import { useNavigate } from 'react-router-dom';
+import { enhanceText, type AIMode, getApiKey } from '../api/ai';
 import { notifications } from '@mantine/notifications';
 import '@mantine/tiptap/styles.css';
 
@@ -23,6 +24,7 @@ interface RichTextProps {
 
 export default function RichText({ content, onChange, editable = true }: RichTextProps) {
     const computedColorScheme = useComputedColorScheme('dark');
+    const navigate = useNavigate();
     const [isAILoading, setIsAILoading] = useState(false);
     const [customPromptOpen, setCustomPromptOpen] = useState(false);
     const [customPrompt, setCustomPrompt] = useState('');
@@ -64,6 +66,31 @@ export default function RichText({ content, onChange, editable = true }: RichTex
 
     const handleAIEnchant = async (mode: AIMode = 'enhance', customInstruction?: string) => {
         if (!editor) return;
+        if (!getApiKey()) {
+            notifications.show({
+                title: 'AI Key Required',
+                message: (
+                    <Stack gap={8}>
+                        <Text size="sm">Please add your OpenRouter API key in your profile settings to use AI features.</Text>
+                        <Button
+                            size="xs"
+                            variant="light"
+                            color="cyan"
+                            onClick={() => {
+                                navigate('/profile#ai-configuration');
+                                notifications.clean();
+                            }}
+                        >
+                            Configure AI Settings
+                        </Button>
+                    </Stack>
+                ),
+                color: 'orange',
+                autoClose: 10000
+            });
+            return;
+        }
+
         const currentText = editor.getText();
         if (!currentText.trim() || currentText.length < 3) {
             notifications.show({ title: 'AI Assistant', message: 'Please write a bit more so I can understand your task!', color: 'blue' });
@@ -182,7 +209,13 @@ export default function RichText({ content, onChange, editable = true }: RichTex
                                 </Tooltip>
                             </Menu.Target>
 
-                            <Menu.Dropdown bg={computedColorScheme === 'dark' ? "#1a1b1e" : "white"} style={{ border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : '#dee2e6'}` }}>
+                            <Menu.Dropdown
+                                bg={computedColorScheme === 'dark' ? "#1a1b1e" : "white"}
+                                style={{
+                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : '#dee2e6'}`,
+                                    zIndex: 3005
+                                }}
+                            >
                                 <Menu.Label c={computedColorScheme === 'dark' ? 'dimmed' : 'gray.6'}>AI Features</Menu.Label>
                                 <Menu.Item
                                     leftSection={<IconSparkles size={14} />}
@@ -229,9 +262,7 @@ export default function RichText({ content, onChange, editable = true }: RichTex
                             </Menu.Target>
                             <Menu.Dropdown bg={computedColorScheme === 'dark' ? "#1a1b1e" : "white"} style={{ border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : '#dee2e6'}`, padding: '4px' }}>
                                 <Group gap={4} p={4} justify="center">
-                                    <RichTextEditor.Control title="Strikethrough" onClick={() => editor.chain().focus().toggleStrike().run()}>
-                                        <RichTextEditor.Strikethrough />
-                                    </RichTextEditor.Control>
+                                    <RichTextEditor.Strikethrough />
                                     <RichTextEditor.H3 />
                                     <RichTextEditor.Blockquote />
                                     <RichTextEditor.Hr />

@@ -63,6 +63,7 @@ public class UsersController : ControllerBase
             Location = user.Location,
             Bio = user.Bio,
             ThemePreference = user.ThemePreference,
+            OpenRouterApiKey = user.OpenRouterApiKey,
             CreatedAt = user.CreatedAt
         });
     }
@@ -93,6 +94,7 @@ public class UsersController : ControllerBase
         if (dto.Location != null) user.Location = dto.Location.Trim();
         if (dto.Bio != null) user.Bio = dto.Bio.Trim();
         if (dto.ThemePreference != null) user.ThemePreference = dto.ThemePreference.Trim();
+        if (dto.OpenRouterApiKey != null) user.OpenRouterApiKey = dto.OpenRouterApiKey.Trim();
 
         await _context.SaveChangesAsync();
 
@@ -108,6 +110,7 @@ public class UsersController : ControllerBase
             Organization = user.Organization,
             Location = user.Location,
             Bio = user.Bio,
+            OpenRouterApiKey = user.OpenRouterApiKey,
             CreatedAt = user.CreatedAt
         });
     }

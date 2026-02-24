@@ -28,7 +28,8 @@ public class BoardService : IBoardService
                 CreatedAt = b.CreatedAt,
                 Role = b.OwnerId == userId ? "Owner" : "Member",
                 ThemeColor = b.ThemeColor,
-                WorkspaceId = b.WorkspaceId
+                WorkspaceId = b.WorkspaceId,
+                IsClosed = b.IsClosed
             })
             .ToListAsync();
     }
@@ -45,7 +46,8 @@ public class BoardService : IBoardService
                 CreatedAt = b.CreatedAt,
                 Role = "Invited",
                 ThemeColor = b.ThemeColor,
-                WorkspaceId = b.WorkspaceId
+                WorkspaceId = b.WorkspaceId,
+                IsClosed = b.IsClosed
             })
             .ToListAsync();
     }
@@ -69,6 +71,7 @@ public class BoardService : IBoardService
                 OwnerId = b.OwnerId,
                 ThemeColor = b.ThemeColor,
                 WorkspaceId = b.WorkspaceId,
+                IsClosed = b.IsClosed,
                 Columns = b.Columns.OrderBy(c => c.Order).Select(c => new ColumnDto
                 {
                     Id = c.Id,
@@ -212,16 +215,19 @@ public class BoardService : IBoardService
         _db.Boards.Add(board);
         await _db.SaveChangesAsync();
 
-        // Create 3 default columns
-        var defaultColumns = new List<Column>
+        if (!dto.SkipDefaultColumns)
         {
-            new() { Name = "To Do", Order = 0, BoardId = board.Id },
-            new() { Name = "In Progress", Order = 1, BoardId = board.Id },
-            new() { Name = "Done", Order = 2, BoardId = board.Id }
-        };
+            // Create 3 default columns
+            var defaultColumns = new List<Column>
+            {
+                new() { Name = "To Do", Order = 0, BoardId = board.Id },
+                new() { Name = "In Progress", Order = 1, BoardId = board.Id },
+                new() { Name = "Done", Order = 2, BoardId = board.Id }
+            };
 
-        _db.Columns.AddRange(defaultColumns);
-        await _db.SaveChangesAsync();
+            _db.Columns.AddRange(defaultColumns);
+            await _db.SaveChangesAsync();
+        }
 
         return new BoardSummaryDto
         {
@@ -368,6 +374,45 @@ public class BoardService : IBoardService
         }
 
         await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> CloseBoardAsync(int boardId, int requesterId)
+    {
+        var board = await _db.Boards.FirstOrDefaultAsync(b => b.Id == boardId);
+        
+        if (board == null || board.OwnerId != requesterId)
+            return false;
+
+        board.IsClosed = true;
+        await _db.SaveChangesAsync();
+
+        return true;
+    }
+
+    public async Task<bool> ReopenBoardAsync(int boardId, int requesterId)
+    {
+        var board = await _db.Boards.FirstOrDefaultAsync(b => b.Id == boardId);
+        
+        if (board == null || board.OwnerId != requesterId)
+            return false;
+
+        board.IsClosed = false;
+        await _db.SaveChangesAsync();
+
+        return true;
+    }
+
+    public async Task<bool> DeleteBoardAsync(int boardId, int requesterId)
+    {
+        var board = await _db.Boards.FirstOrDefaultAsync(b => b.Id == boardId);
+        
+        if (board == null || board.OwnerId != requesterId || !board.IsClosed)
+            return false;
+
+        _db.Boards.Remove(board);
+        await _db.SaveChangesAsync();
+
         return true;
     }
 

@@ -1,8 +1,8 @@
 import api from './axios';
 import type { TaskCard } from './boards';
 
-export const createTask = async (title: string, columnId: number, description?: string): Promise<TaskCard> => {
-    const { data } = await api.post<TaskCard>('/tasks', { title, columnId, description });
+export const createTask = async (title: string, columnId: number, description?: string, priority: string = 'Low'): Promise<TaskCard> => {
+    const { data } = await api.post<TaskCard>('/tasks', { title, columnId, description, priority });
     return data;
 };
 

@@ -21,6 +21,7 @@ public class UserProfileDto
     public string? Location { get; set; }
     public string? Bio { get; set; }
     public string ThemePreference { get; set; } = "dark";
+    public string? OpenRouterApiKey { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -35,6 +36,7 @@ public class UpdateProfileDto
     public string? Location { get; set; }
     public string? Bio { get; set; }
     public string? ThemePreference { get; set; }
+    public string? OpenRouterApiKey { get; set; }
 }
 
 public class MyTaskDto

@@ -33,7 +33,9 @@ import {
     IconList,
     IconPlus,
     IconX,
-    IconChartBar
+    IconChartBar,
+    IconSettings,
+    IconLock
 } from '@tabler/icons-react';
 import {
     DragDropContext,
@@ -53,6 +55,9 @@ import {
     moveColumn,
     deleteColumn,
     updateColumn,
+    closeBoard,
+    deleteBoard,
+    reopenBoard,
     type BoardDetail,
     type BoardSummary,
     type TaskCard as TaskCardType,
@@ -60,6 +65,7 @@ import {
 } from '../api/boards';
 import { searchUsers, type UserSummary } from '../api/users';
 import { createTask, moveTask, deleteTask } from '../api/tasks';
+
 import { type Label } from '../api/labels';
 import { useSignalR } from '../hooks/useSignalR';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -89,6 +95,8 @@ export default function BoardPage() {
     const [membersModalOpen, setMembersModalOpen] = useState(false);
     const [inviting, setInviting] = useState(false);
     const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
+    const [closeModalOpen, setCloseModalOpen] = useState(false);
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
     // Task Detail Modal State
     const [selectedTask, setSelectedTask] = useState<TaskCardType | null>(null);
@@ -144,7 +152,7 @@ export default function BoardPage() {
 
     // ── Delete Column ──
     const handleDeleteColumn = useCallback(async (columnId: number) => {
-        if (!boardId) return;
+        if (!boardId || board?.isClosed) return;
         const previousColumns = board?.columns;
 
         // Optimistic
@@ -168,7 +176,7 @@ export default function BoardPage() {
 
     // ── Update Column (Rename) ──
     const handleUpdateColumn = useCallback(async (columnId: number, name: string) => {
-        if (!boardId) return;
+        if (!boardId || board?.isClosed) return;
         const previousColumns = board?.columns;
 
         // Optimistic
@@ -188,6 +196,7 @@ export default function BoardPage() {
             setBoard((prev) => prev && previousColumns ? { ...prev, columns: previousColumns } : prev);
         }
     }, [boardId, board]);
+
 
     const handleTaskMoveInternal = (task: TaskCardType) => {
         setBoard((prev) => {
@@ -380,7 +389,7 @@ export default function BoardPage() {
     };
 
     const handleAddList = async () => {
-        if (!newListTitle.trim() || !boardId) return;
+        if (!newListTitle.trim() || !boardId || board?.isClosed) return;
         try {
             const newCol = await createColumn(boardId, newListTitle.trim());
             setBoard(prev => prev ? { ...prev, columns: [...prev.columns, newCol] } : prev);
@@ -404,6 +413,7 @@ export default function BoardPage() {
 
 
     const handleDragStart = () => {
+        if (board?.isClosed) return;
         setIsDragging(true);
         isDraggingRef.current = true;
         // Fix issues where focus might be stealing drag
@@ -417,6 +427,7 @@ export default function BoardPage() {
     };
 
     const handleDragEnd = async (result: DropResult) => {
+        if (board?.isClosed) return;
         setIsDragging(false);
         isDraggingRef.current = false;
 
@@ -514,10 +525,10 @@ export default function BoardPage() {
     };
 
     // ── Add Task ──
-    // ── Add Task ──
-    const handleAddTask = useCallback(async (columnId: number, title: string) => {
+    const handleAddTask = useCallback(async (columnId: number, title: string, description?: string, priority?: string) => {
+        if (board?.isClosed) return;
         try {
-            const newTask = await createTask(title, columnId);
+            const newTask = await createTask(title, columnId, description, priority);
             setBoard((prev) => {
                 if (!prev) return prev;
                 // Check duplication strictly
@@ -539,8 +550,8 @@ export default function BoardPage() {
     }, []);
 
     // ── Delete Task ──
-    // ── Delete Task ──
     const handleDeleteTask = useCallback(async (taskId: number) => {
+        if (board?.isClosed) return;
         try {
             // Optimistic update first
             setBoard((prev) => {
@@ -577,7 +588,7 @@ export default function BoardPage() {
 
     // ── Invite Member ──
     const handleInvite = async () => {
-        if (!searchValue.trim() || !boardId) return;
+        if (!searchValue.trim() || !boardId || board?.isClosed) return;
         setInviting(true);
         try {
             await inviteMember(boardId, searchValue.trim());
@@ -641,6 +652,41 @@ export default function BoardPage() {
         }
     };
 
+    const handleCloseBoard = async () => {
+        if (!boardId) return;
+        try {
+            await closeBoard(boardId);
+            notifications.show({ title: 'Success', message: 'Board closed successfully.', color: 'green' });
+            setCloseModalOpen(false);
+            fetchBoard(); // Refresh to show banner and read-only mode
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to close board.', color: 'red' });
+        }
+    };
+
+    const handleReopenBoard = async () => {
+        if (!boardId) return;
+        try {
+            await reopenBoard(boardId);
+            notifications.show({ title: 'Success', message: 'Board reopened successfully.', color: 'green' });
+            fetchBoard();
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to reopen board.', color: 'red' });
+        }
+    };
+
+    const handleDeleteBoard = async () => {
+        if (!boardId) return;
+        try {
+            await deleteBoard(boardId);
+            notifications.show({ title: 'Success', message: 'Board deleted permanently.', color: 'green' });
+            setDeleteModalOpen(false);
+            navigate('/boards');
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to delete board.', color: 'red' });
+        }
+    };
+
     if (loading) {
         return (
             <Center style={{ minHeight: '100%', background: computedColorScheme === 'dark' ? '#0a0a0b' : '#f8f9fa' }}>
@@ -658,7 +704,8 @@ export default function BoardPage() {
     }
 
     const members = board.members || [];
-    const activeTheme = (board as any).themeColor ? BOARD_THEMES[(board as any).themeColor as ThemeColor] : BOARD_THEMES.blue;
+    const themeColor = (board as any).themeColor as ThemeColor;
+    const activeTheme = BOARD_THEMES[themeColor] || BOARD_THEMES.blue;
 
     return (
         <Box
@@ -671,6 +718,26 @@ export default function BoardPage() {
                 flexDirection: 'column',
             }}
         >
+            {/* Closed Board Banner */}
+            {board.isClosed && (
+                <Box py="xs" style={{ background: 'var(--mantine-color-orange-9)', textAlign: 'center' }}>
+                    <Group justify="center" gap="xs">
+                        <IconLock size={16} color="white" />
+                        <Text fw={700} size="sm" c="white">This board is closed. You are in read-only mode.</Text>
+                        <Button
+                            variant="white"
+                            color="orange"
+                            size="compact-xs"
+                            radius="xl"
+                            onClick={handleReopenBoard}
+                            leftSection={<IconRotate size={14} />}
+                        >
+                            Reopen Board
+                        </Button>
+                    </Group>
+                </Box>
+            )}
+
             {/* Header Area */}
             <Box px="xl" py="lg" style={{ background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.1)', backdropFilter: 'blur(12px)', borderBottom: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}` }}>
                 <Group justify="space-between">
@@ -732,15 +799,16 @@ export default function BoardPage() {
                                     size="2rem"
                                     style={{
                                         letterSpacing: '-1px',
-                                        cursor: 'pointer',
+                                        cursor: board.isClosed ? 'default' : 'pointer',
                                         lineHeight: 1.1,
                                         textShadow: computedColorScheme === 'light' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
                                     }}
                                     onDoubleClick={() => {
+                                        if (board.isClosed) return;
                                         setEditedTitle(board.name);
                                         setIsEditingTitle(true);
                                     }}
-                                    title="Double click to rename"
+                                    title={board.isClosed ? undefined : "Double click to rename"}
                                 >
                                     {board.name}
                                 </Text>
@@ -784,7 +852,25 @@ export default function BoardPage() {
                         >
                             Compartilhar
                         </Button>
-                        <ActionIcon variant="subtle" c={computedColorScheme === 'dark' ? 'white' : 'dark'} size="xl" onClick={() => navigate('/boards')}>
+                        <Menu shadow="md" width={200}>
+                            <Menu.Target>
+                                <ActionIcon variant="subtle" c={computedColorScheme === 'dark' ? 'white' : 'dark'} size="xl" title="Board Settings">
+                                    <IconSettings size={22} />
+                                </ActionIcon>
+                            </Menu.Target>
+                            <Menu.Dropdown>
+                                {!board.isClosed ? (
+                                    <Menu.Item leftSection={<IconLock size={14} />} onClick={() => setCloseModalOpen(true)}>
+                                        Close Board
+                                    </Menu.Item>
+                                ) : (
+                                    <Menu.Item color="red" leftSection={<IconTrash size={14} />} onClick={() => setDeleteModalOpen(true)}>
+                                        Delete Board
+                                    </Menu.Item>
+                                )}
+                            </Menu.Dropdown>
+                        </Menu>
+                        <ActionIcon variant="subtle" c={computedColorScheme === 'dark' ? 'white' : 'dark'} size="xl" onClick={() => navigate('/boards')} title="Exit Board">
                             <IconLogout size={24} />
                         </ActionIcon>
                     </Group>
@@ -832,6 +918,8 @@ export default function BoardPage() {
                                                     innerRef={provided.innerRef}
                                                     draggableProps={provided.draggableProps}
                                                     dragHandleProps={provided.dragHandleProps}
+                                                    isClosed={board.isClosed}
+                                                    showAI={idx === 0}
                                                 />
                                             )}
                                         </Draggable>
@@ -839,61 +927,63 @@ export default function BoardPage() {
                                     {provided.placeholder}
 
                                     {/* Add List Button */}
-                                    <Box style={{ minWidth: 320, maxWidth: 360 }}>
-                                        {isAddingList ? (
-                                            <Paper p="sm" style={{
-                                                background: computedColorScheme === 'dark' ? 'rgba(20, 21, 23, 0.85)' : 'rgba(255, 255, 255, 0.95)',
-                                                backdropFilter: 'blur(12px)',
-                                                border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}`,
-                                                borderRadius: 12,
-                                                boxShadow: computedColorScheme === 'light' ? '0 8px 24px rgba(0,0,0,0.08)' : 'none'
-                                            }}>
-                                                <TextInput
-                                                    placeholder="Enter list title..."
-                                                    value={newListTitle}
-                                                    onChange={(e) => setNewListTitle(e.currentTarget.value)}
-                                                    autoFocus
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') handleAddList();
-                                                        if (e.key === 'Escape') setIsAddingList(false);
+                                    {!board.isClosed && (
+                                        <Box style={{ minWidth: 320, maxWidth: 360 }}>
+                                            {isAddingList ? (
+                                                <Paper p="sm" style={{
+                                                    background: computedColorScheme === 'dark' ? 'rgba(20, 21, 23, 0.85)' : 'rgba(255, 255, 255, 0.95)',
+                                                    backdropFilter: 'blur(12px)',
+                                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}`,
+                                                    borderRadius: 12,
+                                                    boxShadow: computedColorScheme === 'light' ? '0 8px 24px rgba(0,0,0,0.08)' : 'none'
+                                                }}>
+                                                    <TextInput
+                                                        placeholder="Enter list title..."
+                                                        value={newListTitle}
+                                                        onChange={(e) => setNewListTitle(e.currentTarget.value)}
+                                                        autoFocus
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') handleAddList();
+                                                            if (e.key === 'Escape') setIsAddingList(false);
+                                                        }}
+                                                        mb="sm"
+                                                        styles={{
+                                                            input: {
+                                                                background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.5)' : 'white',
+                                                                color: computedColorScheme === 'dark' ? 'white' : 'black',
+                                                                border: computedColorScheme === 'light' ? '1px solid #dee2e6' : 'none'
+                                                            }
+                                                        }}
+                                                    />
+                                                    <Group gap="xs">
+                                                        <Button size="xs" color="violet" onClick={handleAddList}>Add List</Button>
+                                                        <ActionIcon variant="subtle" color="gray" onClick={() => setIsAddingList(false)}>
+                                                            <IconX size={18} />
+                                                        </ActionIcon>
+                                                    </Group>
+                                                </Paper>
+                                            ) : (
+                                                <Button
+                                                    fullWidth
+                                                    variant="subtle"
+                                                    color="gray"
+                                                    leftSection={<IconPlus size={18} />}
+                                                    style={{
+                                                        height: 56,
+                                                        background: computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.3)',
+                                                        backdropFilter: 'blur(4px)',
+                                                        justifyContent: 'flex-start',
+                                                        color: 'white',
+                                                        border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.4)'}`,
+                                                        textShadow: computedColorScheme === 'light' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
                                                     }}
-                                                    mb="sm"
-                                                    styles={{
-                                                        input: {
-                                                            background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.5)' : 'white',
-                                                            color: computedColorScheme === 'dark' ? 'white' : 'black',
-                                                            border: computedColorScheme === 'light' ? '1px solid #dee2e6' : 'none'
-                                                        }
-                                                    }}
-                                                />
-                                                <Group gap="xs">
-                                                    <Button size="xs" color="violet" onClick={handleAddList}>Add List</Button>
-                                                    <ActionIcon variant="subtle" color="gray" onClick={() => setIsAddingList(false)}>
-                                                        <IconX size={18} />
-                                                    </ActionIcon>
-                                                </Group>
-                                            </Paper>
-                                        ) : (
-                                            <Button
-                                                fullWidth
-                                                variant="subtle"
-                                                color="gray"
-                                                leftSection={<IconPlus size={18} />}
-                                                style={{
-                                                    height: 56,
-                                                    background: computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.3)',
-                                                    backdropFilter: 'blur(4px)',
-                                                    justifyContent: 'flex-start',
-                                                    color: 'white',
-                                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.4)'}`,
-                                                    textShadow: computedColorScheme === 'light' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
-                                                }}
-                                                onClick={() => setIsAddingList(true)}
-                                            >
-                                                Add another list
-                                            </Button>
-                                        )}
-                                    </Box>
+                                                    onClick={() => setIsAddingList(true)}
+                                                >
+                                                    Add another list
+                                                </Button>
+                                            )}
+                                        </Box>
+                                    )}
                                 </Group>
                             )}
                         </Droppable>
@@ -1264,6 +1354,48 @@ export default function BoardPage() {
                     boardId={boardId}
                 />
             )}
+
+            <Modal
+                opened={closeModalOpen}
+                onClose={() => setCloseModalOpen(false)}
+                title="Close Board"
+                centered
+                styles={{
+                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                }}
+            >
+                <Stack>
+                    <Text size="sm">
+                        Are you sure you want to close this board? You can still access it from the workspace later.
+                    </Text>
+                    <Group justify="flex-end">
+                        <Button variant="subtle" color="gray" onClick={() => setCloseModalOpen(false)}>Cancel</Button>
+                        <Button color="red" onClick={handleCloseBoard}>Close Board</Button>
+                    </Group>
+                </Stack>
+            </Modal>
+
+            <Modal
+                opened={deleteModalOpen}
+                onClose={() => setDeleteModalOpen(false)}
+                title="Delete Board"
+                centered
+                styles={{
+                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                }}
+            >
+                <Stack>
+                    <Text size="sm">
+                        Are you sure you want to permanently delete this board? <b>This action cannot be undone.</b>
+                    </Text>
+                    <Group justify="flex-end">
+                        <Button variant="subtle" color="gray" onClick={() => setDeleteModalOpen(false)}>Cancel</Button>
+                        <Button color="red" onClick={handleDeleteBoard}>Delete Permanently</Button>
+                    </Group>
+                </Stack>
+            </Modal>
         </Box >
     );
 }

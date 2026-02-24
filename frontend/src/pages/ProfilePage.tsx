@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
     Box, Center, Loader, Text, Group, Stack, Paper, Title, Flex, NavLink,
     Avatar, TextInput, Textarea, Button, ActionIcon, Tooltip, Divider,
@@ -9,10 +9,11 @@ import {
     IconEdit, IconCheck, IconX, IconUser, IconHome, IconSettings,
     IconAt, IconCalendar, IconBriefcase, IconBuilding,
     IconMapPin, IconCamera, IconLink, IconUpload,
-    IconLogout, IconSun, IconMoon, IconPalette
+    IconLogout, IconSun, IconMoon, IconPalette, IconSparkles, IconInfoCircle
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useMantineColorScheme, useComputedColorScheme, SegmentedControl, Center as MantineCenter } from '@mantine/core';
+import { validateApiKey } from '../api/ai';
 import { getMe, updateProfile, type UserProfile } from '../api/users';
 
 function getInitials(name: string) {
@@ -45,6 +46,14 @@ function EditableField({
         try {
             await onSave(draft.trim());
             setEditing(false);
+        } catch (e: any) {
+            console.error("Save failure:", e);
+            notifications.show({
+                title: 'Save Failed',
+                message: e.message || 'An error occurred while saving.',
+                color: 'red',
+                autoClose: 5000
+            });
         } finally {
             setSaving(false);
         }
@@ -133,6 +142,48 @@ export default function ProfilePage() {
     const computedColorScheme = useComputedColorScheme('dark');
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+
+    const location = useLocation();
+
+    useEffect(() => {
+        if (location.hash === '#ai-configuration') {
+            const element = document.getElementById('ai-configuration');
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth' });
+                // Optional: flash the border or background to highlight
+                element.style.outline = '2px solid #22b8cf';
+                element.style.outlineOffset = '4px';
+                setTimeout(() => {
+                    const el = document.getElementById('ai-configuration');
+                    if (el) el.style.outline = 'none';
+                }, 3000);
+            }
+        }
+    }, [location]);
+
+    const handleValidateKey = async (key: string): Promise<boolean> => {
+        if (!key || key.length < 10) return false;
+        notifications.show({ id: 'validating-key', title: 'Validating Key', message: 'Checking OpenRouter connection...', loading: true, autoClose: false });
+        try {
+            const isValid = await validateApiKey(key);
+            if (isValid) {
+                notifications.update({ id: 'validating-key', title: 'Key Valid!', message: 'Your API key is working correctly.', color: 'green', loading: false, autoClose: 3000 });
+                return true;
+            } else {
+                notifications.update({ id: 'validating-key', title: 'Validation Failed', message: 'Invalid key or connection issue. Please check your key.', color: 'red', loading: false, autoClose: 4000 });
+                return false;
+            }
+        } catch (e) {
+            notifications.update({ id: 'validating-key', title: 'Validation Error', message: 'Failed to connect to AI provider.', color: 'red', loading: false, autoClose: 4000 });
+            return false;
+        }
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+    };
 
     // Avatar editing state
     const [avatarMode, setAvatarMode] = useState<'none' | 'url' | 'file'>('none');
@@ -419,11 +470,7 @@ export default function ProfilePage() {
                         variant="subtle" color="red" justify="flex-start" size="sm" fullWidth
                         leftSection={<IconLogout size={16} />}
                         mt="auto"
-                        onClick={() => {
-                            localStorage.removeItem('token');
-                            localStorage.removeItem('user');
-                            navigate('/login');
-                        }}
+                        onClick={handleLogout}
                     >
                         Sign Out
                     </Button>
@@ -671,6 +718,89 @@ export default function ProfilePage() {
                                         }}
                                     />
                                 </Box>
+                            </Stack>
+                        </Paper>
+
+                        {/* ── AI Configuration ── */}
+                        <Paper
+                            id="ai-configuration"
+                            p="xl"
+                            radius="xl"
+                            style={{
+                                background: computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.02)' : 'white',
+                                border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+                                boxShadow: computedColorScheme === 'dark' ? '0 8px 32px rgba(0,0,0,0.1)' : '0 8px 32px rgba(0,0,0,0.05)',
+                                transition: 'outline 1s ease'
+                            }}
+                        >
+                            <Title order={4} c={computedColorScheme === 'dark' ? 'white' : 'dark'} mb="xl" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <ThemeIcon size="md" variant="light" color="cyan" radius="md"><IconSparkles size={16} /></ThemeIcon>
+                                AI Configuration
+                            </Title>
+
+                            <Stack gap="lg">
+                                <Box>
+                                    <EditableField
+                                        label="OpenRouter API Key"
+                                        icon={<IconLink size={15} />}
+                                        value={profile?.openRouterApiKey ? '••••••••••••••••' : undefined}
+                                        placeholder="Paste your sk-or-v1-... key"
+                                        onSave={async v => {
+                                            // 1. If clearing key, just save
+                                            const keyToSave = v?.trim() || '';
+                                            if (keyToSave === '') {
+                                                const u = await save({ openRouterApiKey: '' });
+                                                setProfile(u);
+                                                const stored = localStorage.getItem('user');
+                                                if (stored) {
+                                                    const parsed = JSON.parse(stored);
+                                                    parsed.openRouterApiKey = '';
+                                                    localStorage.setItem('user', JSON.stringify(parsed));
+                                                }
+                                                notifications.show({ title: 'AI Key Cleared', message: 'AI features are now disabled.', color: 'gray' });
+                                                return;
+                                            }
+
+                                            // 2. Validate key
+                                            const isValid = await handleValidateKey(keyToSave);
+                                            if (!isValid) {
+                                                // We throw here so handleSave catches it and stays in edit mode
+                                                throw new Error("Validation failed. Please check your OpenRouter API key and try again.");
+                                            }
+
+                                            // 3. Save key
+                                            const u = await save({ openRouterApiKey: keyToSave });
+                                            setProfile(u);
+                                            const stored = localStorage.getItem('user');
+                                            if (stored) {
+                                                const parsed = JSON.parse(stored);
+                                                parsed.openRouterApiKey = u.openRouterApiKey;
+                                                localStorage.setItem('user', JSON.stringify(parsed));
+                                            }
+                                            notifications.show({ title: 'AI Key Saved', message: 'Your personal AI key is now active!', color: 'cyan' });
+                                        }}
+                                    />
+                                </Box>
+
+                                <Paper
+                                    p="md"
+                                    radius="md"
+                                    style={{
+                                        background: computedColorScheme === 'dark' ? 'rgba(34, 184, 207, 0.05)' : 'rgba(34, 184, 207, 0.05)',
+                                        border: `1px dashed ${computedColorScheme === 'dark' ? 'rgba(34, 184, 207, 0.3)' : 'rgba(34, 184, 207, 0.3)'}`
+                                    }}
+                                >
+                                    <Group gap="xs" mb={8}>
+                                        <IconInfoCircle size={16} color="#22b8cf" />
+                                        <Text size="sm" fw={600} c="cyan">How to get your key:</Text>
+                                    </Group>
+                                    <Stack gap={4}>
+                                        <Text size="xs" opacity={0.8}>1. Go to <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noreferrer" style={{ color: '#22b8cf', fontWeight: 600 }}>openrouter.ai/settings/keys</a></Text>
+                                        <Text size="xs" opacity={0.8}>2. Click "Create Key" and give it a name like "NexusFlow".</Text>
+                                        <Text size="xs" opacity={0.8}>3. Copy the key (starts with <Text span fw={700}>sk-or-v1-</Text>) and paste it above.</Text>
+                                        <Text size="xs" opacity={0.8} mt={4}>Personal keys are stored securely and used only for your AI requests.</Text>
+                                    </Stack>
+                                </Paper>
                             </Stack>
                         </Paper>
 

@@ -1,94 +1,211 @@
 /**
- * Enhances text using AI Horde with specific modes
+ * AI Service using OpenRouter API
+ * Requires VITE_OPENROUTER_API_KEY in .env
  */
-export type AIMode = 'enhance' | 'grammar' | 'shorten' | 'professional' | 'custom';
 
-export const enhanceText = async (text: string, mode: AIMode = 'enhance', customInstruction?: string): Promise<string> => {
-    const API_KEY = "0000000000"; // Anonymous key
-    const CLIENT_AGENT = "NexusFlow:1.0:Anonymous";
+import axios from 'axios';
 
-    let systemPrompt = "";
-    switch (mode) {
-        case 'grammar':
-            systemPrompt = "Fix all grammar, spelling, and punctuation errors in the following text. Do NOT change the style, tone, or structure. Return only the corrected text.";
-            break;
-        case 'shorten':
-            systemPrompt = "Condense the following text to be concise and to the point. Remove unnecessary words but keep the core meaning. Return only the shortened text.";
-            break;
-        case 'professional':
-            systemPrompt = "Rewrite the following text to sound professional, formal, and business-appropriate. Use sophisticated vocabulary where suitable. Return only the rewritten text.";
-            break;
-        case 'custom':
-            systemPrompt = customInstruction || "Follow the user's instructions exactly.";
-            break;
-        case 'enhance':
-        default:
-            systemPrompt = "Improve the clarity, flow, and structure of the following text using Markdown. Maintain the original meaning. Do NOT add new sections or invent details.";
-            break;
+export const getApiKey = () => {
+    // 1. Try to get from localStorage (User's personal key)
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+        try {
+            const user = JSON.parse(storedUser);
+            if (user.openRouterApiKey && user.openRouterApiKey.trim().length > 10) {
+                return user.openRouterApiKey.trim();
+            }
+        } catch (e) {
+            console.error("Failed to parse user from localStorage", e);
+        }
     }
 
+    // 2. No fallback to .env (strictly use user-provided keys)
+    return "";
+};
+
+export const validateApiKey = async (key: string): Promise<boolean> => {
+    if (!key || key.trim().length < 10) return false;
+
     try {
-        // 1. Initiate Generation Request
-        const initiateResponse = await fetch("https://stablehorde.net/api/v2/generate/text/async", {
+        const response = await axios.post(
+            BASE_URL,
+            {
+                model: PRIMARY_MODEL,
+                messages: [{ role: "user", content: "hi" }],
+                max_tokens: 1
+            },
+            {
+                headers: {
+                    "Authorization": `Bearer ${key.trim()}`,
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": window.location.origin,
+                    "X-Title": "NexusFlow Key Test"
+                },
+                timeout: 10000
+            }
+        );
+        return response.status === 200;
+    } catch (error: any) {
+        console.error("API Key validation failed", error);
+        return false;
+    }
+};
+const PRIMARY_MODEL = "stepfun/step-3.5-flash:free";
+const FALLBACK_MODEL = "google/gemini-2.0-flash-exp:free";
+const BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+export type AIMode = 'enhance' | 'grammar' | 'shorten' | 'professional' | 'custom';
+
+/**
+ * Extracts JSON object or array from a string
+ */
+const extractJSON = (text: string): string => {
+    const firstBrace = text.indexOf('{');
+    const firstBracket = text.indexOf('[');
+    let start = -1;
+    let end = -1;
+
+    if (firstBrace !== -1 && (firstBracket === -1 || (firstBrace < firstBracket && firstBrace !== -1))) {
+        start = firstBrace;
+        end = text.lastIndexOf('}');
+    } else if (firstBracket !== -1) {
+        start = firstBracket;
+        end = text.lastIndexOf(']');
+    }
+
+    if (start === -1 || end === -1 || end < start) return text;
+    return text.substring(start, end + 1).trim();
+};
+
+/**
+ * Executes a request to OpenRouter API with retry/fallback logic
+ */
+const callOpenRouter = async (prompt: string, isJson: boolean = false, useFallback: boolean = false): Promise<string> => {
+    const API_KEY = getApiKey();
+    if (!API_KEY || API_KEY.length < 10 || API_KEY.includes('YOUR_')) {
+        throw new Error("Missing OpenRouter API Key. Please add your personal key in your Profile settings to enable AI features.");
+    }
+
+    const model = useFallback ? FALLBACK_MODEL : PRIMARY_MODEL;
+
+    try {
+        const response = await fetch(BASE_URL, {
             method: "POST",
             headers: {
-                "apikey": API_KEY,
                 "Content-Type": "application/json",
-                "Client-Agent": CLIENT_AGENT
+                "Authorization": `Bearer ${API_KEY}`,
             },
             body: JSON.stringify({
-                "prompt": `### Instruction:
-${systemPrompt}
-
-### Input:
-${text}
-
-### Output:
-`,
-                "params": {
-                    "n": 1,
-                    "max_context_length": 1024,
-                    "max_length": 500,
-                    "rep_pen": 1.1,
-                    "temperature": mode === 'grammar' ? 0.1 : 0.4, // Low temp for grammar, medium for others
-                    "top_p": 0.9
-                },
-                "models": []
+                model: model,
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.5
             })
         });
 
-        if (!initiateResponse.ok) {
-            throw new Error(`Failed to initiate AI: ${initiateResponse.statusText}`);
-        }
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            const message = errData.error?.message || response.statusText;
 
-        const initialData = await initiateResponse.json();
-        const requestId = initialData.id;
-
-        // 2. Poll for Completion
-        let attempts = 0;
-        const maxAttempts = 30; // 60s timeout
-
-        while (attempts < maxAttempts) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            attempts++;
-
-            const statusResponse = await fetch(`https://stablehorde.net/api/v2/generate/text/status/${requestId}`, {
-                headers: { "Client-Agent": CLIENT_AGENT }
-            });
-
-            if (!statusResponse.ok) continue;
-
-            const status = await statusResponse.json();
-
-            if (status.done) {
-                return status.generations[0].text.trim();
+            // If primary fails with generic error or auth, try fallback once
+            if (!useFallback && (response.status === 402 || response.status === 429 || response.status === 400 || response.status === 401 || response.status === 404)) {
+                console.warn(`Primary model ${model} failed (${response.status}: ${message}), trying fallback ${FALLBACK_MODEL}...`);
+                return callOpenRouter(prompt, isJson, true);
             }
+
+            throw new Error(`OpenRouter API Error: ${response.status} - ${message}`);
         }
 
-        throw new Error("AI Request timed out. system is busy.");
-
+        const data = await response.json();
+        const text = data.choices?.[0]?.message?.content;
+        if (!text) throw new Error("OpenRouter returned an empty response.");
+        return text.trim();
     } catch (error: any) {
-        console.error("AI Horde Error:", error);
+        if (!useFallback) return callOpenRouter(prompt, isJson, true);
+        throw error;
+    }
+};
+
+export const enhanceText = async (text: string, mode: AIMode = 'enhance', customInstruction?: string): Promise<string> => {
+    let systemPrompt = "";
+    switch (mode) {
+        case 'grammar': systemPrompt = "Fix grammar and spelling. Return only corrected text."; break;
+        case 'shorten': systemPrompt = "Condense text. Return only shortened text."; break;
+        case 'professional': systemPrompt = "Rewrite professionally. Return only rewritten text."; break;
+        case 'custom': systemPrompt = customInstruction || "Follow instructions."; break;
+        default: systemPrompt = "Improve clarity and structure. Return only improved text."; break;
+    }
+    return callOpenRouter(`${systemPrompt}\n\nText:\n${text}`);
+};
+
+export const generateSubtasks = async (description: string): Promise<string[]> => {
+    const prompt = `Break down into 3-7 actionable subtasks. Return ONLY a bulleted list starting with '- '.
+Task: ${description}`;
+    try {
+        const responseText = await callOpenRouter(prompt);
+        return responseText.split('\n')
+            .map(line => line.replace(/^-\s*/, '').trim())
+            .filter(line => line.length > 0 && !line.toLowerCase().includes('here are'));
+    } catch (error) {
+        console.error("Subtask Generation Error:", error);
+        throw error;
+    }
+};
+
+export interface AIBoardStructure {
+    columns: string[];
+    tasks: { title: string; column: string; description: string; priority: 'Low' | 'Medium' | 'High' }[];
+}
+
+export const generateBoardStructure = async (projectIdea: string, projectType: string = 'Kanban'): Promise<AIBoardStructure> => {
+    const typeMap: Record<string, string> = {
+        'Scrum': "Agile: 'Product Backlog', 'Sprint Backlog', 'In Progress', 'Review/Testing', 'Done'.",
+        'Sales/CRM': "Sales: 'Leads', 'Discovery', 'Proposal/Quote', 'Negotiation', 'Closed won'.",
+        'Bug Tracking': "QA: 'New Issues', 'Confirmed', 'Fixing', 'Verification/QA', 'Resolved'.",
+    };
+    const instructions = typeMap[projectType] || "Kanban: 'Backlog', 'To Do', 'In Progress', 'Under Review', 'Done'.";
+
+    const systemPrompt = `Generate a realistic ${projectType} project board in JSON format ONLY.
+${instructions}
+1. JSON ONLY. No preamble.
+2. 6-10 tasks.
+3. Every task MUST have a UNIQUE, specific, and detailed description.
+4. Populate the FIRST column with all initial tasks.
+
+Format:
+{
+  "columns": ["Col 1", "Col 2", ...],
+  "tasks": [
+    { "title": "...", "column": "Col 1", "description": "...", "priority": "Medium" }
+  ]
+}
+
+Project Idea: ${projectIdea}`;
+
+    try {
+        const responseText = await callOpenRouter(systemPrompt, true);
+        const jsonText = extractJSON(responseText);
+        return JSON.parse(jsonText);
+    } catch (error) {
+        console.error("Board Generation Error:", error);
+        throw error;
+    }
+};
+
+export const generateTasksForColumn = async (columnName: string, existingTasks: string[] = [], projectContext: string = "", extraInstruction: string = ""): Promise<{ title: string; description: string; priority: 'Low' | 'Medium' | 'High' }[]> => {
+    const prompt = `Generate 3-5 high-quality tasks for a board column named "${columnName}". 
+JSON ONLY. No preamble.
+${projectContext ? `Context: ${projectContext}` : ""}
+${extraInstruction ? `Instruction: ${extraInstruction}` : ""}
+${existingTasks.length > 0 ? `DO NOT duplicate: ${existingTasks.join(', ')}` : ""}
+
+Format: [{"title": "...", "description": "...", "priority": "..."}]`;
+
+    try {
+        const responseText = await callOpenRouter(prompt, true);
+        const jsonText = extractJSON(responseText);
+        return JSON.parse(jsonText);
+    } catch (error) {
+        console.error("Column Task Error:", error);
         throw error;
     }
 };

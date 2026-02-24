@@ -13,6 +13,9 @@ public interface IBoardService
     Task<bool> RespondToInvitationAsync(int boardId, int userId, bool accept);
     Task<bool> RemoveMemberAsync(int boardId, int userId, int requesterId);
     Task<bool> UpdateBoardAsync(int boardId, UpdateBoardDto dto, int requesterId);
+    Task<bool> CloseBoardAsync(int boardId, int requesterId);
+    Task<bool> ReopenBoardAsync(int boardId, int requesterId);
+    Task<bool> DeleteBoardAsync(int boardId, int requesterId);
     Task<ColumnDto> CreateColumnAsync(int boardId, CreateColumnDto dto, int userId);
     Task<bool> MoveColumnAsync(int boardId, int columnId, int newOrder, int userId);
     Task<bool> DeleteColumnAsync(int boardId, int columnId, int userId);

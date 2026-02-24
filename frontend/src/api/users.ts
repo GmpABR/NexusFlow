@@ -19,6 +19,7 @@ export interface UserProfile {
     location?: string | null;
     bio?: string | null;
     themePreference: string;
+    openRouterApiKey?: string | null;
     createdAt: string;
 }
 
@@ -58,6 +59,7 @@ export const updateProfile = async (updates: Partial<{
     location: string;
     bio: string;
     themePreference: string;
+    openRouterApiKey: string;
 }>): Promise<UserProfile> => {
     const { data } = await api.put<UserProfile>('/users/me', updates);
     return data;

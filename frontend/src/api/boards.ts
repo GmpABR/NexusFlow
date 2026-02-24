@@ -9,6 +9,7 @@ export interface BoardSummary {
     role: string;
     themeColor: string;
     workspaceId: number | null;
+    isClosed: boolean;
 }
 
 export interface Attachment {
@@ -75,6 +76,7 @@ export interface BoardDetail {
     members: BoardMember[];
     labels: Label[];
     userRole: string;
+    isClosed: boolean;
 }
 
 export const getBoards = async (): Promise<BoardSummary[]> => {
@@ -87,8 +89,8 @@ export const getPendingInvitations = async (): Promise<BoardSummary[]> => {
     return data;
 };
 
-export const createBoard = async (name: string, workspaceId?: number, themeColor?: string): Promise<BoardSummary> => {
-    const { data } = await api.post<BoardSummary>('/boards', { name, workspaceId, themeColor });
+export const createBoard = async (name: string, workspaceId?: number, themeColor?: string, skipDefaultColumns: boolean = false): Promise<BoardSummary> => {
+    const { data } = await api.post<BoardSummary>('/boards', { name, workspaceId, themeColor, skipDefaultColumns });
     return data;
 };
 
@@ -136,4 +138,16 @@ export const deleteColumn = async (boardId: number, columnId: number): Promise<v
 export const updateColumn = async (boardId: number, columnId: number, name: string): Promise<Column> => {
     const { data } = await api.put<Column>(`/boards/${boardId}/columns/${columnId}`, { name });
     return data;
+};
+
+export const closeBoard = async (boardId: number): Promise<void> => {
+    await api.put(`/boards/${boardId}/close`);
+};
+
+export const reopenBoard = async (boardId: number): Promise<void> => {
+    await api.put(`/boards/${boardId}/reopen`);
+};
+
+export const deleteBoard = async (boardId: number): Promise<void> => {
+    await api.delete(`/boards/${boardId}`);
 };

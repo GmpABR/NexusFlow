@@ -1,9 +1,12 @@
 import { useState, memo, useRef, useEffect } from 'react';
-import { Text, Group, Badge, TextInput, ActionIcon, Box, Menu, useComputedColorScheme } from '@mantine/core';
-import { IconPlus, IconDots, IconTrash, IconPencil } from '@tabler/icons-react';
+import { Text, Group, Badge, TextInput, ActionIcon, Box, Menu, useComputedColorScheme, Modal, Button, Stack } from '@mantine/core';
+import { IconPlus, IconDots, IconTrash, IconPencil, IconSparkles, IconWand } from '@tabler/icons-react';
 import { Droppable } from '@hello-pangea/dnd';
 import TaskCard from './TaskCard';
 import type { Column, TaskCard as TaskCardType } from '../api/boards';
+import { generateTasksForColumn, getApiKey } from '../api/ai';
+import { useNavigate } from 'react-router-dom';
+import { notifications } from '@mantine/notifications';
 
 const COLUMN_COLORS: Record<string, string> = {
     'To Do': '#f59e0b',
@@ -13,7 +16,7 @@ const COLUMN_COLORS: Record<string, string> = {
 
 interface Props {
     column: Column;
-    onAddTask: (columnId: number, title: string) => void;
+    onAddTask: (columnId: number, title: string, description?: string, priority?: string) => void;
     onDeleteTask: (taskId: number) => void;
     onTaskClick: (task: TaskCardType) => void;
     onDeleteColumn: (columnId: number) => void;
@@ -23,6 +26,8 @@ interface Props {
     innerRef?: (element: HTMLElement | null) => void;
     draggableProps?: any;
     dragHandleProps?: any;
+    isClosed?: boolean;
+    showAI?: boolean;
 }
 
 const BoardColumn = memo(function BoardColumn({
@@ -36,8 +41,11 @@ const BoardColumn = memo(function BoardColumn({
     addTaskInputRef,
     innerRef,
     draggableProps,
-    dragHandleProps
+    dragHandleProps,
+    isClosed = false,
+    showAI = false
 }: Props) {
+    const navigate = useNavigate();
     const [newTaskTitle, setNewTaskTitle] = useState('');
     const [showInput, setShowInput] = useState(false);
     const computedColorScheme = useComputedColorScheme('dark');
@@ -46,6 +54,11 @@ const BoardColumn = memo(function BoardColumn({
     const [isRenaming, setIsRenaming] = useState(false);
     const [renameValue, setRenameValue] = useState(column.name);
     const renameInputRef = useRef<HTMLInputElement>(null);
+
+    // AI Generation State
+    const [aiModalOpen, setAiModalOpen] = useState(false);
+    const [aiInstruction, setAiInstruction] = useState('');
+    const [isGenerating, setIsGenerating] = useState(false);
 
     const accentColor = COLUMN_COLORS[column.name] || '#a855f7';
 
@@ -61,6 +74,49 @@ const BoardColumn = memo(function BoardColumn({
         onAddTask(column.id, newTaskTitle.trim());
         setNewTaskTitle('');
         setShowInput(false);
+    };
+
+    const handleGenerateTasks = async () => {
+        if (!getApiKey()) {
+            notifications.show({
+                title: 'AI Key Required',
+                message: (
+                    <Stack gap={8}>
+                        <Text size="sm">Please add your OpenRouter API key in your profile settings to use AI features.</Text>
+                        <Button
+                            size="xs"
+                            variant="light"
+                            color="cyan"
+                            onClick={() => {
+                                navigate('/profile#ai-configuration');
+                                notifications.clean();
+                            }}
+                        >
+                            Configure AI Settings
+                        </Button>
+                    </Stack>
+                ),
+                color: 'orange',
+                autoClose: 10000
+            });
+            return;
+        }
+
+        setIsGenerating(true);
+        try {
+            const existingTitles = column.taskCards.map(t => t.title);
+            const tasks = await generateTasksForColumn(column.name, existingTitles, "", aiInstruction);
+            for (const task of tasks) {
+                onAddTask(column.id, task.title, task.description, task.priority);
+            }
+            notifications.show({ title: 'AI Tasks Generated', message: `Added ${tasks.length} tasks to ${column.name}`, color: 'green' });
+            setAiModalOpen(false);
+            setAiInstruction('');
+        } catch (error: any) {
+            notifications.show({ title: 'AI Error', message: error.message || 'Failed to generate tasks', color: 'red' });
+        } finally {
+            setIsGenerating(false);
+        }
     };
 
     const handleRename = () => {
@@ -116,7 +172,7 @@ const BoardColumn = memo(function BoardColumn({
                 }}
             >
                 {/* Column Header */}
-                <Group justify="space-between" mb="md" {...dragHandleProps} style={{ cursor: 'grab' }}>
+                <Group justify="space-between" mb="md" {...dragHandleProps} style={{ cursor: isClosed ? 'default' : 'grab' }}>
                     <Group gap="sm" style={{ flex: 1 }}>
                         <Box
                             style={{
@@ -148,8 +204,11 @@ const BoardColumn = memo(function BoardColumn({
                                 fw={700}
                                 size="md"
                                 c={computedColorScheme === 'dark' ? 'white' : 'dark'}
-                                style={{ letterSpacing: '0.2px', cursor: 'pointer' }}
-                                onDoubleClick={() => setIsRenaming(true)}
+                                style={{ letterSpacing: '0.2px', cursor: isClosed ? 'default' : 'pointer' }}
+                                onDoubleClick={() => {
+                                    if (isClosed) return;
+                                    setIsRenaming(true);
+                                }}
                             >
                                 {column.name}
                             </Text>
@@ -162,25 +221,27 @@ const BoardColumn = memo(function BoardColumn({
                     </Group>
 
                     {/* Column Actions Menu */}
-                    <Menu position="bottom-end" shadow="md" width={160}>
-                        <Menu.Target>
-                            <ActionIcon variant="subtle" color="gray" size="sm">
-                                <IconDots size={16} />
-                            </ActionIcon>
-                        </Menu.Target>
-                        <Menu.Dropdown>
-                            <Menu.Item leftSection={<IconPencil size={14} />} onClick={() => setIsRenaming(true)}>
-                                Rename
-                            </Menu.Item>
-                            <Menu.Item
-                                leftSection={<IconTrash size={14} />}
-                                color="red"
-                                onClick={() => onDeleteColumn(column.id)}
-                            >
-                                Delete List
-                            </Menu.Item>
-                        </Menu.Dropdown>
-                    </Menu>
+                    {!isClosed && (
+                        <Menu position="bottom-end" shadow="md" width={160}>
+                            <Menu.Target>
+                                <ActionIcon variant="subtle" color="gray" size="sm">
+                                    <IconDots size={16} />
+                                </ActionIcon>
+                            </Menu.Target>
+                            <Menu.Dropdown>
+                                <Menu.Item leftSection={<IconPencil size={14} />} onClick={() => setIsRenaming(true)}>
+                                    Rename
+                                </Menu.Item>
+                                <Menu.Item
+                                    leftSection={<IconTrash size={14} />}
+                                    color="red"
+                                    onClick={() => onDeleteColumn(column.id)}
+                                >
+                                    Delete List
+                                </Menu.Item>
+                            </Menu.Dropdown>
+                        </Menu>
+                    )}
                 </Group>
 
                 {/* Task List (Droppable) */}
@@ -222,56 +283,112 @@ const BoardColumn = memo(function BoardColumn({
                 </Droppable>
 
                 {/* Add Task */}
-                {showInput ? (
-                    <Box mt="sm">
-                        <TextInput
-                            placeholder="Task title..."
-                            value={newTaskTitle}
-                            onChange={(e) => setNewTaskTitle(e.currentTarget.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleAdd();
-                                if (e.key === 'Escape') {
-                                    setShowInput(false);
-                                    setNewTaskTitle('');
-                                }
-                            }}
-                            ref={addTaskInputRef}
-                            autoFocus
-                            size="xs"
-                            styles={{ input: { background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.5)' : '#f8f9fa' } }}
-                            rightSection={
-                                <ActionIcon size="sm" variant="subtle" color="violet" onClick={handleAdd}>
-                                    <IconPlus size={14} />
-                                </ActionIcon>
-                            }
-                        />
-                    </Box>
-                ) : (
-                    <Group
-                        mt="md"
-                        gap="sm"
-                        onClick={() => setShowInput(true)}
-                        style={{
-                            cursor: 'pointer',
-                            padding: '10px 12px',
-                            borderRadius: 10,
-                            transition: 'all 0.15s ease',
-                            border: '1px solid transparent',
-                        }}
-                        onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLElement).style.background = computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)';
-                            (e.currentTarget as HTMLElement).style.borderColor = computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
-                        }}
-                        onMouseLeave={(e) => {
-                            (e.currentTarget as HTMLElement).style.background = 'transparent';
-                            (e.currentTarget as HTMLElement).style.borderColor = 'transparent';
-                        }}
-                    >
-                        <IconPlus size={18} color={computedColorScheme === 'dark' ? 'white' : 'black'} style={{ opacity: 0.8 }} />
-                        <Text size="sm" fw={600} c={computedColorScheme === 'dark' ? 'white' : 'dark'} opacity={0.7}>Add task</Text>
+                {!isClosed && (
+                    <Group mt="md" gap="xs">
+                        {showInput ? (
+                            <Box style={{ flex: 1 }}>
+                                <TextInput
+                                    placeholder="Task title..."
+                                    value={newTaskTitle}
+                                    onChange={(e) => setNewTaskTitle(e.currentTarget.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleAdd();
+                                        if (e.key === 'Escape') {
+                                            setShowInput(false);
+                                            setNewTaskTitle('');
+                                        }
+                                    }}
+                                    ref={addTaskInputRef}
+                                    autoFocus
+                                    size="xs"
+                                    styles={{ input: { background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.5)' : '#f8f9fa' } }}
+                                    rightSection={
+                                        <ActionIcon size="sm" variant="subtle" color="violet" onClick={handleAdd}>
+                                            <IconPlus size={14} />
+                                        </ActionIcon>
+                                    }
+                                />
+                            </Box>
+                        ) : (
+                            <Group
+                                gap="sm"
+                                onClick={() => setShowInput(true)}
+                                style={{
+                                    flex: 1,
+                                    cursor: 'pointer',
+                                    padding: '10px 12px',
+                                    borderRadius: 10,
+                                    transition: 'all 0.15s ease',
+                                    border: '1px solid transparent',
+                                }}
+                                onMouseEnter={(e) => {
+                                    (e.currentTarget as HTMLElement).style.background = computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)';
+                                    (e.currentTarget as HTMLElement).style.borderColor = computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    (e.currentTarget as HTMLElement).style.background = 'transparent';
+                                    (e.currentTarget as HTMLElement).style.borderColor = 'transparent';
+                                }}
+                            >
+                                <IconPlus size={18} color={computedColorScheme === 'dark' ? 'white' : 'black'} style={{ opacity: 0.8 }} />
+                                <Text size="sm" fw={600} c={computedColorScheme === 'dark' ? 'white' : 'dark'} opacity={0.7}>Add task</Text>
+                            </Group>
+                        )}
+                        {showAI && (
+                            <ActionIcon
+                                variant="light"
+                                color="violet"
+                                size="lg"
+                                radius="md"
+                                onClick={() => setAiModalOpen(true)}
+                                title="Generate tasks with AI"
+                            >
+                                <IconSparkles size={18} />
+                            </ActionIcon>
+                        )}
                     </Group>
                 )}
             </Box>
+
+            {/* AI Task Generation Modal */}
+            <Modal
+                opened={aiModalOpen}
+                onClose={() => setAiModalOpen(false)}
+                title={`Generate Tasks for ${column.name}`}
+                centered
+                radius="md"
+                styles={{
+                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white' }
+                }}
+            >
+                <Text size="sm" c="dimmed" mb="md">
+                    Tell the AI what kind of tasks you want to see in this list. Leave blank for general suggestions.
+                </Text>
+
+                <TextInput
+                    label="What kind of tasks?"
+                    placeholder="e.g. Frontend bug fixes, Marketing assets, UX research..."
+                    value={aiInstruction}
+                    onChange={(e) => setAiInstruction(e.currentTarget.value)}
+                    mb="lg"
+                    onKeyDown={(e) => e.key === 'Enter' && handleGenerateTasks()}
+                />
+
+                <Group justify="flex-end">
+                    <Button variant="subtle" color="gray" onClick={() => setAiModalOpen(false)} disabled={isGenerating}>
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="filled"
+                        color="violet"
+                        loading={isGenerating}
+                        onClick={handleGenerateTasks}
+                        leftSection={<IconWand size={16} />}
+                    >
+                        Generate
+                    </Button>
+                </Group>
+            </Modal>
         </Box >
     );
 });

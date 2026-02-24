@@ -10,6 +10,7 @@ public class Board
     public string ThemeColor { get; set; } = "blue"; 
     public string? BackgroundImageUrl { get; set; }
     public bool IsPrivate { get; set; } = false;
+    public bool IsClosed { get; set; } = false;
 
     // Foreign Key to Owner
     public int OwnerId { get; set; }
