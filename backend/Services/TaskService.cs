@@ -308,17 +308,36 @@ public class TaskService : ITaskService
             .FirstOrDefaultAsync();
     }
     
-    public async Task<List<TaskActivity>> GetTaskActivitiesAsync(int taskId)
+    public async Task<List<TaskActivityDto>> GetTaskActivitiesAsync(int taskId)
     {
-        return await _db.TaskActivities
+        var activities = await _db.TaskActivities
             .AsNoTracking()
             .Where(a => a.TaskCardId == taskId)
-            .Include(a => a.User)
-            .OrderByDescending(a => a.Timestamp)
+            .Select(a => new TaskActivityDto
+            {
+                Id = a.Id,
+                TaskCardId = a.TaskCardId,
+                UserId = a.UserId,
+                Username = a.User != null ? a.User.Username : "Unknown",
+                UserAvatarUrl = a.User != null ? a.User.AvatarUrl : null,
+                Action = a.Action,
+                Details = a.Details,
+                Timestamp = a.Timestamp,
+                Reactions = a.Reactions.Select(r => new ActivityReactionDto
+                {
+                    Id = r.Id,
+                    Emoji = r.Emoji,
+                    UserId = r.UserId,
+                    Username = r.User != null ? r.User.Username : "Unknown"
+                }).ToList()
+            })
+            .OrderByDescending(a => a.Timestamp) // Newest first
             .ToListAsync();
+
+        return activities;
     }
 
-    public async Task<TaskActivity> AddCommentAsync(int taskId, string text, int userId)
+    public async Task<TaskActivityDto> AddCommentAsync(int taskId, string text, int userId)
     {
         var activity = new TaskActivity
         {
@@ -332,13 +351,137 @@ public class TaskService : ITaskService
         _db.TaskActivities.Add(activity);
         await _db.SaveChangesAsync();
 
+        Console.WriteLine($"[TaskService] Comment saved. ActivityId: {activity.Id}, TaskId: {taskId}, UserId: {userId}");
+
         // Detect mentions @username
         await DetectMentionsAsync(taskId, text, userId);
 
-        // Load the User so we can return the username/avatar
-        await _db.Entry(activity).Reference(a => a.User).LoadAsync();
+        // Load user info for the DTO
+        var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
 
-        return activity;
+        if (user == null) 
+        {
+            Console.WriteLine($"[TaskService] WARNING: User not found in database for userId: {userId}");
+        }
+        else 
+        {
+            Console.WriteLine($"[TaskService] User found: {user.Username} (ID: {user.Id})");
+        }
+
+        return new TaskActivityDto
+        {
+            Id = activity.Id,
+            TaskCardId = activity.TaskCardId,
+            UserId = activity.UserId,
+            Username = user?.Username ?? "Unknown",
+            UserAvatarUrl = user?.AvatarUrl,
+            Action = activity.Action,
+            Details = activity.Details,
+            Timestamp = activity.Timestamp,
+            Reactions = new List<ActivityReactionDto>()
+        };
+    }
+
+    public async Task<TaskActivityDto?> UpdateActivityAsync(int activityId, string text, int userId)
+    {
+        var activity = await _db.TaskActivities
+            .Include(a => a.User)
+            .Include(a => a.Reactions)
+                .ThenInclude(r => r.User)
+            .FirstOrDefaultAsync(a => a.Id == activityId);
+
+        if (activity == null || activity.Action != "Commented") return null;
+        if (activity.UserId != userId) return null; // Only author can edit
+
+        activity.Details = text;
+        // Optional: track if edited? For now, just update.
+        await _db.SaveChangesAsync();
+
+        return new TaskActivityDto
+        {
+            Id = activity.Id,
+            TaskCardId = activity.TaskCardId,
+            UserId = activity.UserId,
+            Username = activity.User?.Username ?? "Unknown",
+            UserAvatarUrl = activity.User?.AvatarUrl,
+            Action = activity.Action,
+            Details = activity.Details,
+            Timestamp = activity.Timestamp,
+            Reactions = activity.Reactions.Select(r => new ActivityReactionDto
+            {
+                Id = r.Id,
+                Emoji = r.Emoji,
+                UserId = r.UserId,
+                Username = r.User?.Username ?? "Unknown"
+            }).ToList()
+        };
+    }
+
+    public async Task<bool> DeleteActivityAsync(int activityId, int userId)
+    {
+        var activity = await _db.TaskActivities
+            .Include(a => a.TaskCard)
+                .ThenInclude(t => t.Column)
+            .FirstOrDefaultAsync(a => a.Id == activityId);
+
+        if (activity == null) return false;
+
+        // Check permission: Author or Board Owner/Admin
+        if (activity.UserId == userId)
+        {
+            _db.TaskActivities.Remove(activity);
+            await _db.SaveChangesAsync();
+            return true;
+        }
+
+        var boardMember = await _db.BoardMembers
+            .FirstOrDefaultAsync(bm => bm.BoardId == activity.TaskCard.Column.BoardId && bm.UserId == userId);
+
+        if (boardMember != null && (boardMember.Role == "Owner" || boardMember.Role == "Admin"))
+        {
+            _db.TaskActivities.Remove(activity);
+            await _db.SaveChangesAsync();
+            return true;
+        }
+
+        return false;
+    }
+
+    public async Task<TaskActivityReactionDto?> ToggleReactionAsync(int activityId, string emoji, int userId)
+    {
+        var activity = await _db.TaskActivities.FindAsync(activityId);
+        if (activity == null) return null;
+
+        var existing = await _db.TaskActivityReactions
+            .FirstOrDefaultAsync(r => r.TaskActivityId == activityId && r.UserId == userId && r.Emoji == emoji);
+
+        if (existing != null)
+        {
+            _db.TaskActivityReactions.Remove(existing);
+            await _db.SaveChangesAsync();
+            return null; // Removed
+        }
+        else
+        {
+            var reaction = new TaskActivityReaction
+            {
+                TaskActivityId = activityId,
+                UserId = userId,
+                Emoji = emoji
+            };
+            _db.TaskActivityReactions.Add(reaction);
+            await _db.SaveChangesAsync();
+
+            await _db.Entry(reaction).Reference(r => r.User).LoadAsync();
+            return new TaskActivityReactionDto
+            {
+                Id = reaction.Id,
+                TaskActivityId = reaction.TaskActivityId,
+                UserId = reaction.UserId,
+                Username = reaction.User.Username,
+                Emoji = reaction.Emoji
+            };
+        }
     }
 
     private async Task DetectMentionsAsync(int taskId, string text, int senderId)
@@ -704,5 +847,36 @@ public class TaskService : ITaskService
 
         await LogActivity(taskId, userId, "Attachment Deleted", $"Removed file: {fileName}");
         return true;
+    }
+
+    public async Task<TaskActivityDto?> GetActivityByIdAsync(int activityId)
+    {
+        var activity = await _db.TaskActivities
+            .AsNoTracking()
+            .Include(a => a.User)
+            .Include(a => a.Reactions)
+                .ThenInclude(r => r.User)
+            .FirstOrDefaultAsync(a => a.Id == activityId);
+
+        if (activity == null) return null;
+
+        return new TaskActivityDto
+        {
+            Id = activity.Id,
+            TaskCardId = activity.TaskCardId,
+            UserId = activity.UserId,
+            Username = activity.User?.Username ?? "Unknown",
+            UserAvatarUrl = activity.User?.AvatarUrl,
+            Action = activity.Action,
+            Details = activity.Details,
+            Timestamp = activity.Timestamp,
+            Reactions = activity.Reactions.Select(r => new ActivityReactionDto
+            {
+                Id = r.Id,
+                Emoji = r.Emoji,
+                UserId = r.UserId,
+                Username = r.User?.Username ?? "Unknown"
+            }).ToList()
+        };
     }
 }

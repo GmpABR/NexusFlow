@@ -16,4 +16,6 @@ public class TaskActivity
     public string Details { get; set; } = string.Empty; // "Moved from To Do to Done"
     
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+
+    public List<TaskActivityReaction> Reactions { get; set; } = new();
 }

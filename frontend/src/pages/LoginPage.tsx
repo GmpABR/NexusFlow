@@ -30,6 +30,7 @@ export default function LoginPage() {
             localStorage.setItem('user', JSON.stringify({
                 username: res.username,
                 userId: res.userId,
+                id: res.userId, // Duplicate for compatibility
                 avatarUrl: res.avatarUrl
             }));
             notifications.show({ title: 'Welcome back!', message: `Logged in as ${res.username}`, color: 'green' });

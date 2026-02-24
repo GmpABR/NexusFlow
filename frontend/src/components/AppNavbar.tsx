@@ -98,8 +98,11 @@ export default function AppNavbar() {
 
         // Fetch fresh user data to ensure avatar/details are synced
         getMe().then(p => {
-            localStorage.setItem('user', JSON.stringify(p));
-            setUser(p);
+            // Robust property mapping: handle both p.id and p.Id
+            const uid = p.id || (p as any).Id;
+            const userWithId = { ...p, userId: uid, id: uid };
+            localStorage.setItem('user', JSON.stringify(userWithId));
+            setUser(userWithId);
         }).catch(() => { });
     }, []);
 

@@ -1253,6 +1253,7 @@ export default function BoardPage() {
                 task={selectedTask}
                 members={members}
                 boardLabels={board.labels || []}
+                boardRole={board.userRole}
                 onTaskUpdated={handleTaskUpdated}
             />
 

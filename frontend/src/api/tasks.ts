@@ -52,19 +52,23 @@ export const deleteSubtask = async (subtaskId: number): Promise<void> => {
     await api.delete(`/tasks/subtasks/${subtaskId}`);
 };
 
+export interface Reaction {
+    id: number;
+    userId: number;
+    username: string;
+    emoji: string;
+}
+
 export interface TaskActivity {
     id: number;
     taskCardId: number;
     userId: number;
-    user?: {
-        id: number;
-        username: string;
-        email: string;
-        avatarUrl?: string;
-    };
+    username: string;
+    userAvatarUrl?: string;
     action: string;
     details: string;
     timestamp: string;
+    reactions: Reaction[];
 }
 
 export const getTaskActivities = async (taskId: number): Promise<TaskActivity[]> => {
@@ -74,6 +78,20 @@ export const getTaskActivities = async (taskId: number): Promise<TaskActivity[]>
 
 export const addComment = async (taskId: number, text: string): Promise<TaskActivity> => {
     const { data } = await api.post<TaskActivity>(`/tasks/${taskId}/comments`, { text });
+    return data;
+};
+
+export const deleteComment = async (activityId: number): Promise<void> => {
+    await api.delete(`/tasks/activities/${activityId}`);
+};
+
+export const updateComment = async (activityId: number, text: string): Promise<TaskActivity> => {
+    const { data } = await api.put<TaskActivity>(`/tasks/activities/${activityId}`, { text });
+    return data;
+};
+
+export const toggleReaction = async (activityId: number, emoji: string): Promise<Reaction | null> => {
+    const { data } = await api.post<Reaction | null>(`/tasks/activities/${activityId}/reactions`, { emoji });
     return data;
 };
 

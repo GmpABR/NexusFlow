@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Backend.Data;
 using Backend.DTOs;
@@ -143,10 +144,21 @@ public class UsersController : ControllerBase
 
     private int GetUserId()
     {
+        var claims = User.Claims.Select(c => $"{c.Type}: {c.Value}");
+        Console.WriteLine($"[UsersController] User Claims: {string.Join(", ", claims)}");
+
         var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                       ?? User.FindFirst("sub")?.Value
-                      ?? User.FindFirst("id")?.Value;
+                      ?? User.FindFirst("id")?.Value
+                      ?? User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
 
-        return int.TryParse(idClaim, out int userId) ? userId : 0;
+        if (int.TryParse(idClaim, out int userId))
+        {
+            Console.WriteLine($"[UsersController] Extracted UserId: {userId}");
+            return userId;
+        }
+
+        Console.WriteLine("[UsersController] WARNING: UserId claim not found or not an integer.");
+        return 0;
     }
 }

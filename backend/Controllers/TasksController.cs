@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Backend.DTOs;
 using Backend.Hubs;
@@ -149,6 +150,63 @@ public class TasksController : ControllerBase
         return Ok(activity);
     }
 
+    [HttpDelete("activities/{activityId}")]
+    public async Task<IActionResult> DeleteComment(int activityId)
+    {
+        var activity = await _taskService.GetActivityByIdAsync(activityId);
+        if (activity == null) return NotFound();
+
+        var result = await _taskService.DeleteActivityAsync(activityId, GetUserId());
+        if (!result) return Forbid();
+
+        // Notify board
+        var task = await _taskService.GetTaskByIdAsync(activity.TaskCardId);
+        if (task != null)
+        {
+            await _hubContext.Clients.Group($"board_{task.BoardId}")
+                .SendAsync("TaskUpdated", task);
+        }
+
+        return NoContent();
+    }
+
+    [HttpPut("activities/{activityId}")]
+    public async Task<IActionResult> UpdateComment(int activityId, [FromBody] AddCommentDto dto)
+    {
+        var activity = await _taskService.UpdateActivityAsync(activityId, dto.Text, GetUserId());
+        if (activity == null) return Forbid();
+
+        // Notify board
+        var task = await _taskService.GetTaskByIdAsync(activity.TaskCardId);
+        if (task != null)
+        {
+            await _hubContext.Clients.Group($"board_{task.BoardId}")
+                .SendAsync("TaskUpdated", task);
+        }
+
+        return Ok(activity);
+    }
+
+    [HttpPost("activities/{activityId}/reactions")]
+    public async Task<IActionResult> ToggleReaction(int activityId, [FromBody] ToggleReactionDto dto)
+    {
+        var reaction = await _taskService.ToggleReactionAsync(activityId, dto.Emoji, GetUserId());
+        
+        // Notify board so reactions sync in real-time
+        var activity = await _taskService.GetActivityByIdAsync(activityId);
+        if (activity != null)
+        {
+            var task = await _taskService.GetTaskByIdAsync(activity.TaskCardId);
+            if (task != null)
+            {
+                await _hubContext.Clients.Group($"board_{task.BoardId}")
+                    .SendAsync("TaskUpdated", task);
+            }
+        }
+        
+        return Ok(reaction);
+    }
+
     [HttpPost("{id}/labels")]
     public async Task<IActionResult> SetLabels(int id, [FromBody] List<int> labelIds)
     {
@@ -199,14 +257,21 @@ public class TasksController : ControllerBase
 
     private int GetUserId()
     {
+        var claims = User.Claims.Select(c => $"{c.Type}: {c.Value}");
+        Console.WriteLine($"[TasksController] User Claims: {string.Join(", ", claims)}");
+
         var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
                       ?? User.FindFirst("sub")?.Value 
-                      ?? User.FindFirst("id")?.Value;
+                      ?? User.FindFirst("id")?.Value
+                      ?? User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
                       
         if (int.TryParse(idClaim, out int userId))
         {
+            Console.WriteLine($"[TasksController] Extracted UserId: {userId}");
             return userId;
         }
+        
+        Console.WriteLine("[TasksController] WARNING: UserId claim not found or not an integer.");
         return 0;
     }
 }

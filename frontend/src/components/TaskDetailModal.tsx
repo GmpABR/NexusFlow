@@ -21,13 +21,18 @@ interface TaskDetailModalProps {
     task: TaskCard | null;
     members: BoardMember[];
     boardLabels: Label[];
+    boardRole: string;
     onTaskUpdated: (task: TaskCard) => void;
 }
 
 type BoardMember = import('../api/boards').BoardMember;
 
-export default function TaskDetailModal({ opened, onClose, task, members, boardLabels, onTaskUpdated }: TaskDetailModalProps) {
+export default function TaskDetailModal({ opened, onClose, task, members, boardLabels, boardRole, onTaskUpdated }: TaskDetailModalProps) {
     const computedColorScheme = useComputedColorScheme('dark');
+    const userStr = localStorage.getItem('user');
+    const currentUser = userStr ? JSON.parse(userStr) : null;
+    // Robust: check both properties
+    const currentUserId = currentUser?.userId || currentUser?.id || 0;
     const [labelSearch, setLabelSearch] = useState('');
 
     const form = useForm({
@@ -52,6 +57,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
     const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
     const [isAddingSubtask, setIsAddingSubtask] = useState(false);
     const [activities, setActivities] = useState<TaskActivity[]>([]);
+    const [isActivitiesLoading, setIsActivitiesLoading] = useState(false);
 
     // Comments
     const [newComment, setNewComment] = useState('');
@@ -62,6 +68,8 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
     const [mentionOpened, setMentionOpened] = useState(false);
     const [mentionSearch, setMentionSearch] = useState('');
     const [mentionIndex, setMentionIndex] = useState(-1);
+
+    const [activitiesCache, setActivitiesCache] = useState<Record<number, TaskActivity[]>>({});
 
     useEffect(() => {
         if (task) {
@@ -82,6 +90,16 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
             });
 
             setAttachments(task.attachments ?? []);
+
+            // Check cache for instant load
+            if (activitiesCache[task.id]) {
+                setActivities(activitiesCache[task.id]);
+                setIsActivitiesLoading(false);
+            } else {
+                setActivities([]); // Prevent stale comments flashing
+                setIsActivitiesLoading(true);
+            }
+
             fetchActivities(task.id);
         }
     }, [task]);
@@ -90,8 +108,11 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
         try {
             const data = await getTaskActivities(taskId);
             setActivities(data);
+            setActivitiesCache(prev => ({ ...prev, [taskId]: data }));
         } catch (error) {
             console.error("Failed to fetch activities", error);
+        } finally {
+            setIsActivitiesLoading(false);
         }
     };
 
@@ -105,27 +126,45 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
 
         // 1. Optimistic Update: instantly append to the feed
         const tempActivity: TaskActivity = {
-            id: Date.now(), // Fake ID
+            id: Date.now(),
             taskCardId: task.id,
-            userId: 0, // Current user id conceptually, but avatar logic might miss it temporarily unless we find it from members. 
-            // But often UI just needs the text to appear.
-            user: { id: 0, username: 'You', email: '' }, // Fallback for optimistic
+            userId: currentUserId,
+            username: currentUser?.username || 'You',
+            userAvatarUrl: currentUser?.avatarUrl,
             action: 'Commented',
             details: commentText,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            reactions: []
         };
 
-        setActivities(prev => [tempActivity, ...prev]);
+        setActivities(prev => {
+            // Prepend for Descending order (newest at top)
+            const prepended = [tempActivity, ...prev];
+            setActivitiesCache(c => ({ ...c, [task.id]: prepended }));
+            return prepended;
+        });
 
         // 2. Background API call
         try {
-            await addComment(task.id, commentText);
-            // Replace exact temp comment with real data by refetching
-            fetchActivities(task.id);
+            const result = await addComment(task.id, commentText);
+            // Replace the optimistic activity with the real one from the server
+            // This ensures we have the correct ID and server-side data (username, pfp)
+            setActivities(prev => {
+                const updated = prev.map(a => a.id === tempActivity.id ? result : a);
+                setActivitiesCache(c => ({ ...c, [task.id]: updated }));
+                return updated;
+            });
+
+            // Optional: Still fetch all to stay in sync with others, but do it quietly
+            // fetchActivities(task.id); 
         } catch (error) {
             notifications.show({ title: 'Error', message: 'Failed to post comment', color: 'red' });
             // Revert on failure
-            setActivities(prev => prev.filter(a => a.id !== tempActivity.id));
+            setActivities(prev => {
+                const reverted = prev.filter(a => a.id !== tempActivity.id);
+                setActivitiesCache(c => ({ ...c, [task.id]: reverted }));
+                return reverted;
+            });
         } finally {
             setIsSubmittingComment(false);
         }
@@ -324,7 +363,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
             }}
             zIndex={2000}
         >
-            <div style={{ display: 'flex', minHeight: 520 }}>
+            <div style={{ display: 'flex', height: '600px' }}>
 
                 {/* ── Left Column: Task Form ── */}
                 <ScrollArea style={{ flex: 1, minWidth: 0 }} styles={{ viewport: { padding: '20px 24px 24px' } }}>
@@ -680,6 +719,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                             leftSection={<IconTag size={16} />}
                             mb="xl"
                             {...form.getInputProps('tags')}
+                            comboboxProps={{ zIndex: 3001 }}
                             styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
                         />
 
@@ -716,10 +756,16 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                         </Group>
                     </div>
 
-                    {/* Scrollable activity list */}
-                    <ScrollArea style={{ flex: 1 }} styles={{ viewport: { padding: '12px 12px' } }}>
-                        <ActivityLog activities={activities} />
-                    </ScrollArea>
+                    {/* Scrollable activity list - flex: 1 ensures it fills available space */}
+                    <div style={{ flex: 1, minHeight: 0 }}>
+                        <ActivityLog
+                            activities={activities}
+                            currentUserId={currentUserId}
+                            boardRole={boardRole}
+                            onRefresh={() => task && fetchActivities(task.id)}
+                            loading={isActivitiesLoading}
+                        />
+                    </div>
 
                     {/* Add Comment Input */}
                     <div style={{ padding: '12px 16px', borderTop: `1px solid ${computedColorScheme === 'dark' ? '#2C2E33' : '#dee2e6'}`, background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white' }}>

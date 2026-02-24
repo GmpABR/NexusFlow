@@ -52,6 +52,7 @@ export default function BoardAnalyticsModal({ opened, onClose, boardId }: BoardA
             title={<Group gap="xs"><IconChartBar size={20} color="#4dabf7" /><Text fw={700} size="lg">Board Analytics</Text></Group>}
             size="xl"
             centered
+            zIndex={3000}
             styles={{
                 content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
                 header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderBottom: `1px solid ${computedColorScheme === 'dark' ? '#2C2E33' : '#e9ecef'}` },

@@ -16,8 +16,11 @@ public interface ITaskService
     Task<bool> DeleteSubtaskAsync(int subtaskId, int userId);
     
     Task<TaskCardDto?> GetTaskByIdAsync(int taskId);
-    Task<List<TaskActivity>> GetTaskActivitiesAsync(int taskId);
-    Task<TaskActivity> AddCommentAsync(int taskId, string text, int userId);
+    Task<List<TaskActivityDto>> GetTaskActivitiesAsync(int taskId);
+    Task<TaskActivityDto> AddCommentAsync(int taskId, string text, int userId);
+    Task<TaskActivityDto?> UpdateActivityAsync(int activityId, string text, int userId);
+    Task<bool> DeleteActivityAsync(int activityId, int userId);
+    Task<TaskActivityReactionDto?> ToggleReactionAsync(int activityId, string emoji, int userId);
 
     // Time Tracking Methods
     Task<TimeLogDto?> StartTimerAsync(int taskId, int userId);
@@ -35,4 +38,5 @@ public interface ITaskService
     Task<bool> AddLabelToTaskAsync(int taskId, int labelId, int userId);
     Task<bool> RemoveLabelFromTaskAsync(int taskId, int labelId, int userId);
     Task<bool> SetTaskLabelsAsync(int taskId, List<int> labelIds, int userId);
+    Task<TaskActivityDto?> GetActivityByIdAsync(int activityId);
 }

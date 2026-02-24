@@ -22,6 +22,8 @@ public class AppDbContext : DbContext
     public DbSet<Label> Labels { get; set; }
     public DbSet<TaskLabel> TaskLabels { get; set; }
     public DbSet<Notification> Notifications { get; set; }
+    public DbSet<TaskActivityReaction> TaskActivityReactions { get; set; }
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -202,5 +204,20 @@ public class AppDbContext : DbContext
                   .HasForeignKey(n => n.UserId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
+
+        // TaskActivityReaction
+        modelBuilder.Entity<TaskActivityReaction>(entity =>
+        {
+            entity.HasOne(r => r.TaskActivity)
+                  .WithMany(a => a.Reactions)
+                  .HasForeignKey(r => r.TaskActivityId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(r => r.User)
+                  .WithMany()
+                  .HasForeignKey(r => r.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }
+
