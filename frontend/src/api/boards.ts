@@ -10,6 +10,7 @@ export interface BoardSummary {
     themeColor: string;
     workspaceId: number | null;
     isClosed: boolean;
+    openTasksCount: number;
 }
 
 export interface Attachment {
@@ -81,6 +82,15 @@ export interface BoardDetail {
     isClosed: boolean;
 }
 
+export interface BoardInvite {
+    token: string;
+    role: string;
+    boardId: number;
+    boardName: string;
+    createdAt: string;
+    expiresAt: string | null;
+}
+
 export const getBoards = async (): Promise<BoardSummary[]> => {
     const { data } = await api.get<BoardSummary[]>('/boards');
     return data;
@@ -117,6 +127,22 @@ export const inviteMember = async (boardId: number, username: string): Promise<B
 
 export const removeMember = async (boardId: number, userId: number): Promise<void> => {
     await api.delete(`/boards/${boardId}/members/${userId}`);
+};
+
+export const createBoardInvite = async (boardId: number, role: string): Promise<BoardInvite> => {
+    const { data } = await api.post<BoardInvite>(`/boards/${boardId}/invites`, role, {
+        headers: { 'Content-Type': 'application/json' }
+    });
+    return data;
+};
+
+export const getBoardInvite = async (token: string): Promise<BoardInvite> => {
+    const { data } = await api.get<BoardInvite>(`/boards/invites/${token}`);
+    return data;
+};
+
+export const joinBoard = async (token: string): Promise<void> => {
+    await api.post(`/boards/invites/${token}/join`);
 };
 
 export const updateBoard = async (boardId: number, data: { name?: string; themeColor?: string; backgroundImageUrl?: string }): Promise<BoardDetail> => {

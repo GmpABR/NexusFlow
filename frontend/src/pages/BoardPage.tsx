@@ -17,6 +17,9 @@ import {
     ThemeIcon,
     Menu,
     Autocomplete,
+    Select,
+    Divider,
+    CopyButton,
     useComputedColorScheme
 } from '@mantine/core';
 import {
@@ -35,7 +38,11 @@ import {
     IconX,
     IconChartBar,
     IconSettings,
-    IconLock
+    IconLock,
+    IconCopy,
+    IconCheck,
+    IconLink,
+    IconEye
 } from '@tabler/icons-react';
 import {
     DragDropContext,
@@ -58,6 +65,7 @@ import {
     closeBoard,
     deleteBoard,
     reopenBoard,
+    createBoardInvite,
     type BoardDetail,
     type BoardSummary,
     type TaskCard as TaskCardType,
@@ -94,6 +102,8 @@ export default function BoardPage() {
     const [loading, setLoading] = useState(true);
     const [membersModalOpen, setMembersModalOpen] = useState(false);
     const [inviting, setInviting] = useState(false);
+    const [inviteLink, setInviteLink] = useState<string | null>(null);
+    const [inviteRole, setInviteRole] = useState<string>('Member');
     const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
     const [closeModalOpen, setCloseModalOpen] = useState(false);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -413,7 +423,7 @@ export default function BoardPage() {
 
 
     const handleDragStart = () => {
-        if (board?.isClosed) return;
+        if (board?.isClosed || board?.userRole === 'Viewer') return;
         setIsDragging(true);
         isDraggingRef.current = true;
         // Fix issues where focus might be stealing drag
@@ -427,7 +437,7 @@ export default function BoardPage() {
     };
 
     const handleDragEnd = async (result: DropResult) => {
-        if (board?.isClosed) return;
+        if (board?.isClosed || board?.userRole === 'Viewer') return;
         setIsDragging(false);
         isDraggingRef.current = false;
 
@@ -605,6 +615,21 @@ export default function BoardPage() {
         }
     };
 
+    const handleCreateInviteLink = async () => {
+        if (!boardId) return;
+        setInviting(true);
+        try {
+            const invite = await createBoardInvite(boardId, inviteRole);
+            const fullLink = `${window.location.origin}/join/${invite.token}`;
+            setInviteLink(fullLink);
+            notifications.show({ title: 'Link Generated', message: 'Invite link is ready to copy', color: 'green' });
+        } catch (error) {
+            notifications.show({ title: 'Error', message: 'Failed to generate link', color: 'red' });
+        } finally {
+            setInviting(false);
+        }
+    };
+
     // ── Remove Member ──
     const handleRemoveMember = async (userId: number) => {
         if (!boardId) return;
@@ -720,22 +745,34 @@ export default function BoardPage() {
                 flexDirection: 'column',
             }}
         >
+            {/* Viewer Mode Banner */}
+            {(board.userRole === 'Viewer' && !board.isClosed) && (
+                <Box py="xs" style={{ background: 'rgba(251, 191, 36, 0.9)', textAlign: 'center', backdropFilter: 'blur(8px)' }}>
+                    <Group justify="center" gap="xs">
+                        <IconEye size={16} color="black" />
+                        <Text fw={700} size="sm" c="black">Você está no modo VISUALIZAÇÃO. Algumas ações estão restritas.</Text>
+                    </Group>
+                </Box>
+            )}
+
             {/* Closed Board Banner */}
             {board.isClosed && (
                 <Box py="xs" style={{ background: 'var(--mantine-color-orange-9)', textAlign: 'center' }}>
                     <Group justify="center" gap="xs">
                         <IconLock size={16} color="white" />
-                        <Text fw={700} size="sm" c="white">This board is closed. You are in read-only mode.</Text>
-                        <Button
-                            variant="white"
-                            color="orange"
-                            size="compact-xs"
-                            radius="xl"
-                            onClick={handleReopenBoard}
-                            leftSection={<IconRotate size={14} />}
-                        >
-                            Reopen Board
-                        </Button>
+                        <Text fw={700} size="sm" c="white">Este quadro está fechado. Você está no modo somente leitura.</Text>
+                        {(board.userRole === 'Owner' || board.userRole === 'Admin') && (
+                            <Button
+                                variant="white"
+                                color="orange"
+                                size="compact-xs"
+                                radius="xl"
+                                onClick={handleReopenBoard}
+                                leftSection={<IconRotate size={14} />}
+                            >
+                                Reopen Board
+                            </Button>
+                        )}
                     </Group>
                 </Box>
             )}
@@ -806,14 +843,26 @@ export default function BoardPage() {
                                         textShadow: computedColorScheme === 'light' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
                                     }}
                                     onDoubleClick={() => {
-                                        if (board.isClosed) return;
+                                        if (board.isClosed || board.userRole === 'Viewer') return;
                                         setEditedTitle(board.name);
                                         setIsEditingTitle(true);
                                     }}
-                                    title={board.isClosed ? undefined : "Double click to rename"}
+                                    title={(board.isClosed || board.userRole === 'Viewer') ? undefined : "Double click to rename"}
                                 >
                                     {board.name}
                                 </Text>
+                            )}
+                            {board.userRole === 'Viewer' && (
+                                <Badge
+                                    leftSection={<IconEye size={12} />}
+                                    variant="filled"
+                                    color="yellow"
+                                    size="sm"
+                                    radius="xl"
+                                    mt={4}
+                                >
+                                    MODO LEITURA
+                                </Badge>
                             )}
                         </Box>
 
@@ -922,6 +971,7 @@ export default function BoardPage() {
                                                     dragHandleProps={provided.dragHandleProps}
                                                     isClosed={board.isClosed}
                                                     showAI={idx === 0}
+                                                    isViewer={board.userRole === 'Viewer'}
                                                 />
                                             )}
                                         </Draggable>
@@ -929,7 +979,7 @@ export default function BoardPage() {
                                     {provided.placeholder}
 
                                     {/* Add List Button */}
-                                    {!board.isClosed && (
+                                    {(!board.isClosed && board.userRole !== 'Viewer') && (
                                         <Box style={{ minWidth: 320, maxWidth: 360 }}>
                                             {isAddingList ? (
                                                 <Paper p="sm" style={{
@@ -1251,10 +1301,7 @@ export default function BoardPage() {
                                     value={searchValue}
                                     onChange={setSearchValue}
                                     data={searchResults.map(u => u.username)}
-                                    onOptionSubmit={(val) => {
-                                        setSearchValue(val);
-                                        // Optional: Auto-invite on selection? Better to let user click Invite to confirm.
-                                    }}
+                                    // ...
                                     rightSection={searchLoading ? <Loader size="xs" /> : null}
                                     style={{ flex: 1 }}
                                     styles={{
@@ -1267,14 +1314,79 @@ export default function BoardPage() {
                                 />
                                 <Button
                                     leftSection={<IconUserPlus size={16} />}
-                                    variant="gradient"
-                                    gradient={{ from: 'violet', to: 'indigo' }}
+                                    variant="outline"
+                                    color="violet"
                                     loading={inviting}
                                     onClick={handleInvite}
                                 >
                                     Invite
                                 </Button>
                             </Group>
+
+                            <Divider label="or" labelPosition="center" my="lg" />
+
+                            <Box>
+                                <Text size="sm" fw={500} mb="xs" c="dimmed">Invite via link</Text>
+                                <Stack gap="xs">
+                                    <Group grow gap="xs">
+                                        <Select
+                                            data={[
+                                                { value: 'Member', label: 'Member (can edit)' },
+                                                { value: 'Viewer', label: 'Viewer (read-only)' }
+                                            ]}
+                                            value={inviteRole}
+                                            onChange={(val) => setInviteRole(val || 'Member')}
+                                            styles={{
+                                                input: {
+                                                    background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.4)' : 'white',
+                                                    color: computedColorScheme === 'dark' ? 'white' : 'black'
+                                                }
+                                            }}
+                                        />
+                                        <Button
+                                            variant="gradient"
+                                            gradient={{ from: 'violet', to: 'indigo' }}
+                                            onClick={handleCreateInviteLink}
+                                            loading={inviting}
+                                            leftSection={<IconLink size={16} />}
+                                        >
+                                            Generate Link
+                                        </Button>
+                                    </Group>
+
+                                    {inviteLink && (
+                                        <Paper
+                                            p="xs"
+                                            radius="md"
+                                            style={{
+                                                background: computedColorScheme === 'dark' ? 'rgba(139, 92, 246, 0.1)' : 'rgba(139, 92, 246, 0.05)',
+                                                border: '1px dashed rgba(139, 92, 246, 0.5)',
+                                                position: 'relative',
+                                                overflow: 'hidden'
+                                            }}
+                                        >
+                                            <Group justify="space-between" gap="xs">
+                                                <Text size="xs" truncate style={{ flex: 1, fontFamily: 'monospace' }}>
+                                                    {inviteLink}
+                                                </Text>
+                                                <CopyButton value={inviteLink} timeout={2000}>
+                                                    {({ copied, copy }) => (
+                                                        <Button
+                                                            color={copied ? 'teal' : 'violet'}
+                                                            variant="subtle"
+                                                            size="compact-xs"
+                                                            onClick={copy}
+                                                            leftSection={copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+                                                        >
+                                                            {copied ? 'Copied' : 'Copy'}
+                                                        </Button>
+                                                    )}
+                                                </CopyButton>
+                                            </Group>
+                                        </Paper>
+                                    )}
+                                </Stack>
+                            </Box>
                         </Box>
                     )}
 

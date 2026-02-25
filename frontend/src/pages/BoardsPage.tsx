@@ -38,6 +38,7 @@ import { getMyWorkspaces, createWorkspace, type Workspace } from '../api/workspa
 import { createTask } from '../api/tasks';
 import { generateBoardStructure, getApiKey } from '../api/ai';
 import { BOARD_THEMES, type ThemeColor } from '../constants/themes';
+import { BOARD_TEMPLATES, type TemplateType } from '../constants/templates';
 
 export default function BoardsPage() {
     const navigate = useNavigate();
@@ -51,6 +52,7 @@ export default function BoardsPage() {
     // Board Creation State
     const [newBoardName, setNewBoardName] = useState('');
     const [selectedTheme, setSelectedTheme] = useState<ThemeColor>('blue');
+    const [selectedTemplate, setSelectedTemplate] = useState<TemplateType>('kanban');
     const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
 
@@ -100,17 +102,31 @@ export default function BoardsPage() {
         if (!newBoardName.trim()) return;
         setCreating(true);
         try {
-            await createBoard(
+            const template = BOARD_TEMPLATES[selectedTemplate];
+
+            const board = await createBoard(
                 newBoardName,
                 selectedWorkspaceId ? parseInt(selectedWorkspaceId) : undefined,
-                selectedTheme
+                selectedTheme,
+                true // Always skip default columns to use template structure
             );
+
+            if (template && template.columns.length > 0) {
+                notifications.show({ title: 'Template', message: `Initializing ${template.name} structure...`, color: 'blue', loading: true });
+                for (const colName of template.columns) {
+                    await createColumn(board.id, colName);
+                }
+            }
+
             setNewBoardName('');
             setSelectedWorkspaceId(null);
             setSelectedTheme('blue');
+            setSelectedTemplate('kanban');
             setModalOpen(false);
             fetchData();
+            notifications.clean();
             notifications.show({ title: 'Board created!', message: `"${newBoardName}" is ready.`, color: 'green' });
+            navigate(`/boards/${board.id}`);
         } catch {
             notifications.show({ title: 'Error', message: 'Failed to create board.', color: 'red' });
         } finally {
@@ -408,7 +424,7 @@ export default function BoardsPage() {
                                     boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
                                 }}>
                                     <Text size="sm" c="blue.3" fw={700} tt="uppercase" lts={1}>Pending Tasks</Text>
-                                    <Text fz={38} fw={800} c={computedColorScheme === 'dark' ? 'white' : 'dark'} style={{ lineHeight: 1 }}>{boards.filter(b => !b.isClosed).reduce((acc, _) => acc + (Math.floor(Math.random() * 5)), 0)}</Text> {/* Combined mock tasks for active boards */}
+                                    <Text fz={38} fw={800} c={computedColorScheme === 'dark' ? 'white' : 'dark'} style={{ lineHeight: 1 }}>{boards.filter(b => !b.isClosed).reduce((acc, b) => acc + (b.openTasksCount || 0), 0)}</Text>
                                 </Paper>
                             </Group>
                         </Box>
@@ -624,7 +640,7 @@ export default function BoardsPage() {
                                                                         <Box style={{ width: 28, height: 28, borderRadius: '50%', background: '#7950f2', border: `2px solid ${computedColorScheme === 'dark' ? '#1A1B1E' : '#ffffff'}`, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 'bold' }}>A</Box>
                                                                         <Box style={{ width: 28, height: 28, borderRadius: '50%', background: '#228be6', border: `2px solid ${computedColorScheme === 'dark' ? '#1A1B1E' : '#ffffff'}`, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 'bold' }}>B</Box>
                                                                     </Group>
-                                                                    <Text size="xs" fw={600} c="dimmed">Open Tasks: {Math.floor(Math.random() * 10)}</Text>
+                                                                    <Text size="xs" fw={600} c="dimmed">Open Tasks: {board.openTasksCount}</Text>
                                                                 </Group>
                                                             </Card>
                                                         ))}
@@ -692,7 +708,10 @@ export default function BoardsPage() {
                                                                 </Menu.Dropdown>
                                                             </Menu>
                                                         </Group>
-                                                        <Text size="xs" c="dimmed">{board.isClosed ? "Closed" : "Personal"}</Text>
+                                                        <Group justify="space-between" align="center" mt="md">
+                                                            <Text size="xs" c="dimmed">{board.isClosed ? "Closed" : "Personal"}</Text>
+                                                            <Text size="xs" fw={600} c="dimmed">Open Tasks: {board.openTasksCount}</Text>
+                                                        </Group>
                                                     </Card>
                                                 ))}
                                             </SimpleGrid>
@@ -747,6 +766,18 @@ export default function BoardsPage() {
                         </ThemeIcon>
                     ))}
                 </Group>
+
+                <Select
+                    label="Board Template"
+                    placeholder="Choose a starting structure"
+                    data={Object.entries(BOARD_TEMPLATES).map(([key, t]) => ({ value: key, label: t.name }))}
+                    value={selectedTemplate}
+                    onChange={(val) => setSelectedTemplate(val as TemplateType)}
+                    mb={4}
+                />
+                <Text size="xs" c="dimmed" mb="md">
+                    {BOARD_TEMPLATES[selectedTemplate]?.description}
+                </Text>
 
                 <TextInput
                     label="Board Name"

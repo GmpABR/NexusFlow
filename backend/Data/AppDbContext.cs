@@ -23,6 +23,8 @@ public class AppDbContext : DbContext
     public DbSet<TaskLabel> TaskLabels { get; set; }
     public DbSet<Notification> Notifications { get; set; }
     public DbSet<TaskActivityReaction> TaskActivityReactions { get; set; }
+    public DbSet<BoardInvite> BoardInvites { get; set; }
+    public DbSet<WorkspaceInvite> WorkspaceInvites { get; set; }
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -221,6 +223,38 @@ public class AppDbContext : DbContext
                   .WithMany()
                   .HasForeignKey(r => r.UserId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // BoardInvite
+        modelBuilder.Entity<BoardInvite>(entity =>
+        {
+            entity.HasIndex(i => i.Token).IsUnique();
+
+            entity.HasOne(i => i.Board)
+                  .WithMany()
+                  .HasForeignKey(i => i.BoardId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(i => i.Creator)
+                  .WithMany()
+                  .HasForeignKey(i => i.CreatorId)
+                  .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // WorkspaceInvite
+        modelBuilder.Entity<WorkspaceInvite>(entity =>
+        {
+            entity.HasIndex(i => i.Token).IsUnique();
+
+            entity.HasOne(i => i.Workspace)
+                  .WithMany()
+                  .HasForeignKey(i => i.WorkspaceId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(i => i.Creator)
+                  .WithMany()
+                  .HasForeignKey(i => i.CreatorId)
+                  .OnDelete(DeleteBehavior.NoAction);
         });
     }
 }

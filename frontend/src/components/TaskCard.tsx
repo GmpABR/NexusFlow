@@ -35,9 +35,10 @@ interface Props {
     index: number;
     onDelete: (taskId: number) => void;
     onClick: (task: TaskCardType) => void;
+    isViewer?: boolean;
 }
 
-const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick }: Props) {
+const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick, isViewer = false }: Props) {
     const computedColorScheme = useComputedColorScheme('dark');
     const priorityColor =
         task.priority === 'Urgent' ? 'red' :
@@ -126,7 +127,9 @@ const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick }: Prop
                                         <Text size="xs" c="dimmed" opacity={0.7}>{task.attachments.length}</Text>
                                     </Group>
                                 )}
+                            </Group>
 
+                            {!isViewer && (
                                 <Menu position="bottom-end" shadow="md" withinPortal>
                                     <Menu.Target>
                                         <ActionIcon
@@ -148,7 +151,7 @@ const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick }: Prop
                                         </Menu.Item>
                                     </Menu.Dropdown>
                                 </Menu>
-                            </Group>
+                            )}
                         </Group>
 
                         {/* Labels Section */}
@@ -241,8 +244,9 @@ const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick }: Prop
                         </Group>
                     </Stack>
                 </Paper>
-            )}
-        </Draggable>
+            )
+            }
+        </Draggable >
     );
 });
 

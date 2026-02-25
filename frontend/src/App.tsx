@@ -7,6 +7,8 @@ import BoardPage from './pages/BoardPage';
 import WorkspaceDetailsPage from './pages/WorkspaceDetailsPage';
 import MyTasksPage from './pages/MyTasksPage';
 import ProfilePage from './pages/ProfilePage';
+import JoinBoardPage from './pages/JoinBoardPage';
+import JoinWorkspacePage from './pages/JoinWorkspacePage';
 import AppNavbar from './components/AppNavbar';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -75,6 +77,8 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/join/:token" element={<JoinBoardPage />} />
+        <Route path="/join/workspace/:token" element={<JoinWorkspacePage />} />
         <Route path="*" element={<Navigate to="/boards" replace />} />
       </Routes>
     </BrowserRouter>

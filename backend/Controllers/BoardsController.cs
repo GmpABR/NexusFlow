@@ -232,6 +232,39 @@ public class BoardsController : ControllerBase
 
         return Ok(column);
     }
+
+    [HttpPost("{id}/invites")]
+    public async Task<IActionResult> CreateInvite(int id, [FromBody] string role)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        try
+        {
+            var invite = await _boardService.CreateBoardInviteAsync(id, role, userId);
+            return Ok(invite);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Forbid(ex.Message);
+        }
+    }
+
+    [HttpGet("invites/{token}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetInvite(string token)
+    {
+        var invite = await _boardService.GetBoardInviteByTokenAsync(token);
+        if (invite == null) return NotFound("Invite not found or expired.");
+        return Ok(invite);
+    }
+
+    [HttpPost("invites/{token}/join")]
+    public async Task<IActionResult> JoinBoard(string token)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var result = await _boardService.AcceptBoardInviteAsync(token, userId);
+        if (!result) return BadRequest("Could not join board.");
+        return Ok();
+    }
 }
 
 

@@ -575,13 +575,15 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                     placeholder="Task title"
                                     required
                                     {...form.getInputProps('title')}
+                                    disabled={boardRole === 'Viewer'}
                                     styles={{
                                         input: {
                                             background: computedColorScheme === 'dark' ? '#25262b' : 'white',
                                             color: computedColorScheme === 'dark' ? 'white' : 'black',
                                             borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6',
                                             fontSize: '1.2rem',
-                                            fontWeight: 600
+                                            fontWeight: 600,
+                                            opacity: boardRole === 'Viewer' ? 0.9 : undefined
                                         }
                                     }}
                                 />
@@ -597,6 +599,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                             variant={task.isTimerRunning ? "light" : "filled"}
                                             color={task.isTimerRunning ? "red" : "blue"}
                                             onClick={handleToggleTimer}
+                                            disabled={boardRole === 'Viewer'}
                                             leftSection={task.isTimerRunning ? <IconPlayerStop size={14} /> : <IconPlayerPlay size={14} />}
                                         >
                                             {task.isTimerRunning ? "Stop" : "Start"}
@@ -612,6 +615,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                     content={form.values.description}
                                     onChange={(val) => form.setFieldValue('description', val)}
                                     title={form.values.title}
+                                    editable={boardRole !== 'Viewer'}
                                 />
                             </Stack>
 
@@ -625,7 +629,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                             color="violet"
                                             leftSection={isGeneratingSubtasks ? <Loader size={10} color="violet" /> : <IconWand size={12} />}
                                             onClick={handleGenerateSubtasks}
-                                            disabled={isGeneratingSubtasks || !form.values.description.trim()}
+                                            disabled={isGeneratingSubtasks || !form.values.description.trim() || boardRole === 'Viewer'}
                                         >
                                             AI Breakdown
                                         </Button>
@@ -647,6 +651,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                                 checked={subtask.isCompleted}
                                                 onChange={(e) => handleToggleSubtask(subtask.id, e.currentTarget.checked)}
                                                 color="teal"
+                                                disabled={boardRole === 'Viewer'}
                                             />
                                             <Text
                                                 size="sm"
@@ -656,27 +661,31 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                             >
                                                 {subtask.title}
                                             </Text>
-                                            <ActionIcon color="red" variant="subtle" size="sm" onClick={() => handleDeleteSubtask(subtask.id)}>
-                                                <IconTrash size={14} />
-                                            </ActionIcon>
+                                            {boardRole !== 'Viewer' && (
+                                                <ActionIcon color="red" variant="subtle" size="sm" onClick={() => handleDeleteSubtask(subtask.id)}>
+                                                    <IconTrash size={14} />
+                                                </ActionIcon>
+                                            )}
                                         </Group>
                                     ))}
                                 </Stack>
-                                <Group gap="xs" mt="xs">
-                                    <TextInput
-                                        placeholder="Add a subtask..."
-                                        style={{ flex: 1 }}
-                                        value={newSubtaskTitle}
-                                        onChange={(e) => setNewSubtaskTitle(e.currentTarget.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') { e.preventDefault(); handleAddSubtask(); }
-                                        }}
-                                        styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
-                                    />
-                                    <Button size="sm" color="violet" onClick={handleAddSubtask} disabled={!newSubtaskTitle.trim() || isAddingSubtask} type="button">
-                                        {isAddingSubtask ? 'Adding...' : 'Add'}
-                                    </Button>
-                                </Group>
+                                {boardRole !== 'Viewer' && (
+                                    <Group gap="xs" mt="xs">
+                                        <TextInput
+                                            placeholder="Add a subtask..."
+                                            style={{ flex: 1 }}
+                                            value={newSubtaskTitle}
+                                            onChange={(e) => setNewSubtaskTitle(e.currentTarget.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') { e.preventDefault(); handleAddSubtask(); }
+                                            }}
+                                            styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
+                                        />
+                                        <Button size="sm" color="violet" onClick={handleAddSubtask} disabled={!newSubtaskTitle.trim() || isAddingSubtask} type="button">
+                                            {isAddingSubtask ? 'Adding...' : 'Add'}
+                                        </Button>
+                                    </Group>
+                                )}
                             </Stack>
 
                             <Group grow mb="md">
@@ -685,12 +694,14 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                     data={['Low', 'Medium', 'High', 'Urgent']}
                                     {...form.getInputProps('priority')}
                                     comboboxProps={{ zIndex: 3000 }}
+                                    disabled={boardRole === 'Viewer'}
                                     styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
                                 />
                                 <NumberInput
                                     label="Story Points"
                                     min={0}
                                     {...form.getInputProps('storyPoints')}
+                                    disabled={boardRole === 'Viewer'}
                                     styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
                                 />
                             </Group>
@@ -705,6 +716,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                     clearable
                                     {...form.getInputProps('dueDate')}
                                     popoverProps={{ zIndex: 3000 }}
+                                    disabled={boardRole === 'Viewer'}
                                     styles={{
                                         input: {
                                             background: computedColorScheme === 'dark' ? '#25262b' : 'white',
@@ -722,6 +734,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                     searchable
                                     {...form.getInputProps('assigneeIds')}
                                     comboboxProps={{ zIndex: 3000 }}
+                                    disabled={boardRole === 'Viewer'}
                                     renderOption={({ option }) => {
                                         const m = members.find(mbr => mbr.userId.toString() === option.value);
                                         return (
@@ -773,68 +786,70 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                         );
                                     })}
 
-                                    <Menu position="bottom-start" shadow="md" withinPortal closeOnItemClick={false}>
-                                        <Menu.Target>
-                                            <ActionIcon variant="light" color="gray" radius="xl" size="sm">
-                                                <IconPlus size={14} />
-                                            </ActionIcon>
-                                        </Menu.Target>
-                                        <Menu.Dropdown styles={{ dropdown: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', border: `1px solid ${computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'}`, width: 220, zIndex: 3000 } }}>
-                                            <Box p="xs">
-                                                <Text size="xs" fw={700} c="dimmed" mb={8} style={{ textTransform: 'uppercase' }}>Select Label</Text>
-                                                <TextInput
-                                                    placeholder="Search labels..."
-                                                    size="xs"
-                                                    value={labelSearch}
-                                                    onChange={(e) => setLabelSearch(e.currentTarget.value)}
-                                                    mb={4}
-                                                    autoFocus
-                                                    styles={{ input: { background: computedColorScheme === 'dark' ? '#1a1b1e' : '#f8f9fa', color: computedColorScheme === 'dark' ? 'white' : 'black' } }}
-                                                />
-                                            </Box>
-                                            <ScrollArea.Autosize mah={200} offsetScrollbars>
-                                                <Stack gap={4} p="xs">
-                                                    {boardLabels
-                                                        .filter(l => l.name.toLowerCase().includes(labelSearch.toLowerCase()))
-                                                        .map(label => (
-                                                            <Group
-                                                                key={label.id}
-                                                                gap="xs"
-                                                                style={{
-                                                                    padding: '4px 8px',
-                                                                    borderRadius: 4,
-                                                                    cursor: 'pointer',
-                                                                    background: form.values.labelIds.includes(label.id.toString()) ? (computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)') : 'transparent'
-                                                                }}
-                                                                onClick={() => {
-                                                                    const idStr = label.id.toString();
-                                                                    const current = form.values.labelIds;
-                                                                    if (current.includes(idStr)) {
-                                                                        form.setFieldValue('labelIds', current.filter(cid => cid !== idStr));
-                                                                    } else {
-                                                                        form.setFieldValue('labelIds', [...current, idStr]);
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <Box style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: label.color }} />
-                                                                <Text size="sm" style={{ flex: 1 }} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{label.name}</Text>
-                                                                {form.values.labelIds.includes(label.id.toString()) && <Badge size="xs" variant="dot" color="blue">Selected</Badge>}
-                                                            </Group>
-                                                        ))}
-                                                </Stack>
-                                            </ScrollArea.Autosize>
+                                    {boardRole !== 'Viewer' && (
+                                        <Menu position="bottom-start" shadow="md" withinPortal closeOnItemClick={false}>
+                                            <Menu.Target>
+                                                <ActionIcon variant="light" color="gray" radius="xl" size="sm">
+                                                    <IconPlus size={14} />
+                                                </ActionIcon>
+                                            </Menu.Target>
+                                            <Menu.Dropdown styles={{ dropdown: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', border: `1px solid ${computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'}`, width: 220, zIndex: 3000 } }}>
+                                                <Box p="xs">
+                                                    <Text size="xs" fw={700} c="dimmed" mb={8} style={{ textTransform: 'uppercase' }}>Select Label</Text>
+                                                    <TextInput
+                                                        placeholder="Search labels..."
+                                                        size="xs"
+                                                        value={labelSearch}
+                                                        onChange={(e) => setLabelSearch(e.currentTarget.value)}
+                                                        mb={4}
+                                                        autoFocus
+                                                        styles={{ input: { background: computedColorScheme === 'dark' ? '#1a1b1e' : '#f8f9fa', color: computedColorScheme === 'dark' ? 'white' : 'black' } }}
+                                                    />
+                                                </Box>
+                                                <ScrollArea.Autosize mah={200} offsetScrollbars>
+                                                    <Stack gap={4} p="xs">
+                                                        {boardLabels
+                                                            .filter(l => l.name.toLowerCase().includes(labelSearch.toLowerCase()))
+                                                            .map(label => (
+                                                                <Group
+                                                                    key={label.id}
+                                                                    gap="xs"
+                                                                    style={{
+                                                                        padding: '4px 8px',
+                                                                        borderRadius: 4,
+                                                                        cursor: 'pointer',
+                                                                        background: form.values.labelIds.includes(label.id.toString()) ? (computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)') : 'transparent'
+                                                                    }}
+                                                                    onClick={() => {
+                                                                        const idStr = label.id.toString();
+                                                                        const current = form.values.labelIds;
+                                                                        if (current.includes(idStr)) {
+                                                                            form.setFieldValue('labelIds', current.filter(cid => cid !== idStr));
+                                                                        } else {
+                                                                            form.setFieldValue('labelIds', [...current, idStr]);
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <Box style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: label.color }} />
+                                                                    <Text size="sm" style={{ flex: 1 }} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{label.name}</Text>
+                                                                    {form.values.labelIds.includes(label.id.toString()) && <Badge size="xs" variant="dot" color="blue">Selected</Badge>}
+                                                                </Group>
+                                                            ))}
+                                                    </Stack>
+                                                </ScrollArea.Autosize>
 
-                                            <Menu.Divider />
-                                            <div style={{ padding: 8 }}>
-                                                <CreateNewLabelPopover boardId={task.boardId} onCreated={(newLabel) => {
-                                                    const currentIds = form.values.labelIds;
-                                                    if (!currentIds.includes(newLabel.id.toString())) {
-                                                        form.setFieldValue('labelIds', [...currentIds, newLabel.id.toString()]);
-                                                    }
-                                                }} />
-                                            </div>
-                                        </Menu.Dropdown>
-                                    </Menu>
+                                                <Menu.Divider />
+                                                <div style={{ padding: 8 }}>
+                                                    <CreateNewLabelPopover boardId={task.boardId} onCreated={(newLabel) => {
+                                                        const currentIds = form.values.labelIds;
+                                                        if (!currentIds.includes(newLabel.id.toString())) {
+                                                            form.setFieldValue('labelIds', [...currentIds, newLabel.id.toString()]);
+                                                        }
+                                                    }} />
+                                                </div>
+                                            </Menu.Dropdown>
+                                        </Menu>
+                                    )}
                                 </Group>
                             </Stack>
 
@@ -853,7 +868,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                         variant="light"
                                         color="violet"
                                         leftSection={isUploading ? <Loader size={10} color="white" /> : <IconUpload size={12} />}
-                                        disabled={isUploading}
+                                        disabled={isUploading || boardRole === 'Viewer'}
                                         onClick={() => fileInputRef.current?.click()}
                                         type="button"
                                     >
@@ -975,7 +990,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                                 color="violet"
                                                 leftSection={isGeneratingErDiagram ? <Loader size={12} /> : <IconDatabase size={14} />}
                                                 onClick={handleGenerateErDiagram}
-                                                disabled={isGeneratingErDiagram || !form.values.title}
+                                                disabled={isGeneratingErDiagram || !form.values.title || boardRole === 'Viewer'}
                                                 loading={isGeneratingErDiagram}
                                             >
                                                 {form.values.erDiagramPuml ? 'Regenerate' : 'Generate'}
@@ -1008,16 +1023,13 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                                                     <IconPlus size={14} style={{ transform: 'rotate(45deg)' }} />
                                                                 </ActionIcon>
                                                             </Tooltip>
-                                                            <Tooltip label="Export to PDF">
-                                                                <ActionIcon size="sm" variant="subtle" color="blue" onClick={() => handleExportToPDF(dia)}>
-                                                                    <IconDownload size={14} />
-                                                                </ActionIcon>
-                                                            </Tooltip>
-                                                            <Tooltip label="Delete">
-                                                                <ActionIcon size="sm" variant="subtle" color="red" onClick={() => handleDeleteAttachment(dia)}>
-                                                                    <IconTrash size={14} />
-                                                                </ActionIcon>
-                                                            </Tooltip>
+                                                            {boardRole !== 'Viewer' && (
+                                                                <Tooltip label="Delete">
+                                                                    <ActionIcon size="sm" variant="subtle" color="red" onClick={() => handleDeleteAttachment(dia)}>
+                                                                        <IconTrash size={14} />
+                                                                    </ActionIcon>
+                                                                </Tooltip>
+                                                            )}
                                                         </Group>
                                                     </Group>
                                                 ))}
@@ -1035,15 +1047,18 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                 leftSection={<IconTag size={16} />}
                                 mb="xl"
                                 {...form.getInputProps('tags')}
+                                disabled={boardRole === 'Viewer'}
                                 comboboxProps={{ zIndex: 3001 }}
                                 styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
                             />
 
                             <Group justify="flex-end" mt="md" pb="lg">
                                 <Button variant="default" onClick={onClose} styles={{ root: { background: 'transparent', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}>
-                                    Cancel
+                                    {boardRole === 'Viewer' ? 'Close' : 'Cancel'}
                                 </Button>
-                                <Button type="submit" color="violet">Save Changes</Button>
+                                {boardRole !== 'Viewer' && (
+                                    <Button type="submit" color="violet">Save Changes</Button>
+                                )}
                             </Group>
                         </form>
                     </ScrollArea>

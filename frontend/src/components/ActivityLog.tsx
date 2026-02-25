@@ -32,7 +32,7 @@ export default function ActivityLog({ activities, currentUserId, boardRole, onRe
     };
 
     const canEdit = (activity: TaskActivity) => {
-        return activity.action === 'Commented' && activity.userId == currentUserId;
+        return activity.action === 'Commented' && activity.userId == currentUserId && boardRole !== 'Viewer';
     };
 
     const handleDelete = async (id: number) => {
@@ -285,9 +285,12 @@ export default function ActivityLog({ activities, currentUserId, boardRole, onRe
                                                 <Badge
                                                     variant={group.hasReacted ? "filled" : "light"}
                                                     color={group.hasReacted ? "violet" : "gray"}
-                                                    size="sm"
-                                                    style={{ cursor: 'pointer', textTransform: 'none', padding: '0 6px' }}
-                                                    onClick={() => handleReaction(activity.id, group.emoji)}
+                                                    onClick={() => {
+                                                        if (boardRole !== 'Viewer') {
+                                                            handleReaction(activity.id, group.emoji);
+                                                        }
+                                                    }}
+                                                    style={{ cursor: boardRole === 'Viewer' ? 'default' : 'pointer', textTransform: 'none', padding: '0 6px' }}
                                                 >
                                                     {group.emoji} {group.count}
                                                 </Badge>
@@ -310,6 +313,7 @@ export default function ActivityLog({ activities, currentUserId, boardRole, onRe
                                                     color="gray"
                                                     radius="xl"
                                                     title="Add reaction"
+                                                    disabled={boardRole === 'Viewer'}
                                                     onClick={() => setOpenedPickerId(openedPickerId === activity.id ? null : activity.id)}
                                                 >
                                                     <IconPlus size={12} />

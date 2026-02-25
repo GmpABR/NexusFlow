@@ -21,13 +21,15 @@ import {
     Menu,
     ActionIcon,
     ThemeIcon,
+    TextInput,
     useComputedColorScheme,
 } from '@mantine/core';
-import { IconLayoutBoard, IconUsers, IconPlus, IconArrowLeft, IconCheck, IconPalette, IconChartBar, IconSettings, IconLock, IconTrash } from '@tabler/icons-react';
+import { IconLayoutBoard, IconUsers, IconPlus, IconArrowLeft, IconCheck, IconPalette, IconChartBar, IconSettings, IconLock, IconTrash, IconLink, IconCopy } from '@tabler/icons-react';
 import WorkspaceOverview from '../components/WorkspaceOverview';
 import { useDebouncedValue } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { getWorkspace, getWorkspaceBoards, addWorkspaceMember, removeWorkspaceMember, type Workspace } from '../api/workspaces';
+import { getWorkspace, getWorkspaceBoards, addWorkspaceMember, removeWorkspaceMember, createWorkspaceInvite, type Workspace } from '../api/workspaces';
+import { useClipboard } from '@mantine/hooks';
 import { updateBoard, closeBoard, deleteBoard, type BoardSummary } from '../api/boards';
 import { searchUsers, type UserSummary } from '../api/users';
 import { BOARD_THEMES, type ThemeColor } from '../constants/themes';
@@ -58,6 +60,9 @@ export default function WorkspaceDetailsPage() {
     // Board Action State
     const [closeBoardTarget, setCloseBoardTarget] = useState<number | null>(null);
     const [deleteBoardTarget, setDeleteBoardTarget] = useState<number | null>(null);
+    const [inviteLink, setInviteLink] = useState<string | null>(null);
+    const [generatingLink, setGeneratingLink] = useState(false);
+    const clipboard = useClipboard({ timeout: 2000 });
 
     useEffect(() => {
         if (debouncedSearch) {
@@ -180,6 +185,24 @@ export default function WorkspaceDetailsPage() {
             if (id) fetchWorkspace(parseInt(id));
         } catch {
             notifications.show({ title: 'Error', message: 'Failed to delete board.', color: 'red' });
+        };
+    };
+    const handleGenerateInviteLink = async () => {
+        if (!workspace) return;
+        setGeneratingLink(true);
+        try {
+            const invite = await createWorkspaceInvite(workspace.id, 'Member');
+            const url = `${window.location.origin}/join/workspace/${invite.token}`;
+            setInviteLink(url);
+            notifications.show({
+                title: 'Link Generated',
+                message: 'Invite link created successfully.',
+                color: 'violet'
+            });
+        } catch (error) {
+            notifications.show({ title: 'Error', message: 'Failed to generate invite link.', color: 'red' });
+        } finally {
+            setGeneratingLink(false);
         }
     };
 
@@ -356,6 +379,71 @@ export default function WorkspaceDetailsPage() {
                                 Add Member
                             </Button>
                         </Group>
+
+                        <Paper
+                            p="md"
+                            mb="xl"
+                            radius="md"
+                            withBorder
+                            style={{
+                                background: computedColorScheme === 'dark' ? 'rgba(124, 58, 237, 0.05)' : '#f3f0ff',
+                                borderColor: 'rgba(124, 58, 237, 0.2)'
+                            }}
+                        >
+                            <Stack gap="sm">
+                                <Group justify="space-between">
+                                    <Group gap="xs">
+                                        <ThemeIcon color="violet" variant="light" radius="md">
+                                            <IconLink size={18} />
+                                        </ThemeIcon>
+                                        <div>
+                                            <Text fw={600} size="sm">Invite via link</Text>
+                                            <Text size="xs" c="dimmed">Anyone with the link can join as a member</Text>
+                                        </div>
+                                    </Group>
+                                    {!inviteLink ? (
+                                        <Button
+                                            variant="light"
+                                            color="violet"
+                                            size="xs"
+                                            onClick={handleGenerateInviteLink}
+                                            loading={generatingLink}
+                                        >
+                                            Create Link
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            variant="light"
+                                            color="gray"
+                                            size="xs"
+                                            onClick={() => setInviteLink(null)}
+                                        >
+                                            Reset
+                                        </Button>
+                                    )}
+                                </Group>
+
+                                {inviteLink && (
+                                    <Group gap="xs">
+                                        <TextInput
+                                            variant="filled"
+                                            value={inviteLink}
+                                            readOnly
+                                            style={{ flex: 1 }}
+                                            styles={{ input: { fontSize: '12px' } }}
+                                        />
+                                        <Button
+                                            color={clipboard.copied ? 'teal' : 'violet'}
+                                            variant="light"
+                                            onClick={() => clipboard.copy(inviteLink)}
+                                            leftSection={clipboard.copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
+                                        >
+                                            {clipboard.copied ? 'Copied' : 'Copy'}
+                                        </Button>
+                                    </Group>
+                                )}
+                            </Stack>
+                        </Paper>
                         <Stack>
                             {workspace.members.map((member) => (
                                 <Paper

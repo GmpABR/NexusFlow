@@ -29,7 +29,9 @@ public class BoardService : IBoardService
                 Role = b.OwnerId == userId ? "Owner" : "Member",
                 ThemeColor = b.ThemeColor,
                 WorkspaceId = b.WorkspaceId,
-                IsClosed = b.IsClosed
+                IsClosed = b.IsClosed,
+                OpenTasksCount = b.Columns.SelectMany(c => c.TaskCards)
+                    .Count(t => !t.Column.Name.ToLower().Contains("done") && !t.Column.Name.ToLower().Contains("complete"))
             })
             .ToListAsync();
     }
@@ -47,7 +49,9 @@ public class BoardService : IBoardService
                 Role = "Invited",
                 ThemeColor = b.ThemeColor,
                 WorkspaceId = b.WorkspaceId,
-                IsClosed = b.IsClosed
+                IsClosed = b.IsClosed,
+                OpenTasksCount = b.Columns.SelectMany(c => c.TaskCards)
+                    .Count(t => !t.Column.Name.ToLower().Contains("done") && !t.Column.Name.ToLower().Contains("complete"))
             })
             .ToListAsync();
     }
@@ -562,5 +566,89 @@ public class BoardService : IBoardService
             Order = column.Order,
             TaskCards = new List<TaskCardDto>() // Not returning tasks here for simplicity
         };
+    }
+
+    public async Task<BoardInviteDto> CreateBoardInviteAsync(int boardId, string role, int requesterId)
+    {
+        var board = await _db.Boards.FindAsync(boardId);
+        if (board == null || board.OwnerId != requesterId)
+            throw new UnauthorizedAccessException("Only the board owner can create invite links.");
+
+        var invite = new BoardInvite
+        {
+            Token = Guid.NewGuid().ToString("N"),
+            BoardId = boardId,
+            Role = role,
+            CreatorId = requesterId,
+            CreatedAt = DateTime.UtcNow,
+            IsActive = true
+        };
+
+        _db.BoardInvites.Add(invite);
+        await _db.SaveChangesAsync();
+
+        return new BoardInviteDto
+        {
+            Token = invite.Token,
+            Role = invite.Role,
+            BoardId = invite.BoardId,
+            BoardName = board.Name,
+            CreatedAt = invite.CreatedAt
+        };
+    }
+
+    public async Task<BoardInviteDto?> GetBoardInviteByTokenAsync(string token)
+    {
+        var invite = await _db.BoardInvites
+            .Include(i => i.Board)
+            .FirstOrDefaultAsync(i => i.Token == token && i.IsActive);
+
+        if (invite == null) return null;
+
+        return new BoardInviteDto
+        {
+            Token = invite.Token,
+            Role = invite.Role,
+            BoardId = invite.BoardId,
+            BoardName = invite.Board.Name,
+            CreatedAt = invite.CreatedAt
+        };
+    }
+
+    public async Task<bool> AcceptBoardInviteAsync(string token, int userId)
+    {
+        var invite = await _db.BoardInvites
+            .Include(i => i.Board)
+            .FirstOrDefaultAsync(i => i.Token == token && i.IsActive);
+
+        if (invite == null) return false;
+
+        // Check if already a member
+        var existing = await _db.BoardMembers
+            .FirstOrDefaultAsync(m => m.BoardId == invite.BoardId && m.UserId == userId);
+
+        if (existing != null)
+        {
+            if (existing.Status == "Accepted") return true; // Already joined
+            
+            // Update role if joining via a different link? 
+            // For now, just accept the existing one and update status.
+            existing.Status = "Accepted";
+            existing.Role = invite.Role;
+        }
+        else
+        {
+            var member = new BoardMember
+            {
+                BoardId = invite.BoardId,
+                UserId = userId,
+                Role = invite.Role,
+                Status = "Accepted"
+            };
+            _db.BoardMembers.Add(member);
+        }
+
+        await _db.SaveChangesAsync();
+        return true;
     }
 }

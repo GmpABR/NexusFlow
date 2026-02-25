@@ -20,5 +20,10 @@ public interface IBoardService
     Task<bool> MoveColumnAsync(int boardId, int columnId, int newOrder, int userId);
     Task<bool> DeleteColumnAsync(int boardId, int columnId, int userId);
     Task<ColumnDto?> UpdateColumnAsync(int boardId, int columnId, UpdateColumnDto dto, int userId);
+    
+    // Invite Link Management
+    Task<BoardInviteDto> CreateBoardInviteAsync(int boardId, string role, int requesterId);
+    Task<BoardInviteDto?> GetBoardInviteByTokenAsync(string token);
+    Task<bool> AcceptBoardInviteAsync(string token, int userId);
 }
 

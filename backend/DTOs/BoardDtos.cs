@@ -20,6 +20,7 @@ public class BoardSummaryDto
     public string ThemeColor { get; set; } = "blue";
     public int? WorkspaceId { get; set; }
     public bool IsClosed { get; set; }
+    public int OpenTasksCount { get; set; }
 }
 
 public class ColumnDto
@@ -66,4 +67,14 @@ public class UpdateColumnDto
 {
     [Required, MinLength(1)]
     public string Name { get; set; } = string.Empty;
+}
+
+public class BoardInviteDto
+{
+    public string Token { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    public int BoardId { get; set; }
+    public string BoardName { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public DateTime? ExpiresAt { get; set; }
 }

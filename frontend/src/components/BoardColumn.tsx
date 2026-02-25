@@ -28,6 +28,7 @@ interface Props {
     dragHandleProps?: any;
     isClosed?: boolean;
     showAI?: boolean;
+    isViewer?: boolean;
 }
 
 const BoardColumn = memo(function BoardColumn({
@@ -43,7 +44,8 @@ const BoardColumn = memo(function BoardColumn({
     draggableProps,
     dragHandleProps,
     isClosed = false,
-    showAI = false
+    showAI = false,
+    isViewer = false
 }: Props) {
     const navigate = useNavigate();
     const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -206,9 +208,9 @@ const BoardColumn = memo(function BoardColumn({
                                 fw={700}
                                 size="md"
                                 c={computedColorScheme === 'dark' ? 'white' : 'dark'}
-                                style={{ letterSpacing: '0.2px', cursor: isClosed ? 'default' : 'pointer' }}
+                                style={{ letterSpacing: '0.2px', cursor: (isClosed || isViewer) ? 'default' : 'pointer' }}
                                 onDoubleClick={() => {
-                                    if (isClosed) return;
+                                    if (isClosed || isViewer) return;
                                     setIsRenaming(true);
                                 }}
                             >
@@ -223,7 +225,7 @@ const BoardColumn = memo(function BoardColumn({
                     </Group>
 
                     {/* Column Actions Menu */}
-                    {!isClosed && (
+                    {(!isClosed && !isViewer) && (
                         <Menu position="bottom-end" shadow="md" width={160}>
                             <Menu.Target>
                                 <ActionIcon variant="subtle" color="gray" size="sm">
@@ -276,6 +278,7 @@ const BoardColumn = memo(function BoardColumn({
                                         index={index}
                                         onDelete={onDeleteTask}
                                         onClick={onTaskClick}
+                                        isViewer={isViewer}
                                     />
                                 </div>
                             ))}
@@ -285,7 +288,7 @@ const BoardColumn = memo(function BoardColumn({
                 </Droppable>
 
                 {/* Add Task */}
-                {!isClosed && (
+                {(!isClosed && !isViewer) && (
                     <Group mt="md" gap="xs">
                         {showInput ? (
                             <Box style={{ flex: 1 }}>
