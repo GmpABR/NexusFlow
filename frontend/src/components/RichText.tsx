@@ -7,9 +7,7 @@ import Superscript from '@tiptap/extension-superscript';
 import SubScript from '@tiptap/extension-subscript';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Menu, Loader, Tooltip, Group, Modal, TextInput, Button, Stack, Text, useComputedColorScheme } from '@mantine/core';
-import { IconPlus, IconSparkles, IconWand, IconArrowRight, IconBriefcase, IconMessageCircle } from '@tabler/icons-react';
-import Underline from '@tiptap/extension-underline';
-import Link from '@tiptap/extension-link';
+import { IconPlus, IconSparkles, IconWand, IconArrowRight, IconBriefcase, IconMessageCircle, IconPencilPlus } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { enhanceText, type AIMode, getApiKey } from '../api/ai';
@@ -20,26 +18,30 @@ interface RichTextProps {
     content: string;
     onChange: (content: string) => void;
     editable?: boolean;
+    title?: string;
 }
 
-export default function RichText({ content, onChange, editable = true }: RichTextProps) {
+export default function RichText({ content, onChange, editable = true, title }: RichTextProps) {
     const computedColorScheme = useComputedColorScheme('dark');
     const navigate = useNavigate();
     const [isAILoading, setIsAILoading] = useState(false);
     const [customPromptOpen, setCustomPromptOpen] = useState(false);
     const [customPrompt, setCustomPrompt] = useState('');
+    const [lastExternalContent, setLastExternalContent] = useState(content);
+
     const editor = useEditor({
         extensions: [
             StarterKit,
-            Underline,
-            Link.configure({
-                openOnClick: false,
-                HTMLAttributes: {
-                    target: '_blank',
-                    rel: 'noopener noreferrer',
-                    class: 'editor-link',
-                },
-            }),
+            // Commenting out these as they may be causing duplicate warnings with the current bundle/version
+            // Underline,
+            // Link.configure({
+            //     openOnClick: false,
+            //     HTMLAttributes: {
+            //         target: '_blank',
+            //         rel: 'noopener noreferrer',
+            //         class: 'editor-link',
+            //     },
+            // }),
             Superscript,
             SubScript,
             Highlight,
@@ -48,21 +50,26 @@ export default function RichText({ content, onChange, editable = true }: RichTex
         ],
         content,
         onUpdate: ({ editor }) => {
-            onChange(editor.getHTML());
+            const html = editor.getHTML();
+            setLastExternalContent(html);
+            onChange(html);
         },
         editable,
+        immediatelyRender: false, // Recommended for SSR/Consistency
     });
 
     // Update content if changed externally (e.g. initial load or SignalR)
     useEffect(() => {
-        if (!editor) return;
+        if (!editor || content === lastExternalContent) return;
 
-        if (content !== editor.getHTML()) {
-            if (!editor.isFocused || editor.isEmpty) {
-                editor.commands.setContent(content);
-            }
+        console.log(`[RichText] Content prop updated. External: ${content.substring(0, 30)}... | Editor: ${editor.getHTML().substring(0, 30)}...`);
+
+        if (!editor.isFocused) {
+            console.log(`[RichText] Syncing content to editor.`);
+            editor.commands.setContent(content, { emitUpdate: false });
+            setLastExternalContent(content);
         }
-    }, [content, editor]);
+    }, [content, editor, lastExternalContent]);
 
     const handleAIEnchant = async (mode: AIMode = 'enhance', customInstruction?: string) => {
         if (!editor) return;
@@ -92,10 +99,12 @@ export default function RichText({ content, onChange, editable = true }: RichTex
         }
 
         const currentText = editor.getText();
-        if (!currentText.trim() || currentText.length < 3) {
-            notifications.show({ title: 'AI Assistant', message: 'Please write a bit more so I can understand your task!', color: 'blue' });
+        if (!currentText.trim() && mode !== 'custom' && mode !== 'write_title') {
+            notifications.show({ title: 'AI Assistant', message: 'Please provide some text to improve!', color: 'blue' });
             return;
         }
+
+        const inputForAI = mode === 'write_title' ? (title || currentText) : currentText;
 
         setIsAILoading(true);
         const loadingId = notifications.show({
@@ -107,7 +116,10 @@ export default function RichText({ content, onChange, editable = true }: RichTex
         });
 
         try {
-            const improved = await enhanceText(currentText, mode, customInstruction);
+            let improved = await enhanceText(inputForAI, mode, customInstruction);
+
+            // Safety net: Aggressively strip any remaining double asterisks (**)
+            improved = improved.replace(/\*\*/g, '');
 
             // We use setContent which Tiptap handles well for markdown-like text
             editor.commands.setContent(improved);
@@ -193,7 +205,7 @@ export default function RichText({ content, onChange, editable = true }: RichTex
                     </RichTextEditor.ControlsGroup>
 
                     <RichTextEditor.ControlsGroup>
-                        <Menu shadow="md" width={200} position="bottom-end">
+                        <Menu shadow="md" width={200} position="bottom-end" withinPortal zIndex={3005}>
                             <Menu.Target>
                                 <Tooltip label="AI Assistant" withArrow>
                                     <RichTextEditor.Control
@@ -217,6 +229,14 @@ export default function RichText({ content, onChange, editable = true }: RichTex
                                 }}
                             >
                                 <Menu.Label c={computedColorScheme === 'dark' ? 'dimmed' : 'gray.6'}>AI Features</Menu.Label>
+                                {title && (
+                                    <Menu.Item
+                                        leftSection={<IconPencilPlus size={14} />}
+                                        onClick={() => handleAIEnchant('write_title')}
+                                    >
+                                        Write from Title
+                                    </Menu.Item>
+                                )}
                                 <Menu.Item
                                     leftSection={<IconSparkles size={14} />}
                                     onClick={() => handleAIEnchant('enhance')}
@@ -254,7 +274,7 @@ export default function RichText({ content, onChange, editable = true }: RichTex
 
                     {/* Extras in a Menu */}
                     <RichTextEditor.ControlsGroup>
-                        <Menu shadow="md" width={160} position="bottom-end">
+                        <Menu shadow="md" width={160} position="bottom-end" withinPortal zIndex={3005}>
                             <Menu.Target>
                                 <RichTextEditor.Control title="More options">
                                     <IconPlus size={18} stroke={2.5} />
@@ -283,6 +303,7 @@ export default function RichText({ content, onChange, editable = true }: RichTex
                 onClose={() => setCustomPromptOpen(false)}
                 title="Custom AI Instruction"
                 centered
+                zIndex={3200}
                 styles={{
                     content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
                     header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },

@@ -528,7 +528,9 @@ export default function BoardPage() {
     const handleAddTask = useCallback(async (columnId: number, title: string, description?: string, priority?: string) => {
         if (board?.isClosed) return;
         try {
+            console.log(`[BoardPage] handleAddTask called for Column: ${columnId}`, { title, descLength: description?.length });
             const newTask = await createTask(title, columnId, description, priority);
+            console.log(`[BoardPage] Received from Backend:`, { id: newTask.id, title: newTask.title, descHash: newTask.description?.substring(0, 20) + "..." });
             setBoard((prev) => {
                 if (!prev) return prev;
                 // Check duplication strictly
@@ -1311,7 +1313,7 @@ export default function BoardPage() {
                                         >
                                             {m.role}
                                         </Badge>
-                                        {isOwner && m.role !== 'Owner' && (
+                                        {isOwner && m.role !== 'Owner' && !m.isWorkspaceMember && (
                                             <ActionIcon
                                                 variant="subtle"
                                                 color="red"
@@ -1338,6 +1340,7 @@ export default function BoardPage() {
 
             {/* Task Detail Modal */}
             < TaskDetailModal
+                key={selectedTask?.id ?? 'none'}
                 opened={taskModalOpen}
                 onClose={() => setTaskModalOpen(false)}
                 task={selectedTask}

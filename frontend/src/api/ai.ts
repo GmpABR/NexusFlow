@@ -54,7 +54,7 @@ const PRIMARY_MODEL = "stepfun/step-3.5-flash:free";
 const FALLBACK_MODEL = "google/gemini-2.0-flash-exp:free";
 const BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-export type AIMode = 'enhance' | 'grammar' | 'shorten' | 'professional' | 'custom';
+export type AIMode = 'enhance' | 'grammar' | 'shorten' | 'professional' | 'custom' | 'write_title';
 
 /**
  * Extracts JSON object or array from a string
@@ -127,14 +127,22 @@ const callOpenRouter = async (prompt: string, isJson: boolean = false, useFallba
 
 export const enhanceText = async (text: string, mode: AIMode = 'enhance', customInstruction?: string): Promise<string> => {
     let systemPrompt = "";
+    const cleanRule = "CRITICAL: You are FORBIDDEN from using double asterisks (**) for bolding. Use plain text for headers and simple dashes (-) for lists. Output MUST be clean, professional, and free of markdown bold markers.";
+
     switch (mode) {
-        case 'grammar': systemPrompt = "Fix grammar and spelling. Return only corrected text."; break;
-        case 'shorten': systemPrompt = "Condense text. Return only shortened text."; break;
-        case 'professional': systemPrompt = "Rewrite professionally. Return only rewritten text."; break;
-        case 'custom': systemPrompt = customInstruction || "Follow instructions."; break;
-        default: systemPrompt = "Improve clarity and structure. Return only improved text."; break;
+        case 'grammar': systemPrompt = `Fix grammar and spelling. ${cleanRule} Return only corrected text.`; break;
+        case 'shorten': systemPrompt = `Condense text while keeping key info. ${cleanRule} Return only shortened text.`; break;
+        case 'professional': systemPrompt = `Rewrite professionally. ${cleanRule} Return only rewritten text.`; break;
+        case 'custom': systemPrompt = `${customInstruction || "Follow instructions."} ${cleanRule}`; break;
+        case 'write_title': systemPrompt = `Write a concise, professional task description based on the provided title. ${cleanRule} Focus on goals and scope.`; break;
+        default: systemPrompt = `Improve clarity and structure. ${cleanRule} Return only improved text.`; break;
     }
-    return callOpenRouter(`${systemPrompt}\n\nText:\n${text}`);
+
+    const prompt = text.trim()
+        ? `${systemPrompt}\n\nText:\n${text}`
+        : `Instruction: ${systemPrompt}\n\nTask: Generate professional content based on the instruction above.`;
+
+    return callOpenRouter(prompt);
 };
 
 export const generateSubtasks = async (description: string): Promise<string[]> => {
@@ -192,20 +200,56 @@ Project Idea: ${projectIdea}`;
 };
 
 export const generateTasksForColumn = async (columnName: string, existingTasks: string[] = [], projectContext: string = "", extraInstruction: string = ""): Promise<{ title: string; description: string; priority: 'Low' | 'Medium' | 'High' }[]> => {
-    const prompt = `Generate 3-5 high-quality tasks for a board column named "${columnName}". 
-JSON ONLY. No preamble.
-${projectContext ? `Context: ${projectContext}` : ""}
-${extraInstruction ? `Instruction: ${extraInstruction}` : ""}
-${existingTasks.length > 0 ? `DO NOT duplicate: ${existingTasks.join(', ')}` : ""}
+    const prompt = `Break down the following instruction into 3-5 high-quality, distinct, and actionable tasks for a board column named "${columnName}".
 
-Format: [{"title": "...", "description": "...", "priority": "..."}]`;
+Instruction: ${extraInstruction}
+${projectContext ? `Project Context: ${projectContext}` : ""}
+${existingTasks.length > 0 ? `DO NOT duplicate these existing tasks: ${existingTasks.join(', ')}` : ""}
+
+CRITICAL REQUIREMENTS:
+1. EACH task must have a unique "title" representing a specific part of the breakdown.
+2. EACH task MUST have a completely unique, detailed "description" that explains the specific steps to complete THAT EXACT task.
+3. DO NOT repeat the original instruction in the descriptions. 
+4. DO NOT use the same description for multiple tasks.
+5. Ensure descriptions are actionable and technical if appropriate.
+
+Response Format (JSON ONLY):
+[{"title": "...", "description": "...", "priority": "Low|Medium|High"}]`;
 
     try {
         const responseText = await callOpenRouter(prompt, true);
         const jsonText = extractJSON(responseText);
+        console.log("Raw generated tasks payload:", jsonText);
         return JSON.parse(jsonText);
     } catch (error) {
         console.error("Column Task Error:", error);
+        throw error;
+    }
+};
+
+/**
+ * Prompts the AI to generate a PlantUML diagram based on the provided context.
+ */
+export const generateErDiagram = async (context: string, diagramType: string = 'Entity-Relationship (ER)'): Promise<string> => {
+    const prompt = `Generate a PlantUML ${diagramType} diagram for the following context.
+Return ONLY the raw PlantUML code, without markdown blocks, without \`\`\`plantuml.
+Start with @startuml and end with @enduml.
+
+Context: ${context}`;
+
+    try {
+        const responseText = await callOpenRouter(prompt);
+        // Clean up markdown code blocks if the AI still included them
+        let code = responseText.trim();
+        if (code.startsWith('\`\`\`')) {
+            const lines = code.split('\n');
+            if (lines.length > 2) {
+                code = lines.slice(1, -1).join('\n');
+            }
+        }
+        return code.trim();
+    } catch (error) {
+        console.error("ER Diagram Generation Error:", error);
         throw error;
     }
 };

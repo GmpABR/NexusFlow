@@ -33,7 +33,7 @@ const theme = createTheme({
 createRoot(document.getElementById('root')!).render(
   // StrictMode removed to fix react-beautiful-dnd issue in development
   <MantineProvider theme={theme} defaultColorScheme="dark">
-    <Notifications position="bottom-right" zIndex={9999} />
+    <Notifications position="bottom-right" zIndex={1000000} />
     <App />
   </MantineProvider>
 );

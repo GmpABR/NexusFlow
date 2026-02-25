@@ -21,6 +21,7 @@ export interface UpdateTaskDto {
     assigneeIds?: number[];         // multi-assignee (authoritative)
     tags?: string | null;
     labelIds?: number[];
+    erDiagramPuml?: string | null;
 }
 
 export const updateTask = async (taskId: number, dto: UpdateTaskDto): Promise<TaskCard> => {

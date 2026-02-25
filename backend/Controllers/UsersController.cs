@@ -122,7 +122,7 @@ public class UsersController : ControllerBase
         var userId = GetUserId();
 
         var tasks = await _context.TaskCards
-            .Where(t => t.AssigneeId == userId)
+            .Where(t => t.AssigneeId == userId || t.Assignees.Any(a => a.UserId == userId))
             .Include(t => t.Column)
                 .ThenInclude(c => c.Board)
             .OrderBy(t => t.DueDate)

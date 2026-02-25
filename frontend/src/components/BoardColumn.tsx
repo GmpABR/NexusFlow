@@ -106,7 +106,9 @@ const BoardColumn = memo(function BoardColumn({
         try {
             const existingTitles = column.taskCards.map(t => t.title);
             const tasks = await generateTasksForColumn(column.name, existingTitles, "", aiInstruction);
+            console.log(`[BoardColumn] AI Generated Tasks for ${column.name}:`, tasks);
             for (const task of tasks) {
+                console.log(`[BoardColumn] Adding Task: "${task.title}" with Description Length: ${task.description?.length}`);
                 onAddTask(column.id, task.title, task.description, task.priority);
             }
             notifications.show({ title: 'AI Tasks Generated', message: `Added ${tasks.length} tasks to ${column.name}`, color: 'green' });

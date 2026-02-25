@@ -66,6 +66,8 @@ public class AppDbContext : DbContext
         // TaskActivity -> TaskCard
         modelBuilder.Entity<TaskActivity>(entity =>
         {
+            entity.HasIndex(a => a.TaskCardId); // Optimization
+
             entity.HasOne(a => a.TaskCard)
                   .WithMany() // TaskCard doesn't need explicit list of activities for now, can query by ID
                   .HasForeignKey(a => a.TaskCardId)
@@ -208,6 +210,8 @@ public class AppDbContext : DbContext
         // TaskActivityReaction
         modelBuilder.Entity<TaskActivityReaction>(entity =>
         {
+            entity.HasIndex(r => r.TaskActivityId); // Optimization
+
             entity.HasOne(r => r.TaskActivity)
                   .WithMany(a => a.Reactions)
                   .HasForeignKey(r => r.TaskActivityId)

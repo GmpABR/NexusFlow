@@ -40,6 +40,7 @@ export interface TaskCard {
     assigneeName: string | null;
     assignees?: { userId: number; username: string; avatarUrl?: string | null }[];
     tags: string | null;
+    erDiagramPuml?: string | null;
     totalTimeSpentMinutes: number;
     isTimerRunning: boolean;
     subtasks?: Subtask[];
@@ -63,6 +64,7 @@ export interface BoardMember {
     status: 'Pending' | 'Accepted' | 'Rejected';
     joinedAt: string;
     avatarUrl?: string | null;
+    isWorkspaceMember: boolean;
 }
 
 export interface BoardDetail {

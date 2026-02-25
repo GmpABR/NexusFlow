@@ -28,6 +28,10 @@ public class TasksController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateTask([FromBody] CreateTaskDto dto)
     {
+        Console.WriteLine($"[TasksController] CREATE TASK RECEIVED: Title={dto.Title}");
+        Console.WriteLine($"[TasksController] -> Desc Length: {dto.Description?.Length ?? 0}");
+        Console.WriteLine($"[TasksController] -> Desc Snippet: {dto.Description?.Substring(0, Math.Min(dto.Description?.Length ?? 0, 100))}");
+        
         var task = await _taskService.CreateTaskAsync(dto, GetUserId());
 
         // Notify all clients viewing the board

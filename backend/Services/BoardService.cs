@@ -58,6 +58,7 @@ public class BoardService : IBoardService
         // Returns null if board doesn't exist OR user has no access.
         var boardDto = await _db.Boards
             .AsNoTracking()
+            .AsSplitQuery()
             .Where(b => b.Id == boardId && (
                 b.OwnerId == userId 
                 || b.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
@@ -147,7 +148,8 @@ public class BoardService : IBoardService
                     Email = m.User.Email,
                     Role = m.Role,
                     JoinedAt = m.JoinedAt,
-                    AvatarUrl = m.User.AvatarUrl
+                    AvatarUrl = m.User.AvatarUrl,
+                    IsWorkspaceMember = false
                 }).ToList(),
                 UserRole = b.OwnerId == userId ? "Owner" : (b.Members.Where(m => m.UserId == userId).Select(m => m.Role).FirstOrDefault() ?? "Member") 
                 // Handle null coalescing properly.
@@ -168,7 +170,8 @@ public class BoardService : IBoardService
                     Email = owner.Email,
                     Role = "Owner",
                     JoinedAt = boardDto.CreatedAt,
-                    AvatarUrl = owner.AvatarUrl
+                    AvatarUrl = owner.AvatarUrl,
+                    IsWorkspaceMember = false
                 });
             }
 
@@ -192,7 +195,8 @@ public class BoardService : IBoardService
                             Email = wm.User.Email,
                             Role = wm.Role,
                             JoinedAt = wm.JoinedAt,
-                            AvatarUrl = wm.User.AvatarUrl
+                            AvatarUrl = wm.User.AvatarUrl,
+                            IsWorkspaceMember = true
                         });
                     }
                 }
@@ -252,7 +256,8 @@ public class BoardService : IBoardService
                 Email = m.User.Email,
                 Role = m.Role,
                 JoinedAt = m.JoinedAt,
-                AvatarUrl = m.User.AvatarUrl
+                AvatarUrl = m.User.AvatarUrl,
+                IsWorkspaceMember = false
             })
             .ToListAsync();
     }
