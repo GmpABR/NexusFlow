@@ -3,13 +3,13 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
     Box, Center, Loader, Text, Group, Stack, Paper, Title, Flex, NavLink,
     Avatar, TextInput, Textarea, Button, ActionIcon, Tooltip, Divider,
-    Badge, ThemeIcon,
+    Badge, ThemeIcon, Switch,
 } from '@mantine/core';
 import {
     IconEdit, IconCheck, IconX, IconUser, IconHome, IconSettings,
     IconAt, IconCalendar, IconBriefcase, IconBuilding,
     IconMapPin, IconCamera, IconLink, IconUpload,
-    IconLogout, IconSun, IconMoon, IconPalette, IconSparkles, IconInfoCircle
+    IconLogout, IconSun, IconMoon, IconPalette, IconSparkles, IconInfoCircle, IconEyeOff
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useMantineColorScheme, useComputedColorScheme, SegmentedControl, Center as MantineCenter } from '@mantine/core';
@@ -718,6 +718,43 @@ export default function ProfilePage() {
                                         }}
                                     />
                                 </Box>
+
+                                <Divider color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'} />
+
+                                <Group justify="space-between" wrap="nowrap">
+                                    <Box>
+                                        <Text size="sm" fw={600} c={computedColorScheme === 'dark' ? 'white' : 'dark'} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <IconEyeOff size={16} color={computedColorScheme === 'dark' ? '#b6c2cf' : '#495057'} />
+                                            Appear Offline Always
+                                        </Text>
+                                        <Text size="xs" c="dimmed" mt={2}>
+                                            Hide your online status from all team members.
+                                        </Text>
+                                    </Box>
+                                    <Switch
+                                        color="violet"
+                                        checked={profile?.displayOfflineAlways || false}
+                                        onChange={async (event) => {
+                                            const isChecked = event.currentTarget.checked;
+                                            // Optimistic update
+                                            if (profile) setProfile({ ...profile, displayOfflineAlways: isChecked });
+                                            try {
+                                                const u = await save({ displayOfflineAlways: isChecked });
+                                                const stored = localStorage.getItem('user');
+                                                if (stored) {
+                                                    const parsed = JSON.parse(stored);
+                                                    parsed.displayOfflineAlways = u.displayOfflineAlways;
+                                                    localStorage.setItem('user', JSON.stringify(parsed));
+                                                }
+                                                // Event is fired across SignalR so we don't need local notifs here really, but good for feedback
+                                                notifications.show({ title: 'Privacy Settings Updated', message: isChecked ? 'You now appear offline.' : 'You appear online when active.', color: 'green' });
+                                            } catch {
+                                                if (profile) setProfile({ ...profile, displayOfflineAlways: !isChecked }); // Revert
+                                                notifications.show({ title: 'Error', message: 'Failed to update privacy setting.', color: 'red' });
+                                            }
+                                        }}
+                                    />
+                                </Group>
                             </Stack>
                         </Paper>
 

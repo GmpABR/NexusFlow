@@ -17,6 +17,16 @@ export function useSignalR(boardId: number | null, callbacks: {
     onLabelUpdated?: (label: Label) => void;
     onLabelDeleted?: (labelId: number) => void;
     onNotificationReceived?: (notification: Notification) => void;
+    onUserOnline?: (userId: number) => void;
+    onUserOffline?: (userId: number) => void;
+    onBoardUpdated?: (board: import('../api/boards').BoardDetail) => void;
+    onBoardClosed?: (boardId: number) => void;
+    onBoardReopened?: (boardId: number) => void;
+    onBoardDeleted?: (boardId: number) => void;
+    onColumnCreated?: (column: import('../api/boards').Column) => void;
+    onColumnMoved?: (event: { columnId: number, newOrder: number }) => void;
+    onColumnUpdated?: (column: import('../api/boards').Column) => void;
+    onColumnDeleted?: (columnId: number) => void;
 }) {
     const connectionRef = useRef<HubConnection | null>(null);
     const callbacksRef = useRef(callbacks);
@@ -77,6 +87,46 @@ export function useSignalR(boardId: number | null, callbacks: {
 
         connection.on('ReceiveNotification', (notification: Notification) => {
             callbacksRef.current.onNotificationReceived?.(notification);
+        });
+
+        connection.on('UserOnline', (userId: number) => {
+            callbacksRef.current.onUserOnline?.(userId);
+        });
+
+        connection.on('UserOffline', (userId: number) => {
+            callbacksRef.current.onUserOffline?.(userId);
+        });
+
+        connection.on('BoardUpdated', (board: import('../api/boards').BoardDetail) => {
+            callbacksRef.current.onBoardUpdated?.(board);
+        });
+
+        connection.on('BoardClosed', (boardId: number) => {
+            callbacksRef.current.onBoardClosed?.(boardId);
+        });
+
+        connection.on('BoardReopened', (boardId: number) => {
+            callbacksRef.current.onBoardReopened?.(boardId);
+        });
+
+        connection.on('BoardDeleted', (boardId: number) => {
+            callbacksRef.current.onBoardDeleted?.(boardId);
+        });
+
+        connection.on('ColumnCreated', (column: import('../api/boards').Column) => {
+            callbacksRef.current.onColumnCreated?.(column);
+        });
+
+        connection.on('ColumnMoved', (data: { columnId: number, newOrder: number }) => {
+            callbacksRef.current.onColumnMoved?.(data);
+        });
+
+        connection.on('ColumnUpdated', (column: import('../api/boards').Column) => {
+            callbacksRef.current.onColumnUpdated?.(column);
+        });
+
+        connection.on('ColumnDeleted', (columnId: number) => {
+            callbacksRef.current.onColumnDeleted?.(columnId);
         });
 
         connection

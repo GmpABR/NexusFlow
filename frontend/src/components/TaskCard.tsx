@@ -1,9 +1,11 @@
 import { memo } from 'react';
-import { Paper, Text, Group, ActionIcon, Badge, Avatar, Stack, Menu, Tooltip, useComputedColorScheme } from '@mantine/core';
+import { Paper, Text, Group, ActionIcon, Badge, Avatar, Stack, Menu, Tooltip, useComputedColorScheme, Box } from '@mantine/core';
 import { IconPaperclip } from '@tabler/icons-react';
-import { IconCalendar, IconClock, IconStar, IconGripVertical, IconDots, IconTrash } from '@tabler/icons-react';
+import { IconCalendar, IconClock, IconStar, IconGripVertical, IconDots, IconTrash, IconCheck } from '@tabler/icons-react';
 import { Draggable } from '@hello-pangea/dnd';
 import type { TaskCard as TaskCardType } from '../api/boards';
+import { usePresence } from '../contexts/PresenceContext';
+import { OnlineIndicator } from './OnlineIndicator';
 
 type DueDateStatus = 'overdue' | 'due-soon' | 'upcoming' | null;
 
@@ -40,6 +42,7 @@ interface Props {
 
 const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick, isViewer = false }: Props) {
     const computedColorScheme = useComputedColorScheme('dark');
+    const { onlineUserIds } = usePresence();
     const priorityColor =
         task.priority === 'Urgent' ? 'red' :
             task.priority === 'High' ? 'orange' :
@@ -100,15 +103,18 @@ const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick, isView
                                     return (
                                         <Group gap={-4} wrap="nowrap">
                                             {visible.map(a => (
-                                                <Tooltip key={a.userId} label={a.username} withinPortal position="top">
-                                                    <Avatar
-                                                        src={(a as any).avatarUrl}
-                                                        size={20} radius="xl" color="indigo"
-                                                        styles={{ root: { border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'}`, marginLeft: -4 } }}
-                                                    >
-                                                        {a.username.slice(0, 2).toUpperCase()}
-                                                    </Avatar>
-                                                </Tooltip>
+                                                <Box key={a.userId} style={{ position: 'relative', display: 'flex', zIndex: 1 }}>
+                                                    <Tooltip label={a.username} withinPortal position="top">
+                                                        <Avatar
+                                                            src={(a as any).avatarUrl}
+                                                            size={20} radius="xl" color="indigo"
+                                                            styles={{ root: { border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'}`, marginLeft: -4 } }}
+                                                        >
+                                                            {a.username.slice(0, 2).toUpperCase()}
+                                                        </Avatar>
+                                                    </Tooltip>
+                                                    <OnlineIndicator isOnline={onlineUserIds.has(a.userId)} size={6} offset={-1} />
+                                                </Box>
                                             ))}
                                             {overflow > 0 && (
                                                 <Avatar size={20} radius="xl" color="gray"
@@ -125,6 +131,20 @@ const TaskCard = memo(function TaskCard({ task, index, onDelete, onClick, isView
                                     <Group gap={2}>
                                         <IconPaperclip size={11} color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'} />
                                         <Text size="xs" c="dimmed" opacity={0.7}>{task.attachments.length}</Text>
+                                    </Group>
+                                )}
+
+                                {/* Subtask checklist badge */}
+                                {task.subtasks && task.subtasks.length > 0 && (
+                                    <Group gap={2} ml={2}>
+                                        <IconCheck size={11} color={task.subtasks.every(s => s.isCompleted) ? '#10b981' : (computedColorScheme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)')} />
+                                        <Text
+                                            size="xs"
+                                            c={task.subtasks.every(s => s.isCompleted) ? '#10b981' : 'dimmed'}
+                                            opacity={task.subtasks.every(s => s.isCompleted) ? 1 : 0.7}
+                                        >
+                                            {task.subtasks.filter(s => s.isCompleted).length}/{task.subtasks.length}
+                                        </Text>
                                     </Group>
                                 )}
                             </Group>

@@ -3,6 +3,7 @@ using System;
 using Backend.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Backend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260226214030_AddUserDisplayOfflineAlways")]
+    partial class AddUserDisplayOfflineAlways
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -108,43 +111,6 @@ namespace Backend.Migrations
                     b.HasIndex("WorkspaceId");
 
                     b.ToTable("Boards");
-                });
-
-            modelBuilder.Entity("Backend.Models.BoardAutomation", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("ActionType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ActionValue")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("BoardId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("TriggerCondition")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("TriggerType")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BoardId");
-
-                    b.ToTable("BoardAutomations");
                 });
 
             modelBuilder.Entity("Backend.Models.BoardInvite", b =>
@@ -725,17 +691,6 @@ namespace Backend.Migrations
                     b.Navigation("Workspace");
                 });
 
-            modelBuilder.Entity("Backend.Models.BoardAutomation", b =>
-                {
-                    b.HasOne("Backend.Models.Board", "Board")
-                        .WithMany("Automations")
-                        .HasForeignKey("BoardId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Board");
-                });
-
             modelBuilder.Entity("Backend.Models.BoardInvite", b =>
                 {
                     b.HasOne("Backend.Models.Board", "Board")
@@ -981,8 +936,6 @@ namespace Backend.Migrations
 
             modelBuilder.Entity("Backend.Models.Board", b =>
                 {
-                    b.Navigation("Automations");
-
                     b.Navigation("Columns");
 
                     b.Navigation("Labels");

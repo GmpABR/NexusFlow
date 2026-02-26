@@ -73,6 +73,11 @@ public class TaskService : ITaskService
     {
         var task = await _db.TaskCards
             .Include(t => t.Assignee)
+            .Include(t => t.Assignees).ThenInclude(a => a.User)
+            .Include(t => t.Subtasks)
+            .Include(t => t.Attachments).ThenInclude(a => a.UploadedBy)
+            .Include(t => t.TimeLogs)
+            .Include(t => t.Column)
             .FirstOrDefaultAsync(t => t.Id == taskId);
             
         if (task == null) return null;
@@ -145,7 +150,15 @@ public class TaskService : ITaskService
     public async Task<TaskCardDto?> MoveTaskAsync(int taskId, MoveTaskDto dto, int userId)
     {
         Console.WriteLine($"[MoveTask] Moving Task {taskId} to Column {dto.TargetColumnId} at Order {dto.NewOrder}");
-        var task = await _db.TaskCards.FindAsync(taskId);
+        var task = await _db.TaskCards
+            .Include(t => t.Column)
+            .Include(t => t.Assignee)
+            .Include(t => t.Assignees).ThenInclude(a => a.User)
+            .Include(t => t.Subtasks)
+            .Include(t => t.Attachments).ThenInclude(a => a.UploadedBy)
+            .Include(t => t.TimeLogs)
+            .FirstOrDefaultAsync(t => t.Id == taskId);
+            
         if (task == null) return null;
 
         int oldColumnId = task.ColumnId;
@@ -244,6 +257,11 @@ public class TaskService : ITaskService
         }
 
         return new SubtaskDto { Id = subtask.Id, Title = subtask.Title, IsCompleted = subtask.IsCompleted, TaskCardId = subtask.TaskCardId };
+    }
+
+    public async Task<Subtask?> GetSubtaskByIdAsync(int subtaskId)
+    {
+        return await _db.Subtasks.FindAsync(subtaskId);
     }
 
     public async Task<bool> DeleteSubtaskAsync(int subtaskId, int userId)
@@ -706,15 +724,15 @@ public class TaskService : ITaskService
         {
             await _db.Entry(task).Reference(t => t.Column).LoadAsync();
         }
-        if (task.Subtasks == null) 
+        if (!_db.Entry(task).Collection(t => t.Subtasks).IsLoaded) 
         {
             await _db.Entry(task).Collection(t => t.Subtasks).LoadAsync();
         }
-        if (task.TimeLogs == null)
+        if (!_db.Entry(task).Collection(t => t.TimeLogs).IsLoaded)
         {
             await _db.Entry(task).Collection(t => t.TimeLogs).LoadAsync();
         }
-        if (task.Labels == null)
+        if (!_db.Entry(task).Collection(t => t.Labels).IsLoaded)
         {
             await _db.Entry(task).Collection(t => t.Labels).LoadAsync();
         }

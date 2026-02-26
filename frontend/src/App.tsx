@@ -11,23 +11,27 @@ import JoinBoardPage from './pages/JoinBoardPage';
 import JoinWorkspacePage from './pages/JoinWorkspacePage';
 import AppNavbar from './components/AppNavbar';
 
+import { PresenceProvider } from './contexts/PresenceContext';
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('token');
   if (!token) return <Navigate to="/login" replace />;
   const computedColorScheme = useComputedColorScheme('dark');
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100vh',
-      background: computedColorScheme === 'dark' ? '#0a0a0b' : '#f1f3f5'
-    }}>
-      <AppNavbar />
-      <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
-        {children}
+    <PresenceProvider>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        background: computedColorScheme === 'dark' ? '#0a0a0b' : '#f1f3f5'
+      }}>
+        <AppNavbar />
+        <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+          {children}
+        </div>
       </div>
-    </div>
+    </PresenceProvider>
   );
 }
 

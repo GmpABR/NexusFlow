@@ -20,6 +20,7 @@ export interface UserProfile {
     bio?: string | null;
     themePreference: string;
     openRouterApiKey?: string | null;
+    displayOfflineAlways: boolean;
     createdAt: string;
 }
 
@@ -60,8 +61,14 @@ export const updateProfile = async (updates: Partial<{
     bio: string;
     themePreference: string;
     openRouterApiKey: string;
+    displayOfflineAlways: boolean;
 }>): Promise<UserProfile> => {
     const { data } = await api.put<UserProfile>('/users/me', updates);
+    return data;
+};
+
+export const getOnlineUserIds = async (): Promise<number[]> => {
+    const { data } = await api.get<number[]>('/users/presence');
     return data;
 };
 

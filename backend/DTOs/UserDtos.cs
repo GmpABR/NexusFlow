@@ -6,6 +6,7 @@ public class UserSummaryDto
     public string Username { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
+    public bool DisplayOfflineAlways { get; set; }
 }
 
 public class UserProfileDto
@@ -22,6 +23,7 @@ public class UserProfileDto
     public string? Bio { get; set; }
     public string ThemePreference { get; set; } = "dark";
     public string? OpenRouterApiKey { get; set; }
+    public bool DisplayOfflineAlways { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -37,6 +39,7 @@ public class UpdateProfileDto
     public string? Bio { get; set; }
     public string? ThemePreference { get; set; }
     public string? OpenRouterApiKey { get; set; }
+    public bool? DisplayOfflineAlways { get; set; }
 }
 
 public class MyTaskDto

@@ -65,7 +65,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
     const [activities, setActivities] = useState<TaskActivity[]>([]);
     const [isActivitiesLoading, setIsActivitiesLoading] = useState(false);
     const [isGeneratingErDiagram, setIsGeneratingErDiagram] = useState(false);
-    const [erDiagramOpened, setErDiagramOpened] = useState(false);
+    const [, setErDiagramOpened] = useState(false);
     const [diagramType, setDiagramType] = useState('Entity-Relationship (ER)');
     const [isExporting, setIsExporting] = useState(false);
     const [isSavingToAttachments, setIsSavingToAttachments] = useState(false);
@@ -84,12 +84,27 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
     useEffect(() => {
         if (task && opened) {
             console.log(`[TaskDetailModal] Mounted for Task ID: ${task.id}`, task.title);
+
+            form.setValues({
+                title: task.title || '',
+                description: task.description || '',
+                priority: (task.priority as any) || 'Low',
+                dueDate: task.dueDate ? new Date(task.dueDate) : null,
+                storyPoints: task.storyPoints || 0,
+                assigneeId: task.assigneeId ? task.assigneeId.toString() : null,
+                assigneeIds: task.assignees?.map(a => a.userId.toString()) ?? (task.assigneeId ? [task.assigneeId.toString()] : []),
+                tags: task.tags ? task.tags.split(',') : [],
+                subtasks: task.subtasks || [],
+                labelIds: task.labels?.map(l => l.id.toString()) || [],
+                erDiagramPuml: task.erDiagramPuml || ''
+            });
+
             setAttachments(task.attachments ?? []);
             setActivities([]);
             setIsActivitiesLoading(true);
             fetchActivities(task.id);
         }
-    }, [task?.id, opened]);
+    }, [task, opened]);
 
     const fetchActivities = async (taskId: number) => {
         try {
@@ -201,6 +216,14 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
             form.setFieldValue('subtasks', currentSubtasks);
             notifications.show({ title: 'AI Breakdown Complete', message: `Added ${subtaskTitles.length} subtasks.`, color: 'green' });
             fetchActivities(task.id);
+
+            // Force a parent task update to trigger a SignalR broadcast so all clients see the AI breakdown immediately
+            setTimeout(() => {
+                if (task) {
+                    onTaskUpdated({ ...task, subtasks: currentSubtasks });
+                }
+            }, 100);
+
         } catch (error) {
             notifications.show({ title: 'AI Breakdown Failed', message: 'Could not generate subtasks from description.', color: 'red' });
         } finally {
@@ -215,8 +238,12 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
             const newSubtask = await createSubtask(task.id, newSubtaskTitle);
             const currentSubtasks = form.values.subtasks || [];
             const exists = currentSubtasks.some(s => String(s.id) === String(newSubtask.id));
+            const updatedSubtasks = [...currentSubtasks, newSubtask];
             if (!exists) {
-                form.setFieldValue('subtasks', [...currentSubtasks, newSubtask]);
+                form.setFieldValue('subtasks', updatedSubtasks);
+            }
+            if (task) {
+                onTaskUpdated({ ...task, subtasks: updatedSubtasks });
             }
             setNewSubtaskTitle('');
             notifications.show({ title: 'Subtask added', message: 'New subtask created', color: 'green' });
@@ -383,7 +410,11 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                 fileSizeBytes: file.size
             });
 
-            setAttachments(prev => [saved, ...prev]);
+            const newAttachments = [saved, ...attachments];
+            setAttachments(newAttachments);
+            if (task) {
+                onTaskUpdated({ ...task, attachments: newAttachments });
+            }
             notifications.show({ title: 'Saved', message: 'Diagram added to attachments successfully!', color: 'green' });
             setErDiagramOpened(false);
         } catch (error: any) {
@@ -401,7 +432,12 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
         form.setFieldValue(`subtasks.${index}.isCompleted`, checked);
         try {
             await updateSubtask(subtaskId, { isCompleted: checked });
-            if (task) fetchActivities(task.id);
+            if (task) {
+                const updatedSubtasks = [...subtasks];
+                updatedSubtasks[index] = { ...updatedSubtasks[index], isCompleted: checked };
+                onTaskUpdated({ ...task, subtasks: updatedSubtasks });
+                fetchActivities(task.id);
+            }
         } catch {
             form.setFieldValue(`subtasks.${index}.isCompleted`, !checked);
             notifications.show({ title: 'Error', message: 'Failed to update subtask', color: 'red' });
@@ -414,7 +450,10 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
         form.setFieldValue('subtasks', updatedSubtasks);
         try {
             await deleteSubtask(subtaskId);
-            if (task) fetchActivities(task.id);
+            if (task) {
+                onTaskUpdated({ ...task, subtasks: updatedSubtasks });
+                fetchActivities(task.id);
+            }
         } catch {
             form.setFieldValue('subtasks', subtasks);
             notifications.show({ title: 'Error', message: 'Failed to delete subtask', color: 'red' });
@@ -434,7 +473,11 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                 contentType: file.type || 'application/octet-stream',
                 fileSizeBytes: file.size
             });
-            setAttachments(prev => [saved, ...prev]);
+            const newAttachments = [saved, ...attachments];
+            setAttachments(newAttachments);
+            if (task) {
+                onTaskUpdated({ ...task, attachments: newAttachments });
+            }
             notifications.show({ title: 'Uploaded', message: file.name, color: 'green' });
             if (fileInputRef.current) fileInputRef.current.value = '';
         } catch (err: any) {
@@ -449,7 +492,11 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
         try {
             await deleteAttachment(task.id, att.id);
             await removeTaskAttachment(att.storagePath);
-            setAttachments(prev => prev.filter(a => a.id !== att.id));
+            const newAttachments = attachments.filter(a => a.id !== att.id);
+            setAttachments(newAttachments);
+            if (task) {
+                onTaskUpdated({ ...task, attachments: newAttachments });
+            }
             notifications.show({ title: 'Removed', message: att.fileName, color: 'blue' });
         } catch {
             notifications.show({ title: 'Error', message: 'Failed to remove attachment', color: 'red' });

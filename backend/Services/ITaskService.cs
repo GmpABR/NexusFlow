@@ -14,6 +14,7 @@ public interface ITaskService
     Task<SubtaskDto> CreateSubtaskAsync(int taskId, CreateSubtaskDto dto, int userId);
     Task<SubtaskDto?> UpdateSubtaskAsync(int subtaskId, UpdateSubtaskDto dto, int userId);
     Task<bool> DeleteSubtaskAsync(int subtaskId, int userId);
+    Task<Subtask?> GetSubtaskByIdAsync(int subtaskId);
     
     Task<TaskCardDto?> GetTaskByIdAsync(int taskId);
     Task<List<TaskActivityDto>> GetTaskActivitiesAsync(int taskId);

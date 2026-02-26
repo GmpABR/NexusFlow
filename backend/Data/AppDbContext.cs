@@ -25,7 +25,7 @@ public class AppDbContext : DbContext
     public DbSet<TaskActivityReaction> TaskActivityReactions { get; set; }
     public DbSet<BoardInvite> BoardInvites { get; set; }
     public DbSet<WorkspaceInvite> WorkspaceInvites { get; set; }
-
+    public DbSet<BoardAutomation> BoardAutomations { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -129,6 +129,15 @@ public class AppDbContext : DbContext
                   .WithMany(w => w.Boards)
                   .HasForeignKey(b => b.WorkspaceId)
                   .OnDelete(DeleteBehavior.SetNull); 
+        });
+
+        // BoardAutomation -> Board
+        modelBuilder.Entity<BoardAutomation>(entity =>
+        {
+            entity.HasOne(a => a.Board)
+                  .WithMany(b => b.Automations)
+                  .HasForeignKey(a => a.BoardId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         // TimeLog -> TaskCard and User

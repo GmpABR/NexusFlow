@@ -15,6 +15,8 @@ import { getBoards, getBoardDetail, type BoardSummary, type TaskCard, type Colum
 import { getNotifications } from '../api/notifications';
 import NotificationDrawer from './NotificationDrawer';
 import { useSignalR } from '../hooks/useSignalR';
+import { usePresence } from '../contexts/PresenceContext';
+import { OnlineIndicator } from './OnlineIndicator';
 
 function getInitials(name: string) {
     const parts = name.trim().split(/\s+/);
@@ -60,6 +62,9 @@ export default function AppNavbar() {
     const [searchOpen, setSearchOpen] = useState(false);
     const [loadingCards, setLoadingCards] = useState(false);
     const searchRef = useRef<HTMLInputElement>(null);
+
+    // Presence
+    const { onlineUserIds } = usePresence();
 
     // Notification state
     const [notifDrawerOpen, setNotifDrawerOpen] = useState(false);
@@ -459,15 +464,18 @@ export default function AppNavbar() {
                                 (e.currentTarget as HTMLElement).style.background = 'transparent';
                             }}
                         >
-                            <Avatar
-                                src={avatarUrl || undefined}
-                                size={34}
-                                radius="xl"
-                                color="violet"
-                                style={{ boxShadow: '0 0 0 1px #30363d' }}
-                            >
-                                {getInitials(username)}
-                            </Avatar>
+                            <Box style={{ position: 'relative', display: 'flex' }}>
+                                <Avatar
+                                    src={avatarUrl || undefined}
+                                    size={34}
+                                    radius="xl"
+                                    color="violet"
+                                    style={{ boxShadow: '0 0 0 1px #30363d' }}
+                                >
+                                    {getInitials(username)}
+                                </Avatar>
+                                <OnlineIndicator isOnline={user?.id ? onlineUserIds.has(user.id) : false} size={10} offset={0} />
+                            </Box>
                         </Group>
                     </Menu.Target>
                     <Menu.Dropdown>

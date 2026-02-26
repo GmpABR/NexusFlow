@@ -24,4 +24,5 @@ public class Board
     public ICollection<Column> Columns { get; set; } = new List<Column>();
     public ICollection<BoardMember> Members { get; set; } = new List<BoardMember>();
     public ICollection<Label> Labels { get; set; } = new List<Label>();
+    public ICollection<BoardAutomation> Automations { get; set; } = new List<BoardAutomation>();
 }

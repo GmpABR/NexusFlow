@@ -42,7 +42,8 @@ import {
     IconCopy,
     IconCheck,
     IconLink,
-    IconEye
+    IconEye,
+    IconRobot
 } from '@tabler/icons-react';
 import {
     DragDropContext,
@@ -78,8 +79,8 @@ import { type Label } from '../api/labels';
 import { useSignalR } from '../hooks/useSignalR';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import BoardColumn from '../components/BoardColumn';
-
-
+import { usePresence } from '../contexts/PresenceContext';
+import { OnlineIndicator } from '../components/OnlineIndicator';
 
 import TaskDetailModal from '../components/TaskDetailModal';
 import BoardTableView from '../components/BoardTableView';
@@ -87,6 +88,7 @@ import BoardCalendarView from '../components/BoardCalendarView';
 import BoardDashboardView from '../components/BoardDashboardView';
 import BoardTimelineView from '../components/BoardTimelineView';
 import BoardAnalyticsModal from '../components/BoardAnalyticsModal';
+import BoardAutomationsModal from '../components/BoardAutomationsModal';
 import { BOARD_THEMES, type ThemeColor } from '../constants/themes';
 
 type ViewMode = 'board' | 'table' | 'calendar' | 'dashboard' | 'timeline' | 'map';
@@ -97,6 +99,7 @@ export default function BoardPage() {
     const computedColorScheme = useComputedColorScheme('dark');
 
     const boardId = id ? parseInt(id) : null;
+    const { onlineUserIds } = usePresence();
 
     const [board, setBoard] = useState<BoardDetail | null>(null);
     const [loading, setLoading] = useState(true);
@@ -105,6 +108,7 @@ export default function BoardPage() {
     const [inviteLink, setInviteLink] = useState<string | null>(null);
     const [inviteRole, setInviteRole] = useState<string>('Member');
     const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
+    const [automationsModalOpen, setAutomationsModalOpen] = useState(false);
     const [closeModalOpen, setCloseModalOpen] = useState(false);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
@@ -212,58 +216,42 @@ export default function BoardPage() {
         setBoard((prev) => {
             if (!prev) return prev;
 
-            // Find current location of the task
-            let sourceColIndex = -1;
-            let sourceTaskIndex = -1;
-
+            // Find current location
+            let sourceColIdx = -1;
+            let sourceTIdx = -1;
             prev.columns.forEach((col, cIdx) => {
                 const tIdx = col.taskCards.findIndex(t => t.id === task.id);
                 if (tIdx !== -1) {
-                    sourceColIndex = cIdx;
-                    sourceTaskIndex = tIdx;
+                    sourceColIdx = cIdx;
+                    sourceTIdx = tIdx;
                 }
             });
 
-            // If not found, check if it's a new task to be inserted (e.g. from another user)
-            // But usually move implies existing. If checks fail, return prev.
-            if (sourceColIndex === -1 && !task.columnId) return prev;
-
-            const targetColIndex = prev.columns.findIndex(c => c.id === task.columnId);
-            if (targetColIndex === -1) return prev;
-
-            // Clone to ensure we have a new object reference in state
-            const updatedTask = { ...task };
+            const targetColIdx = prev.columns.findIndex(c => c.id === task.columnId);
+            if (targetColIdx === -1) return prev;
 
             const newColumns = [...prev.columns];
 
-            // If dragging within same column
-            if (sourceColIndex === targetColIndex) {
-                const newCards = [...newColumns[sourceColIndex].taskCards];
-                if (sourceColIndex !== -1) newCards.splice(sourceTaskIndex, 1);
-
-                const insertIndex = Math.min(task.order, newCards.length);
-                newCards.splice(insertIndex, 0, updatedTask);
-
-                newColumns[sourceColIndex] = { ...newColumns[sourceColIndex], taskCards: newCards };
-            }
-            // If dragging between different columns
-            else {
-                if (sourceColIndex !== -1) {
-                    const sourceCards = [...newColumns[sourceColIndex].taskCards];
-                    sourceCards.splice(sourceTaskIndex, 1);
-                    newColumns[sourceColIndex] = { ...newColumns[sourceColIndex], taskCards: sourceCards };
-                }
-
-                const targetCards = [...newColumns[targetColIndex].taskCards];
-                const insertIndex = Math.min(task.order, targetCards.length);
-                targetCards.splice(insertIndex, 0, updatedTask);
-                newColumns[targetColIndex] = { ...newColumns[targetColIndex], taskCards: targetCards };
+            // 1. Remove from source and re-sync orders
+            if (sourceColIdx !== -1) {
+                const sourceCards = [...newColumns[sourceColIdx].taskCards];
+                sourceCards.splice(sourceTIdx, 1);
+                newColumns[sourceColIdx] = {
+                    ...newColumns[sourceColIdx],
+                    taskCards: sourceCards.map((t, i) => ({ ...t, order: i }))
+                };
             }
 
-            return {
-                ...prev,
-                columns: newColumns
+            // 2. Insert into target (ensure we don't have duplicates) and re-sync orders
+            const targetCards = [...newColumns[targetColIdx].taskCards.filter(t => t.id !== task.id)];
+            const insertIndex = Math.min(task.order, targetCards.length);
+            targetCards.splice(insertIndex, 0, task);
+            newColumns[targetColIdx] = {
+                ...newColumns[targetColIdx],
+                taskCards: targetCards.map((t, i) => ({ ...t, order: i }))
             };
+
+            return { ...prev, columns: newColumns };
         });
     };
 
@@ -376,6 +364,73 @@ export default function BoardPage() {
                 };
             });
         },
+        onBoardUpdated: (updatedBoard) => {
+            setBoard((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    name: updatedBoard.name,
+                    themeColor: updatedBoard.themeColor
+                };
+            });
+        },
+        onBoardClosed: () => {
+            setBoard((prev) => prev ? { ...prev, isClosed: true } : prev);
+        },
+        onBoardReopened: () => {
+            setBoard((prev) => prev ? { ...prev, isClosed: false } : prev);
+        },
+        onBoardDeleted: () => {
+            notifications.show({ title: 'Board Deleted', message: 'This board was deleted by an admin.', color: 'red' });
+            navigate('/boards');
+        },
+        onColumnCreated: (column) => {
+            setBoard((prev) => {
+                if (!prev) return prev;
+                if (prev.columns.some(c => c.id === column.id)) return prev;
+                return {
+                    ...prev,
+                    columns: [...prev.columns, column]
+                };
+            });
+        },
+        onColumnMoved: ({ columnId, newOrder }) => {
+            setBoard((prev) => {
+                if (!prev) return prev;
+                const columns = [...prev.columns];
+                const colIndex = columns.findIndex(c => c.id === columnId);
+                if (colIndex === -1) return prev;
+
+                const [movedCol] = columns.splice(colIndex, 1);
+                // Safe insertion based on newOrder index
+                const cleanOrder = Math.max(0, Math.min(newOrder, columns.length));
+                columns.splice(cleanOrder, 0, movedCol);
+
+                // Map the new array to update the 'order' property of each column
+                return {
+                    ...prev,
+                    columns: columns.map((c, i) => ({ ...c, order: i }))
+                };
+            });
+        },
+        onColumnUpdated: (updatedColumn) => {
+            setBoard((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    columns: prev.columns.map(c => c.id === updatedColumn.id ? { ...c, name: updatedColumn.name } : c)
+                };
+            });
+        },
+        onColumnDeleted: (columnId: number) => {
+            setBoard((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    columns: prev.columns.filter(c => c.id !== columnId)
+                };
+            });
+        }
     });
 
     // ── Add this for SignalR update (hacky without updating hook right now, but standard flow)
@@ -384,12 +439,33 @@ export default function BoardPage() {
     const handleTaskUpdated = (updatedTask: TaskCardType) => {
         setBoard((prev) => {
             if (!prev) return prev;
+
+            // Remove task from wherever it currently is ensuring clean slate
+            const newColumns = prev.columns.map(col => ({
+                ...col,
+                taskCards: col.taskCards.filter(t => t.id !== updatedTask.id)
+            }));
+
+            // Find the target column
+            const targetColIdx = newColumns.findIndex(col => col.id === updatedTask.columnId);
+            if (targetColIdx !== -1) {
+                // Insert the updated task
+                newColumns[targetColIdx].taskCards.push(updatedTask);
+
+                // Sort by the order provided (server-side truth)
+                newColumns[targetColIdx].taskCards.sort((a, b) => a.order - b.order);
+
+                // CRITICAL: Re-map orders to be strictly sequential (0, 1, 2...)
+                // this ensures that the NEXT move against these neighbors will have the correct order data.
+                newColumns[targetColIdx].taskCards = newColumns[targetColIdx].taskCards.map((t, i) => ({
+                    ...t,
+                    order: i
+                }));
+            }
+
             return {
                 ...prev,
-                columns: prev.columns.map((col) => ({
-                    ...col,
-                    taskCards: col.taskCards.map((t) => t.id === updatedTask.id ? updatedTask : t)
-                }))
+                columns: newColumns
             };
         });
         // Also update selected task if open
@@ -516,8 +592,14 @@ export default function BoardPage() {
 
                 destCards.splice(destination.index, 0, updatedMovedTask);
 
-                newColumns[sourceColIndex] = { ...sourceCol, taskCards: sourceCards };
-                newColumns[targetColIndex] = { ...destCol, taskCards: destCards };
+                newColumns[sourceColIndex] = {
+                    ...sourceCol,
+                    taskCards: sourceCards.map((t, i) => ({ ...t, order: i }))
+                };
+                newColumns[targetColIndex] = {
+                    ...destCol,
+                    taskCards: destCards.map((t, i) => ({ ...t, order: i }))
+                };
             }
 
             return { ...prev, columns: newColumns };
@@ -525,7 +607,9 @@ export default function BoardPage() {
 
         // 3. API Call
         try {
-            await moveTask(taskId, targetColumnId, destination.index);
+            const result = await moveTask(taskId, targetColumnId, destination.index);
+            // Instantly apply the result from the server (which includes automation changes like Priority)
+            handleTaskUpdated(result);
         } catch (error) {
             console.error("Move failed:", error);
             notifications.show({ title: 'Error', message: 'Failed to save move.', color: 'red' });
@@ -867,16 +951,24 @@ export default function BoardPage() {
                         </Box>
 
                         <Group gap="md">
-                            <Avatar.Group spacing="md">
-                                {members.slice(0, 4).map(m => (
-                                    <Avatar key={m.userId} src={m.avatarUrl} radius="xl" size="md" title={m.username || 'User'} color="indigo">
-                                        {(m.username || '?').slice(0, 2).toUpperCase()}
-                                    </Avatar>
-                                ))}
-                                {members.length > 4 && (
-                                    <Avatar radius="xl" size="md">+{members.length - 4}</Avatar>
-                                )}
-                            </Avatar.Group>
+                            <Box
+                                onClick={() => setMembersModalOpen(true)}
+                                style={{ cursor: 'pointer', transition: 'transform 0.2s' }}
+                                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                title="View all members"
+                            >
+                                <Avatar.Group spacing="md">
+                                    {members.slice(0, 4).map(m => (
+                                        <Avatar key={m.userId} src={m.avatarUrl} radius="xl" size="md" color="indigo" styles={{ root: { border: `2px solid ${computedColorScheme === 'dark' ? '#1a1b1e' : 'white'}` } }}>
+                                            {(m.username || '?').slice(0, 2).toUpperCase()}
+                                        </Avatar>
+                                    ))}
+                                    {members.length > 4 && (
+                                        <Avatar radius="xl" size="md" styles={{ root: { border: `2px solid ${computedColorScheme === 'dark' ? '#1a1b1e' : 'white'}` } }}>+{members.length - 4}</Avatar>
+                                    )}
+                                </Avatar.Group>
+                            </Box>
                         </Group>
                     </Group>
 
@@ -902,6 +994,17 @@ export default function BoardPage() {
                             fw={700}
                         >
                             Compartilhar
+                        </Button>
+                        <Button
+                            variant={computedColorScheme === 'dark' ? 'default' : 'white'}
+                            color={computedColorScheme === 'dark' ? 'gray' : 'dark'}
+                            size="md"
+                            radius="md"
+                            leftSection={<IconRobot size={20} color="#845ef7" />}
+                            onClick={() => setAutomationsModalOpen(true)}
+                            fw={700}
+                        >
+                            Automations
                         </Button>
                         <Menu shadow="md" width={200}>
                             <Menu.Target>
@@ -1403,17 +1506,25 @@ export default function BoardPage() {
                                 }}
                             >
                                 <Group justify="space-between">
-                                    <Group gap="sm">
-                                        <Avatar
-                                            src={m.avatarUrl}
-                                            size="md"
-                                            radius="xl"
-                                            color={m.role === 'Owner' ? 'violet' : 'teal'}
-                                        >
-                                            {(m.username || '?').slice(0, 2).toUpperCase()}
-                                        </Avatar>
+                                    <Group gap="sm" align="center">
+                                        <Box style={{ position: 'relative', display: 'flex' }}>
+                                            <Avatar
+                                                src={m.avatarUrl}
+                                                size="md"
+                                                radius="xl"
+                                                color={m.role === 'Owner' ? 'violet' : 'teal'}
+                                            >
+                                                {(m.username || '?').slice(0, 2).toUpperCase()}
+                                            </Avatar>
+                                            <OnlineIndicator isOnline={onlineUserIds.has(m.userId)} size={12} offset={0} />
+                                        </Box>
                                         <div>
-                                            <Text size="sm" fw={500} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{m.username}</Text>
+                                            <Group gap={6} align="center">
+                                                <Text size="sm" fw={500} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{m.username}</Text>
+                                                {onlineUserIds.has(m.userId) && (
+                                                    <Badge size="xs" variant="dot" color="green">Online</Badge>
+                                                )}
+                                            </Group>
                                             <Text size="xs" c="dimmed">{m.email}</Text>
                                         </div>
                                     </Group>
@@ -1467,6 +1578,14 @@ export default function BoardPage() {
                     opened={analyticsModalOpen}
                     onClose={() => setAnalyticsModalOpen(false)}
                     boardId={boardId}
+                />
+            )}
+
+            {board && (
+                <BoardAutomationsModal
+                    opened={automationsModalOpen}
+                    onClose={() => setAutomationsModalOpen(false)}
+                    board={board}
                 />
             )}
 
