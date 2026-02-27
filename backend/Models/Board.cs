@@ -16,9 +16,9 @@ public class Board
     public int OwnerId { get; set; }
     public User Owner { get; set; } = null!;
 
-    // Foreign Key to Workspace (Nullable for now to support old boards, or plan migration)
-    public int? WorkspaceId { get; set; }
-    public Workspace? Workspace { get; set; }
+    // Foreign Key to Workspace
+    public int WorkspaceId { get; set; }
+    public Workspace Workspace { get; set; } = null!;
 
     // Navigation
     public ICollection<Column> Columns { get; set; } = new List<Column>();

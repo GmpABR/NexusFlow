@@ -8,7 +8,7 @@ export interface BoardSummary {
     createdAt: string;
     role: string;
     themeColor: string;
-    workspaceId: number | null;
+    workspaceId: number;
     isClosed: boolean;
     openTasksCount: number;
 }
@@ -74,7 +74,7 @@ export interface BoardDetail {
     createdAt: string;
     ownerId: number;
     themeColor: string;
-    workspaceId: number | null;
+    workspaceId: number;
     columns: Column[];
     members: BoardMember[];
     labels: Label[];
@@ -101,7 +101,7 @@ export const getPendingInvitations = async (): Promise<BoardSummary[]> => {
     return data;
 };
 
-export const createBoard = async (name: string, workspaceId?: number, themeColor?: string, skipDefaultColumns: boolean = false): Promise<BoardSummary> => {
+export const createBoard = async (name: string, workspaceId: number, themeColor?: string, skipDefaultColumns: boolean = false): Promise<BoardSummary> => {
     const { data } = await api.post<BoardSummary>('/boards', { name, workspaceId, themeColor, skipDefaultColumns });
     return data;
 };

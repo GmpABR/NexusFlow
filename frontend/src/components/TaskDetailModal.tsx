@@ -1,4 +1,4 @@
-import { Modal, Avatar, TextInput, Select, MultiSelect, NumberInput, Button, Group, Badge, TagsInput, Stack, Text, Progress, Checkbox, ActionIcon, ScrollArea, Loader, Menu, Box, Popover, ColorInput, useComputedColorScheme, Tooltip } from '@mantine/core';
+import { Modal, Avatar, TextInput, Select, MultiSelect, NumberInput, Button, Group, Badge, TagsInput, Stack, Text, Progress, Checkbox, ActionIcon, ScrollArea, Loader, Menu, Box, Popover, ColorInput, useComputedColorScheme, Tooltip, TypographyStylesProvider, Title, Paper, CopyButton } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
 import { useEffect, useState, useRef } from 'react';
@@ -9,7 +9,7 @@ import { updateTask, createSubtask, updateSubtask, deleteSubtask, type Subtask, 
 import { generateSubtasks, getApiKey, generateErDiagram } from '../api/ai';
 import { startTimer, stopTimer } from '../api/timelogs';
 import { notifications } from '@mantine/notifications';
-import { IconCalendar, IconUser, IconTag, IconTrash, IconMessageCircle, IconClock, IconPlayerPlay, IconPlayerStop, IconAlertCircle, IconPaperclip, IconDownload, IconUpload, IconX, IconPlus, IconWand, IconDatabase } from '@tabler/icons-react';
+import { IconCalendar, IconUser, IconTag, IconTrash, IconMessageCircle, IconClock, IconPlayerPlay, IconPlayerStop, IconAlertCircle, IconPaperclip, IconDownload, IconUpload, IconX, IconPlus, IconWand, IconDatabase, IconFileDescription, IconFileText, IconCopy, IconCheck, IconSparkles } from '@tabler/icons-react';
 import plantumlEncoder from 'plantuml-encoder';
 import '@mantine/dates/styles.css';
 import dayjs from 'dayjs';
@@ -70,6 +70,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
     const [isExporting, setIsExporting] = useState(false);
     const [isSavingToAttachments, setIsSavingToAttachments] = useState(false);
     const [previewDiagramData, setPreviewDiagramData] = useState<{ url: string, puml?: string, title: string } | null>(null);
+    const [previewMarkdownData, setPreviewMarkdownData] = useState<{ content: string, title: string } | null>(null);
 
     // Comments
     const [newComment, setNewComment] = useState('');
@@ -503,6 +504,22 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
         }
     };
 
+    const handlePreviewMarkdown = (att: Attachment) => {
+        if (att.publicUrl.startsWith('data:')) {
+            const base64 = att.publicUrl.split(',')[1];
+            try {
+                // Decode base64 to UTF-8 text
+                const decoded = decodeURIComponent(escape(window.atob(base64)));
+                setPreviewMarkdownData({ content: decoded, title: att.fileName });
+            } catch (e) {
+                console.error("Failed to decode markdown", e);
+                window.open(att.publicUrl, '_blank');
+            }
+        } else {
+            window.open(att.publicUrl, '_blank');
+        }
+    };
+
     const handleSubmit = async (values: typeof form.values) => {
         if (!task) return;
         try {
@@ -600,6 +617,20 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                         <Badge size="sm" color="yellow" variant="light" leftSection={<IconAlertCircle size={10} />}>Due Soon</Badge>
                     )}
                     {task.isTimerRunning && <Badge size="sm" color="blue" variant="light" leftSection={<IconClock size={10} />}>Timer Running</Badge>}
+                    {attachments.some(a => a.fileName.endsWith('.md')) && (
+                        <Button
+                            size="compact-xs"
+                            variant="light"
+                            color="violet"
+                            leftSection={<IconSparkles size={12} />}
+                            onClick={() => {
+                                const sum = attachments.find(a => a.fileName.endsWith('.md'));
+                                if (sum) handlePreviewMarkdown(sum);
+                            }}
+                        >
+                            View AI Summary
+                        </Button>
+                    )}
                 </Group>}
                 size={1100}
                 centered
@@ -937,12 +968,30 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                             const isImage = att.contentType.startsWith('image/');
                                             const sizeKb = (att.fileSizeBytes / 1024).toFixed(1);
                                             return (
-                                                <Group key={att.id} gap={8} style={{
-                                                    padding: '6px 8px',
-                                                    background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8f9fa',
-                                                    borderRadius: 6,
-                                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.07)' : '#dee2e6'}`
-                                                }}>
+                                                <Group
+                                                    key={att.id}
+                                                    gap={8}
+                                                    style={{
+                                                        padding: '6px 8px',
+                                                        background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8f9fa',
+                                                        borderRadius: 6,
+                                                        border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.07)' : '#dee2e6'}`,
+                                                        cursor: (att.fileName.endsWith('.md') || isImage) ? 'pointer' : 'default',
+                                                        transition: 'background 0.2s ease',
+                                                    }}
+                                                    onClick={() => {
+                                                        if (att.fileName.endsWith('.md')) handlePreviewMarkdown(att);
+                                                        else if (isImage) window.open(att.publicUrl, '_blank');
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        if (att.fileName.endsWith('.md') || isImage) {
+                                                            e.currentTarget.style.background = computedColorScheme === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f3f5';
+                                                        }
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.currentTarget.style.background = computedColorScheme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8f9fa';
+                                                    }}
+                                                >
                                                     {isImage ? (
                                                         <img
                                                             src={att.publicUrl}
@@ -952,10 +1001,16 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                                     ) : (
                                                         <div style={{
                                                             width: 36, height: 36, borderRadius: 4, flexShrink: 0,
-                                                            background: 'rgba(139,92,246,0.2)',
+                                                            background: att.fileName.endsWith('.md') ? 'rgba(34,139,230,0.15)' : 'rgba(139,92,246,0.2)',
                                                             display: 'flex', alignItems: 'center', justifyContent: 'center'
                                                         }}>
-                                                            <IconPaperclip size={16} color="#a78bfa" />
+                                                            {att.fileName.endsWith('.md') ? (
+                                                                <IconFileDescription size={18} color="#228be6" />
+                                                            ) : att.contentType.startsWith('text/') ? (
+                                                                <IconFileText size={18} color="#40c057" />
+                                                            ) : (
+                                                                <IconPaperclip size={16} color="#a78bfa" />
+                                                            )}
                                                         </div>
                                                     )}
                                                     <Stack gap={1} style={{ flex: 1, minWidth: 0 }}>
@@ -963,13 +1018,28 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                                         <Text size="xs" c="dimmed">{sizeKb} KB · {att.uploadedByUsername}</Text>
                                                     </Stack>
                                                     <Group gap={4}>
-                                                        <Tooltip label="Download">
+                                                        {att.fileName.endsWith('.md') && (
+                                                            <Tooltip label="View Summary">
+                                                                <ActionIcon
+                                                                    size="sm" variant="subtle" color="violet"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handlePreviewMarkdown(att);
+                                                                    }}
+                                                                >
+                                                                    <IconFileDescription size={16} />
+                                                                </ActionIcon>
+                                                            </Tooltip>
+                                                        )}
+                                                        <Tooltip label={att.publicUrl.startsWith('data:') ? "Download Summary" : "Download"}>
                                                             <ActionIcon
                                                                 component="a"
                                                                 href={att.publicUrl}
+                                                                download={att.fileName}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
                                                                 size="sm" variant="subtle" color="gray"
+                                                                onClick={(e) => e.stopPropagation()}
                                                             >
                                                                 <IconDownload size={14} />
                                                             </ActionIcon>
@@ -977,7 +1047,10 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                                         <Tooltip label="Delete">
                                                             <ActionIcon
                                                                 size="sm" variant="subtle" color="red"
-                                                                onClick={() => handleDeleteAttachment(att)}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteAttachment(att);
+                                                                }}
                                                             >
                                                                 <IconTrash size={14} />
                                                             </ActionIcon>
@@ -1294,6 +1367,120 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                     </Stack>
                 ) : (
                     <Text p="xl" ta="center" c="dimmed">No diagram available.</Text>
+                )}
+            </Modal>
+
+            {/* Markdown Summary Preview Modal */}
+            <Modal
+                opened={!!previewMarkdownData}
+                onClose={() => setPreviewMarkdownData(null)}
+                title={
+                    <Group gap="xs">
+                        <IconSparkles size={18} color="#7c3aed" />
+                        <Title order={4} style={{ color: computedColorScheme === 'dark' ? 'white' : 'black' }}>
+                            {previewMarkdownData?.title || 'Summary Preview'}
+                        </Title>
+                    </Group>
+                }
+                size="lg"
+                centered
+                zIndex={3100}
+                overlayProps={{
+                    backgroundOpacity: 0.55,
+                    blur: 3,
+                }}
+                styles={{
+                    header: {
+                        background: computedColorScheme === 'dark' ? '#1a1b1e' : '#f8f9fa',
+                        borderBottom: `1px solid ${computedColorScheme === 'dark' ? '#2C2E33' : '#dee2e6'}`,
+                        padding: '16px 20px'
+                    },
+                    body: {
+                        background: computedColorScheme === 'dark' ? '#141517' : '#ffffff',
+                        padding: '30px',
+                        maxHeight: '85vh',
+                    }
+                }}
+            >
+                {previewMarkdownData ? (
+                    <Stack gap="xl">
+                        <Paper
+                            p="xl"
+                            radius="md"
+                            withBorder
+                            style={{
+                                background: computedColorScheme === 'dark' ? '#1a1b1e' : '#fafafa',
+                                borderStyle: 'dashed',
+                                borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'
+                            }}
+                        >
+                            <TypographyStylesProvider>
+                                <Box style={{
+                                    lineHeight: 1.7,
+                                    fontSize: '16px',
+                                    color: computedColorScheme === 'dark' ? '#e9ecef' : '#343a40'
+                                }}>
+                                    {/* Advanced inline Markdown rendering for the summary */}
+                                    <div dangerouslySetInnerHTML={{
+                                        __html: previewMarkdownData.content
+                                            .replace(/^# (.*$)/gim, '<h1 style="margin-bottom: 20px; font-weight: 800;">$1</h1>')
+                                            .replace(/^## (.*$)/gim, '<h2 style="margin-top: 24px; margin-bottom: 12px; font-weight: 700;">$1</h2>')
+                                            .replace(/^### (.*$)/gim, '<h3 style="margin-top: 20px; margin-bottom: 8px; font-weight: 600;">$1</h3>')
+                                            .replace(/^---/gim, '<hr style="margin: 24px 0; border: 0; border-top: 1px solid #373A40; opacity: 0.3;" />')
+                                            .replace(/^\* (.*$)/gim, '<li style="margin-bottom: 8px; margin-left: 20px;">$1</li>')
+                                            .replace(/^- (.*$)/gim, '<li style="margin-bottom: 8px; margin-left: 20px;">$1</li>')
+                                            .replace(/\*\*(.*)\*\*/gim, '<strong style="color: #7c3aed;">$1</strong>')
+                                            .replace(/__(.*)__/gim, '<strong style="color: #7c3aed;">$1</strong>')
+                                            .replace(/\*(.*)\*/gim, '<em>$1</em>')
+                                            .replace(/_(.*)_/gim, '<em>$1</em>')
+                                            .split('\n')
+                                            .map(line => {
+                                                const trimmed = line.trim();
+                                                if (!trimmed) return '<br/>';
+                                                if (trimmed.startsWith('<h') || trimmed.startsWith('<li') || trimmed.startsWith('<hr') || trimmed.startsWith('<br')) return line;
+                                                return `<p style="margin-bottom: 16px;">${line}</p>`;
+                                            })
+                                            .join('')
+                                    }} />
+                                </Box>
+                            </TypographyStylesProvider>
+                        </Paper>
+
+                        <Group justify="flex-end" mt="md" gap="md">
+                            <CopyButton value={previewMarkdownData.content} timeout={2000}>
+                                {({ copied, copy }) => (
+                                    <Button
+                                        variant="subtle"
+                                        color={copied ? 'teal' : 'gray'}
+                                        onClick={copy}
+                                        leftSection={copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
+                                    >
+                                        {copied ? 'Copied' : 'Copy Content'}
+                                    </Button>
+                                )}
+                            </CopyButton>
+
+                            <Button variant="default" onClick={() => setPreviewMarkdownData(null)}>
+                                Close
+                            </Button>
+
+                            <Button
+                                component="a"
+                                href={`data:text/markdown;base64,${window.btoa(unescape(encodeURIComponent(previewMarkdownData.content)))}`}
+                                download={previewMarkdownData.title}
+                                color="violet"
+                                variant="filled"
+                                fw={600}
+                                size="md"
+                                leftSection={<IconDownload size={18} />}
+                                style={{ boxShadow: '0 4px 12px rgba(124, 58, 237, 0.2)' }}
+                            >
+                                Download .md
+                            </Button>
+                        </Group>
+                    </Stack>
+                ) : (
+                    <Text ta="center" c="dimmed" p="xl">No content available.</Text>
                 )}
             </Modal>
         </>

@@ -17,6 +17,7 @@ import NotificationDrawer from './NotificationDrawer';
 import { useSignalR } from '../hooks/useSignalR';
 import { usePresence } from '../contexts/PresenceContext';
 import { OnlineIndicator } from './OnlineIndicator';
+import { notifications } from '@mantine/notifications';
 
 function getInitials(name: string) {
     const parts = name.trim().split(/\s+/);
@@ -72,9 +73,17 @@ export default function AppNavbar() {
 
     // SignalR for real-time notifications
     useSignalR(null, {
-        onNotificationReceived: () => {
+        onNotificationReceived: (notification) => {
             setUnreadNotifCount(prev => prev + 1);
-            // Optionally show a momentary mantine notification toast here too
+
+            // Show a toast for the incoming notification
+            notifications.show({
+                title: notification.type === 'Error' ? 'Automation Alert' : 'New Notification',
+                message: notification.message,
+                color: notification.type === 'Error' ? 'red' : 'blue',
+                icon: <IconBell size={16} />,
+                autoClose: 6000,
+            });
         }
     });
 

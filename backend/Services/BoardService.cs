@@ -20,7 +20,7 @@ public class BoardService : IBoardService
             .AsNoTracking()
             .Where(b => b.OwnerId == userId 
                      || b.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
-                     || (b.Workspace != null && b.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted")))
+                     || (b.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted")))
             .Select(b => new BoardSummaryDto
             {
                 Id = b.Id,
@@ -66,7 +66,7 @@ public class BoardService : IBoardService
             .Where(b => b.Id == boardId && (
                 b.OwnerId == userId 
                 || b.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
-                || (b.Workspace != null && b.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted"))
+                || (b.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted"))
             ))
             .Select(b => new BoardDetailDto
             {
@@ -180,29 +180,26 @@ public class BoardService : IBoardService
             }
 
             // Workspace members are implicitly members of the board
-            if (boardDto.WorkspaceId.HasValue)
-            {
-                var wsMembers = await _db.WorkspaceMembers
-                    .Include(wm => wm.User)
-                    .Where(wm => wm.WorkspaceId == boardDto.WorkspaceId.Value && wm.Status == "Accepted")
-                    .ToListAsync();
+            var wsMembers = await _db.WorkspaceMembers
+                .Include(wm => wm.User)
+                .Where(wm => wm.WorkspaceId == boardDto.WorkspaceId && wm.Status == "Accepted")
+                .ToListAsync();
                 
-                foreach (var wm in wsMembers)
+            foreach (var wm in wsMembers)
+            {
+                if (!boardDto.Members.Any(m => m.UserId == wm.UserId))
                 {
-                    if (!boardDto.Members.Any(m => m.UserId == wm.UserId))
+                    boardDto.Members.Add(new BoardMemberDto
                     {
-                        boardDto.Members.Add(new BoardMemberDto
-                        {
-                            Id = wm.Id,
-                            UserId = wm.UserId,
-                            Username = wm.User.Username,
-                            Email = wm.User.Email,
-                            Role = wm.Role,
-                            JoinedAt = wm.JoinedAt,
-                            AvatarUrl = wm.User.AvatarUrl,
-                            IsWorkspaceMember = true
-                        });
-                    }
+                        Id = wm.Id,
+                        UserId = wm.UserId,
+                        Username = wm.User.Username,
+                        Email = wm.User.Email,
+                        Role = wm.Role,
+                        JoinedAt = wm.JoinedAt,
+                        AvatarUrl = wm.User.AvatarUrl,
+                        IsWorkspaceMember = true
+                    });
                 }
             }
         }

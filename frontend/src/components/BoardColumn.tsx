@@ -29,6 +29,7 @@ interface Props {
     isClosed?: boolean;
     showAI?: boolean;
     isViewer?: boolean;
+    boardName?: string;
 }
 
 const BoardColumn = memo(function BoardColumn({
@@ -45,7 +46,8 @@ const BoardColumn = memo(function BoardColumn({
     dragHandleProps,
     isClosed = false,
     showAI = false,
-    isViewer = false
+    isViewer = false,
+    boardName = ''
 }: Props) {
     const navigate = useNavigate();
     const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -107,7 +109,7 @@ const BoardColumn = memo(function BoardColumn({
         setIsGenerating(true);
         try {
             const existingTitles = column.taskCards.map(t => t.title);
-            const tasks = await generateTasksForColumn(column.name, existingTitles, "", aiInstruction);
+            const tasks = await generateTasksForColumn(column.name, existingTitles, boardName, aiInstruction);
             console.log(`[BoardColumn] AI Generated Tasks for ${column.name}:`, tasks);
             for (const task of tasks) {
                 console.log(`[BoardColumn] Adding Task: "${task.title}" with Description Length: ${task.description?.length}`);
@@ -301,6 +303,11 @@ const BoardColumn = memo(function BoardColumn({
                                         if (e.key === 'Escape') {
                                             setShowInput(false);
                                             setNewTaskTitle('');
+                                        }
+                                    }}
+                                    onBlur={() => {
+                                        if (!newTaskTitle.trim()) {
+                                            setShowInput(false);
                                         }
                                     }}
                                     ref={addTaskInputRef}

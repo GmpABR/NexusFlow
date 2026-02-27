@@ -2,6 +2,7 @@ using Backend.Data;
 using Backend.DTOs;
 using Backend.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -11,13 +12,13 @@ public class BoardAutomationService : IAutomationService
 {
     private readonly AppDbContext _db;
     private readonly IHubContext<Backend.Hubs.BoardHub> _hubContext;
-    private readonly IServiceProvider _serviceProvider;
+    private readonly IServiceScopeFactory _scopeFactory;
     
-    public BoardAutomationService(AppDbContext db, IHubContext<Backend.Hubs.BoardHub> hubContext, IServiceProvider serviceProvider)
+    public BoardAutomationService(AppDbContext db, IHubContext<Backend.Hubs.BoardHub> hubContext, IServiceScopeFactory scopeFactory)
     {
         _db = db;
         _hubContext = hubContext;
-        _serviceProvider = serviceProvider;
+        _scopeFactory = scopeFactory;
     }
 
     public async Task<List<AutomationDto>> GetAutomationsAsync(int boardId)
@@ -203,19 +204,27 @@ public class BoardAutomationService : IAutomationService
                         break;
 
                     case "AiSummary":
+                        Console.WriteLine($"[Automation] Triggered AiSummary for Task {taskId} in Board {boardId}");
                         // AI Summary is slow, handle it in background to keep UI instant
                         _ = Task.Run(async () => {
                             try {
-                                using var scope = _serviceProvider.CreateScope();
+                                using var scope = _scopeFactory.CreateScope();
                                 var scopedContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                                 var scopedHub = scope.ServiceProvider.GetRequiredService<IHubContext<Backend.Hubs.BoardHub>>();
                                 var scopedTaskService = scope.ServiceProvider.GetRequiredService<ITaskService>();
+                                var scopedNotifService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
                                 // Fetch fresh state in new scope
                                 var bTask = await scopedContext.TaskCards
                                     .Include(t => t.Column)
+                                    .Include(t => t.Assignee)
+                                    .Include(t => t.Assignees).ThenInclude(ta => ta.User)
+                                    .Include(t => t.Labels).ThenInclude(tl => tl.Label)
                                     .FirstOrDefaultAsync(t => t.Id == taskId);
-                                if (bTask == null) return;
+                                if (bTask == null) {
+                                    Console.WriteLine($"[Automation] Task {taskId} not found in scope.");
+                                    return;
+                                }
 
                                 // Fetch comments
                                 var comments = await scopedContext.TaskActivities
@@ -225,25 +234,75 @@ public class BoardAutomationService : IAutomationService
                                     .ToListAsync();
 
                                 string aiContext = $"Title: {bTask.Title}\nDescription: {bTask.Description}\nComments:\n{string.Join("\n", comments)}";
-                                string summary = await GenerateAiSummaryInternal(aiContext, userId, scopedContext);
+                                
+                                // Fallback: if current user has no key, try the board owner
+                                int targetKeyUserId = userId;
+                                var triggeringUser = await scopedContext.Users.FindAsync(userId);
+                                if (triggeringUser == null || string.IsNullOrEmpty(triggeringUser.OpenRouterApiKey))
+                                {
+                                    var owner = await scopedContext.BoardMembers
+                                        .Where(bm => bm.BoardId == boardId && bm.Role == "Owner")
+                                        .FirstOrDefaultAsync();
+                                    if (owner != null) targetKeyUserId = owner.UserId;
+                                }
+
+                                Console.WriteLine($"[Automation] Generating AI Summary using key from User {targetKeyUserId}...");
+                                var keyUser = await scopedContext.Users.FindAsync(targetKeyUserId);
+                                if (keyUser == null || string.IsNullOrEmpty(keyUser.OpenRouterApiKey))
+                                {
+                                    Console.WriteLine($"[Automation] AI Summary failed: No API key found for User {userId} or Board Owner.");
+                                    await scopedNotifService.CreateNotificationAsync(userId == 0 ? 1 : userId, 
+                                        $"AI Summary failed for '{bTask.Title}': No OpenRouter API key configured for you or the board owner.", 
+                                        "Error", taskId);
+                                    return;
+                                }
+
+                                string summary = await GenerateAiSummaryInternal(aiContext, targetKeyUserId, scopedContext);
                                 
                                 if (!string.IsNullOrEmpty(summary))
                                 {
-                                    var activity = new TaskActivity {
-                                        TaskCardId = taskId,
-                                        UserId = userId == 0 ? 1 : userId,
-                                        Action = "Commented",
-                                        Details = $"**AI Summary:** {summary}",
-                                        Timestamp = DateTime.UtcNow
-                                    };
-                                    scopedContext.TaskActivities.Add(activity);
-                                    await scopedContext.SaveChangesAsync();
+                                    Console.WriteLine($"[Automation] Summary generated, length: {summary.Length}. Creating attachment...");
+                                    
+                                    // Build dynamic metadata section
+                                    var metadataEntries = new List<string>();
+                                    if (!string.IsNullOrEmpty(bTask.Priority)) metadataEntries.Add($"**Priority:** {bTask.Priority}");
+                                    
+                                    var assignees = bTask.Assignees?.Select(a => a.User?.FullName ?? a.User?.Username).Where(n => n != null).ToList();
+                                    if (assignees != null && assignees.Any()) metadataEntries.Add($"**Assignees:** {string.Join(", ", assignees)}");
+                                    else if (bTask.Assignee != null) metadataEntries.Add($"**Assignee:** {bTask.Assignee.FullName ?? bTask.Assignee.Username}");
 
-                                    // Broadcast update to sync AI summary on frontend
+                                    var tags = bTask.Labels?.Select(l => l.Label?.Name).Where(n => n != null).ToList();
+                                    if (tags != null && tags.Any()) metadataEntries.Add($"**Tags:** {string.Join(", ", tags)}");
+
+                                    string metadataSection = metadataEntries.Any() ? string.Join("\n", metadataEntries) + "\n" : "";
+
+                                    // Professional header for the Markdown file
+                                    string markdownContent = $"# AI Task Summary\n\n**Task:** {bTask.Title}\n**Date:** {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC\n{metadataSection}\n---\n\n{summary}\n\n---\n*Generated automatically by NexusFlow AI*";
+                                    var base64Content = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(markdownContent));
+                                    var dataUrl = $"data:text/markdown;base64,{base64Content}";
+
+                                    var attDto = new CreateAttachmentDto {
+                                        FileName = $"AI-Summary-{DateTime.UtcNow:yyyy-MM-dd-HHmm}.md",
+                                        PublicUrl = dataUrl,
+                                        StoragePath = "internal/ai-summary",
+                                        ContentType = "text/markdown",
+                                        FileSizeBytes = markdownContent.Length
+                                    };
+
+                                    await scopedTaskService.AddAttachmentAsync(taskId, attDto, userId == 0 ? 1 : userId);
+
+                                    // Broadcast update to sync new attachment on frontend
                                     var updatedDto = await scopedTaskService.GetTaskByIdAsync(taskId);
                                     if (updatedDto != null) {
-                                        await scopedHub.Clients.Group($"board_{bTask.BoardId}").SendAsync("TaskUpdated", updatedDto);
+                                        await scopedHub.Clients.Group($"board_{bTask.Column.BoardId}").SendAsync("TaskUpdated", updatedDto);
+                                        Console.WriteLine($"[Automation] AI Summary attachment created and broadcasted for Task {taskId}");
                                     }
+                                }
+                                else {
+                                    Console.WriteLine($"[Automation] AI Summary generation returned empty for Task {taskId}. Check API key.");
+                                    await scopedNotifService.CreateNotificationAsync(userId == 0 ? 1 : userId, 
+                                        $"AI Summary failed for '{bTask.Title}': The AI returned an empty response. Your OpenRouter API key might be invalid. Please check your Profile Settings.", 
+                                        "Error", taskId);
                                 }
                             } catch (Exception ex) {
                                 Console.WriteLine($"[Automation] Async AI Summary failed: {ex.Message}");
@@ -280,6 +339,7 @@ public class BoardAutomationService : IAutomationService
         };
         
         _db.TaskActivities.Add(activity);
+        await _db.SaveChangesAsync();
     }
 
     private async Task<string> GenerateAiSummaryInternal(string context, int userId, AppDbContext db)

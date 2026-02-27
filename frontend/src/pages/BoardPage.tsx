@@ -284,17 +284,16 @@ export default function BoardPage() {
         onTaskCreated: (task: TaskCardType) => {
             setBoard((prev) => {
                 if (!prev) return prev;
-                // Check if task already exists to avoid duplication from optimistic/API updates
-                const exists = prev.columns.some(col => col.taskCards.some(t => t.id === task.id));
-                if (exists) return prev;
-
                 return {
                     ...prev,
-                    columns: prev.columns.map((col) =>
-                        col.id === task.columnId
-                            ? { ...col, taskCards: [...col.taskCards, task] }
-                            : col
-                    ),
+                    columns: prev.columns.map((col) => {
+                        if (String(col.id) !== String(task.columnId)) return col;
+                        const filteredTasks = col.taskCards.filter(t => String(t.id) !== String(task.id));
+                        return {
+                            ...col,
+                            taskCards: [...filteredTasks, task].sort((a, b) => a.order - b.order)
+                        };
+                    }),
                 };
             });
         },
@@ -387,10 +386,10 @@ export default function BoardPage() {
         onColumnCreated: (column) => {
             setBoard((prev) => {
                 if (!prev) return prev;
-                if (prev.columns.some(c => c.id === column.id)) return prev;
+                const filteredColumns = prev.columns.filter(c => String(c.id) !== String(column.id));
                 return {
                     ...prev,
-                    columns: [...prev.columns, column]
+                    columns: [...filteredColumns, column].sort((a, b) => a.order - b.order)
                 };
             });
         },
@@ -478,7 +477,14 @@ export default function BoardPage() {
         if (!newListTitle.trim() || !boardId || board?.isClosed) return;
         try {
             const newCol = await createColumn(boardId, newListTitle.trim());
-            setBoard(prev => prev ? { ...prev, columns: [...prev.columns, newCol] } : prev);
+            setBoard(prev => {
+                if (!prev) return prev;
+                const filteredColumns = prev.columns.filter(c => String(c.id) !== String(newCol.id));
+                return {
+                    ...prev,
+                    columns: [...filteredColumns, newCol].sort((a, b) => a.order - b.order)
+                };
+            });
             setNewListTitle('');
             setIsAddingList(false);
             notifications.show({ title: 'Success', message: 'List added', color: 'green' });
@@ -627,17 +633,16 @@ export default function BoardPage() {
             console.log(`[BoardPage] Received from Backend:`, { id: newTask.id, title: newTask.title, descHash: newTask.description?.substring(0, 20) + "..." });
             setBoard((prev) => {
                 if (!prev) return prev;
-                // Check duplication strictly
-                const exists = prev.columns.some(col => col.taskCards.some(t => t.id === newTask.id));
-                if (exists) return prev;
-
                 return {
                     ...prev,
-                    columns: prev.columns.map((col) =>
-                        col.id === columnId
-                            ? { ...col, taskCards: [...col.taskCards, newTask] }
-                            : col
-                    ),
+                    columns: prev.columns.map((col) => {
+                        if (String(col.id) !== String(columnId)) return col;
+                        const filteredTasks = col.taskCards.filter(t => String(t.id) !== String(newTask.id));
+                        return {
+                            ...col,
+                            taskCards: [...filteredTasks, newTask].sort((a, b) => a.order - b.order)
+                        };
+                    }),
                 };
             });
         } catch {
@@ -1075,6 +1080,7 @@ export default function BoardPage() {
                                                     isClosed={board.isClosed}
                                                     showAI={idx === 0}
                                                     isViewer={board.userRole === 'Viewer'}
+                                                    boardName={board.name}
                                                 />
                                             )}
                                         </Draggable>
@@ -1100,6 +1106,11 @@ export default function BoardPage() {
                                                         onKeyDown={(e) => {
                                                             if (e.key === 'Enter') handleAddList();
                                                             if (e.key === 'Escape') setIsAddingList(false);
+                                                        }}
+                                                        onBlur={() => {
+                                                            if (!newListTitle.trim()) {
+                                                                setIsAddingList(false);
+                                                            }
                                                         }}
                                                         mb="sm"
                                                         styles={{
@@ -1260,8 +1271,19 @@ export default function BoardPage() {
                 centered
                 radius="lg"
                 size="md"
+                zIndex={3000}
                 styles={{
-                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    content: {
+                        background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white',
+                        color: computedColorScheme === 'dark' ? 'white' : 'black',
+                        maxHeight: '80vh',
+                        display: 'flex',
+                        flexDirection: 'column'
+                    },
+                    body: {
+                        overflowY: 'auto',
+                        flex: 1
+                    },
                     header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
                 }}
             >
@@ -1325,7 +1347,7 @@ export default function BoardPage() {
                                 <Text size="xs" fw={700} c="dimmed" mb="xs" style={{ textTransform: 'uppercase' }}>
                                     Outros Quadros
                                 </Text>
-                                <Stack gap="xs" style={{ maxHeight: 300, overflowY: 'auto' }}>
+                                <Stack gap="xs">
                                     {allBoards
                                         .filter(b => b.workspaceId !== board?.workspaceId || (board?.workspaceId === null && b.workspaceId === null && b.id !== board.id))
                                         .map(b => (
