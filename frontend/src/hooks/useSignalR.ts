@@ -32,8 +32,9 @@ export function useSignalR(boardId: number | null, callbacks: {
     const callbacksRef = useRef(callbacks);
     callbacksRef.current = callbacks;
 
+    const token = localStorage.getItem('token');
+
     useEffect(() => {
-        const token = localStorage.getItem('token');
         if (!token) return;
 
         const connection = new HubConnectionBuilder()
@@ -144,7 +145,7 @@ export function useSignalR(boardId: number | null, callbacks: {
             }
             connection.stop();
         };
-    }, [boardId]);
+    }, [boardId, token]);
 
     const isConnected = useCallback(() => {
         return connectionRef.current?.state === 'Connected';

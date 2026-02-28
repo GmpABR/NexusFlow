@@ -22,6 +22,7 @@ import {
     ActionIcon,
     ThemeIcon,
     TextInput,
+    Select,
     useComputedColorScheme,
 } from '@mantine/core';
 import { IconLayoutBoard, IconUsers, IconPlus, IconArrowLeft, IconCheck, IconPalette, IconChartBar, IconSettings, IconLock, IconTrash, IconLink, IconCopy } from '@tabler/icons-react';
@@ -51,6 +52,7 @@ export default function WorkspaceDetailsPage() {
     const [searchResults, setSearchResults] = useState<UserSummary[]>([]);
     const [searchLoading, setSearchLoading] = useState(false);
     const [inviting, setInviting] = useState(false);
+    const [inviteRole, setInviteRole] = useState<string>('Member');
 
     // Remove Member State
     const [removeModalOpen, setRemoveModalOpen] = useState(false);
@@ -88,10 +90,10 @@ export default function WorkspaceDetailsPage() {
         if (!searchValue || !workspace) return;
         setInviting(true);
         try {
-            await addWorkspaceMember(workspace.id, searchValue);
+            await addWorkspaceMember(workspace.id, searchValue, inviteRole);
             notifications.show({
                 title: 'Invitation Sent',
-                message: `An invitation has been sent to ${searchValue}.`,
+                message: `An invitation has been sent/updated for ${searchValue} as ${inviteRole}.`,
                 color: 'teal',
                 icon: <IconCheck size={16} />,
                 autoClose: 5000,
@@ -500,12 +502,23 @@ export default function WorkspaceDetailsPage() {
                 >
                     <Stack>
                         <Autocomplete
-                            label="Search User"
+                            label="Username"
                             placeholder="Type username..."
                             data={searchResults.map(u => u.username)}
                             value={searchValue}
                             onChange={setSearchValue}
                             rightSection={searchLoading ? <Loader size="xs" /> : null}
+                            mb="md"
+                        />
+                        <Select
+                            label="Role"
+                            data={[
+                                { value: 'Admin', label: 'Admin' },
+                                { value: 'Member', label: 'Member' },
+                                { value: 'Viewer', label: 'Viewer' }
+                            ]}
+                            value={inviteRole}
+                            onChange={(val: string | null) => setInviteRole(val || 'Member')}
                             mb="md"
                         />
                         <Group justify="flex-end">

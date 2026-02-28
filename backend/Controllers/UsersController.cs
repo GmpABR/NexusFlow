@@ -35,13 +35,12 @@ public class UsersController : ControllerBase
             return Ok(new List<UserSummaryDto>());
 
         var users = await _context.Users
-            .Where(u => u.Username.Contains(query) || u.Email.Contains(query))
+            .Where(u => u.Username.Contains(query))
             .Take(10)
             .Select(u => new UserSummaryDto
             {
                 Id = u.Id,
                 Username = u.Username,
-                Email = u.Email,
                 AvatarUrl = u.AvatarUrl,
                 DisplayOfflineAlways = u.DisplayOfflineAlways
             })
@@ -75,6 +74,13 @@ public class UsersController : ControllerBase
             DisplayOfflineAlways = user.DisplayOfflineAlways,
             CreatedAt = user.CreatedAt
         });
+    }
+
+    private string? MaskApiKey(string? key)
+    {
+        if (string.IsNullOrEmpty(key)) return key;
+        if (key.Length <= 8) return "****";
+        return key.Substring(0, 8) + "********" + key.Substring(key.Length - 4);
     }
 
     // ── PUT /api/users/me ────────────────────────────────────────────────

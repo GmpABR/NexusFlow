@@ -6,6 +6,8 @@ public class InviteMemberDto
 {
     [Required]
     public string Username { get; set; } = string.Empty;
+
+    public string Role { get; set; } = "Member";
 }
 
 public class BoardMemberDto
@@ -18,4 +20,5 @@ public class BoardMemberDto
     public DateTime JoinedAt { get; set; }
     public string? AvatarUrl { get; set; }
     public bool IsWorkspaceMember { get; set; }
+    public int BoardId { get; set; }
 }

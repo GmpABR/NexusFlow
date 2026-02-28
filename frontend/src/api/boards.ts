@@ -120,8 +120,8 @@ export const respondToInvitation = async (boardId: number, accept: boolean): Pro
     await api.post(`/boards/${boardId}/invitations/respond`, { accept });
 };
 
-export const inviteMember = async (boardId: number, username: string): Promise<BoardMember> => {
-    const { data } = await api.post<BoardMember>(`/boards/${boardId}/members`, { username });
+export const inviteMember = async (boardId: number, username: string, role: string = 'Member'): Promise<BoardMember> => {
+    const { data } = await api.post<BoardMember>(`/boards/${boardId}/members`, { username, role });
     return data;
 };
 

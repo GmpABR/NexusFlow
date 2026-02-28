@@ -69,13 +69,11 @@ public class BoardsController : ControllerBase
     public async Task<IActionResult> InviteMember(int id, [FromBody] InviteMemberDto dto)
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var member = await _boardService.InviteMemberAsync(id, dto.Username, userId);
+        var member = await _boardService.InviteMemberAsync(id, dto.Username, dto.Role, userId);
         if (member == null)
-            return BadRequest(new { message = "Could not invite user. They may not exist, are already a member, or you are not the owner." });
+            return BadRequest(new { message = "Could not invite user. They may not exist or you are not the owner." });
 
-        // Notify that specific user if online (optional, but good)
-        // For now, we update the board group, but really only the owner cares about the "member added" event until they accept.
-        // Actually, Trello shows pending members. So broadcasting is fine.
+        // Notify that specific user if online
         await _hubContext.Clients.Group($"board_{id}")
             .SendAsync("MemberJoined", member);
 
@@ -86,12 +84,19 @@ public class BoardsController : ControllerBase
     public async Task<IActionResult> RespondToInvitation(int id, [FromBody] InvitationResponseDto dto)
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var result = await _boardService.RespondToInvitationAsync(id, userId, dto.Accept);
+        var member = await _boardService.RespondToInvitationAsync(id, userId, dto.Accept);
         
-        if (!result) return NotFound("Invitation not found or already processed.");
+        if (member == null && dto.Accept) return NotFound("Invitation not found or already processed.");
+
+        if (member != null)
+        {
+            await _hubContext.Clients.Group($"board_{id}")
+                .SendAsync("MemberJoined", member);
+        }
 
         return Ok(new { message = dto.Accept ? "Invitation accepted" : "Invitation declined" });
     }
+    
 
     [HttpDelete("{id}/members/{userId}")]
     public async Task<IActionResult> RemoveMember(int id, int userId)
@@ -262,9 +267,15 @@ public class BoardsController : ControllerBase
     public async Task<IActionResult> JoinBoard(string token)
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var result = await _boardService.AcceptBoardInviteAsync(token, userId);
-        if (!result) return BadRequest("Could not join board.");
-        return Ok();
+        var member = await _boardService.AcceptBoardInviteAsync(token, userId);
+        
+        if (member == null) return BadRequest("Could not join board.");
+
+        // Notify other board members that someone has joined
+        await _hubContext.Clients.Group($"board_{member.BoardId}")
+            .SendAsync("MemberJoined", member);
+        
+        return Ok(member);
     }
 }
 

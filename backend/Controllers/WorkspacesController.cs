@@ -72,7 +72,7 @@ public class WorkspacesController : ControllerBase
         if (workspace == null) return NotFound();
 
         // Check access
-         var isMember = workspace.OwnerId == userId || workspace.Members.Any(m => m.UserId == userId);
+         var isMember = workspace.OwnerId == userId || workspace.Members.Any(m => m.UserId == userId && m.Status == "Accepted");
 
         if (!isMember)
         {
@@ -156,7 +156,7 @@ public class WorkspacesController : ControllerBase
         
         // Check access
         var hasAccess = await _context.Workspaces
-            .AnyAsync(w => w.Id == id && (w.OwnerId == userId || w.Members.Any(m => m.UserId == userId)));
+            .AnyAsync(w => w.Id == id && (w.OwnerId == userId || w.Members.Any(m => m.UserId == userId && m.Status == "Accepted")));
 
         if (!hasAccess)
         {
@@ -195,7 +195,7 @@ public class WorkspacesController : ControllerBase
         // For now, allow Owner or any Member? No, usually Admin/Owner.
         // Let's allow Owner for sure.
         // And maybe Members with Role 'Admin'.
-        var requesterMember = workspace.Members.FirstOrDefault(m => m.UserId == userId);
+        var requesterMember = workspace.Members.FirstOrDefault(m => m.UserId == userId && m.Status == "Accepted");
         bool isAdmin = workspace.OwnerId == userId || (requesterMember != null && requesterMember.Role == "Admin");
 
         if (!isAdmin) return Forbid();
@@ -203,16 +203,29 @@ public class WorkspacesController : ControllerBase
         var userToAdd = await _context.Users.FirstOrDefaultAsync(u => u.Username == dto.Username);
         if (userToAdd == null) return BadRequest(new { message = "User not found." });
 
-        if (workspace.Members.Any(m => m.UserId == userToAdd.Id))
+        var existingMember = workspace.Members.FirstOrDefault(m => m.UserId == userToAdd.Id);
+        if (existingMember != null)
         {
-            return BadRequest(new { message = "User is already a member." });
+            // Update role and set back to Pending
+            existingMember.Role = dto.Role;
+            existingMember.Status = "Pending";
+            await _context.SaveChangesAsync();
+
+            return Ok(new WorkspaceMemberDto
+            {
+                UserId = userToAdd.Id,
+                Username = userToAdd.Username,
+                Role = existingMember.Role,
+                Status = existingMember.Status,
+                JoinedAt = existingMember.JoinedAt
+            });
         }
 
         var newMember = new WorkspaceMember
         {
             WorkspaceId = id,
             UserId = userToAdd.Id,
-            Role = "Member", // Default role
+            Role = dto.Role,
             Status = "Pending",
             JoinedAt = DateTime.UtcNow
         };
@@ -243,7 +256,7 @@ public class WorkspacesController : ControllerBase
         if (workspace == null) return NotFound();
 
         // Check permissions
-        var requesterMember = workspace.Members.FirstOrDefault(m => m.UserId == requesterId);
+        var requesterMember = workspace.Members.FirstOrDefault(m => m.UserId == requesterId && m.Status == "Accepted");
         bool isAdmin = workspace.OwnerId == requesterId || (requesterMember != null && requesterMember.Role == "Admin");
 
         // Allow user to leave themselves?
@@ -332,7 +345,7 @@ public class WorkspacesController : ControllerBase
         if (workspace == null) return NotFound();
 
         // Check if requester is Owner or Admin
-        var requesterMember = workspace.Members.FirstOrDefault(m => m.UserId == userId);
+        var requesterMember = workspace.Members.FirstOrDefault(m => m.UserId == userId && m.Status == "Accepted");
         bool isAdmin = workspace.OwnerId == userId || (requesterMember != null && requesterMember.Role == "Admin");
 
         if (!isAdmin) return Forbid();
@@ -414,16 +427,10 @@ public class WorkspacesController : ControllerBase
 
         if (existingMember != null)
         {
-            if (existingMember.Status == "Accepted")
-            {
-                return BadRequest(new { message = "You are already a member of this workspace." });
-            }
-            else
-            {
-                existingMember.Status = "Accepted";
-                existingMember.Role = invite.Role;
-                existingMember.JoinedAt = DateTime.UtcNow;
-            }
+            // Update role from the invite and ensure status is Accepted
+            existingMember.Status = "Accepted";
+            existingMember.Role = invite.Role;
+            existingMember.JoinedAt = DateTime.UtcNow;
         }
         else
         {

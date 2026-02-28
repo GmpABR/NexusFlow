@@ -153,7 +153,8 @@ public class BoardService : IBoardService
                     Role = m.Role,
                     JoinedAt = m.JoinedAt,
                     AvatarUrl = m.User.AvatarUrl,
-                    IsWorkspaceMember = false
+                    IsWorkspaceMember = false,
+                    BoardId = m.BoardId
                 }).ToList(),
                 UserRole = b.OwnerId == userId ? "Owner" : (b.Members.Where(m => m.UserId == userId).Select(m => m.Role).FirstOrDefault() ?? "Member") 
                 // Handle null coalescing properly.
@@ -175,7 +176,8 @@ public class BoardService : IBoardService
                     Role = "Owner",
                     JoinedAt = boardDto.CreatedAt,
                     AvatarUrl = owner.AvatarUrl,
-                    IsWorkspaceMember = false
+                    IsWorkspaceMember = false,
+                    BoardId = boardDto.Id
                 });
             }
 
@@ -198,7 +200,8 @@ public class BoardService : IBoardService
                         Role = wm.Role,
                         JoinedAt = wm.JoinedAt,
                         AvatarUrl = wm.User.AvatarUrl,
-                        IsWorkspaceMember = true
+                        IsWorkspaceMember = true,
+                        BoardId = boardDto.Id
                     });
                 }
             }
@@ -267,12 +270,13 @@ public class BoardService : IBoardService
                 Role = m.Role,
                 JoinedAt = m.JoinedAt,
                 AvatarUrl = m.User.AvatarUrl,
-                IsWorkspaceMember = false
+                IsWorkspaceMember = false,
+                BoardId = m.BoardId
             })
             .ToListAsync();
     }
 
-    public async Task<BoardMemberDto?> InviteMemberAsync(int boardId, string username, int inviterId)
+    public async Task<BoardMemberDto?> InviteMemberAsync(int boardId, string username, string role, int inviterId)
     {
         // Only the owner can invite
         var board = await _db.Boards.FindAsync(boardId);
@@ -290,12 +294,11 @@ public class BoardService : IBoardService
         
         if (existing != null)
         {
-            if (existing.Status == "Accepted") return null; // Already member
-            if (existing.Status == "Pending") return null; // Already invited
-            
-            // If Rejected, re-invite
+            // Update role and set back to Pending so they can accept/be notified
+            existing.Role = role;
             existing.Status = "Pending";
             await _db.SaveChangesAsync();
+
             return new BoardMemberDto
             {
                 Id = existing.Id,
@@ -304,7 +307,8 @@ public class BoardService : IBoardService
                 Email = user.Email,
                 Role = existing.Role,
                 JoinedAt = existing.JoinedAt,
-                AvatarUrl = user.AvatarUrl
+                AvatarUrl = user.AvatarUrl,
+                BoardId = boardId
             };
         }
 
@@ -312,7 +316,7 @@ public class BoardService : IBoardService
         {
             UserId = user.Id,
             BoardId = boardId,
-            Role = "Member",
+            Role = role,
             Status = "Pending"
         };
         
@@ -327,30 +331,42 @@ public class BoardService : IBoardService
             Email = user.Email,
             Role = member.Role,
             JoinedAt = member.JoinedAt,
-            AvatarUrl = user.AvatarUrl
+            AvatarUrl = user.AvatarUrl,
+            BoardId = boardId
         };
     }
 
-    public async Task<bool> RespondToInvitationAsync(int boardId, int userId, bool accept)
+    public async Task<BoardMemberDto?> RespondToInvitationAsync(int boardId, int userId, bool accept)
     {
         var member = await _db.BoardMembers
+            .Include(m => m.User)
             .FirstOrDefaultAsync(m => m.BoardId == boardId && m.UserId == userId && m.Status == "Pending");
         
-        if (member == null) return false;
+        if (member == null) return null;
 
         if (accept)
         {
             member.Status = "Accepted";
+            await _db.SaveChangesAsync();
+            
+            return new BoardMemberDto
+            {
+                Id = member.Id,
+                UserId = member.UserId,
+                Username = member.User.Username,
+                Email = member.User.Email,
+                Role = member.Role,
+                JoinedAt = member.JoinedAt,
+                AvatarUrl = member.User.AvatarUrl,
+                BoardId = boardId
+            };
         }
         else
         {
-            // We can either remove the record or set to Rejected. 
-            // Removing keeps the table cleaner for now.
             _db.BoardMembers.Remove(member);
+            await _db.SaveChangesAsync();
+            return null;
         }
-
-        await _db.SaveChangesAsync();
-        return true;
     }
 
     public async Task<bool> RemoveMemberAsync(int boardId, int userId, int requesterId)
@@ -621,13 +637,18 @@ public class BoardService : IBoardService
         };
     }
 
-    public async Task<bool> AcceptBoardInviteAsync(string token, int userId)
+    public async Task<BoardMemberDto?> AcceptBoardInviteAsync(string token, int userId)
     {
         var invite = await _db.BoardInvites
             .Include(i => i.Board)
             .FirstOrDefaultAsync(i => i.Token == token && i.IsActive);
 
-        if (invite == null) return false;
+        if (invite == null) return null;
+
+        var user = await _db.Users.FindAsync(userId);
+        if (user == null) return null;
+
+        BoardMember? member;
 
         // Check if already a member
         var existing = await _db.BoardMembers
@@ -635,16 +656,14 @@ public class BoardService : IBoardService
 
         if (existing != null)
         {
-            if (existing.Status == "Accepted") return true; // Already joined
-            
-            // Update role if joining via a different link? 
-            // For now, just accept the existing one and update status.
+            // Update role from the invite and ensure status is Accepted
             existing.Status = "Accepted";
             existing.Role = invite.Role;
+            member = existing;
         }
         else
         {
-            var member = new BoardMember
+            member = new BoardMember
             {
                 BoardId = invite.BoardId,
                 UserId = userId,
@@ -655,6 +674,17 @@ public class BoardService : IBoardService
         }
 
         await _db.SaveChangesAsync();
-        return true;
+
+        return new BoardMemberDto
+        {
+            Id = member.Id,
+            UserId = userId,
+            Username = user.Username,
+            Email = user.Email,
+            Role = member.Role,
+            JoinedAt = member.JoinedAt,
+            AvatarUrl = user.AvatarUrl,
+            BoardId = invite.BoardId
+        };
     }
 }

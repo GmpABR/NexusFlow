@@ -50,6 +50,8 @@ export default function BoardAutomationsModal({ opened, onClose, board }: BoardA
         }
     }, [opened, board.id]);
 
+    const canManageAutomations = board.userRole === 'Owner' || board.userRole === 'Admin';
+
     const loadAutomations = async () => {
         try {
             setLoading(true);
@@ -70,6 +72,7 @@ export default function BoardAutomationsModal({ opened, onClose, board }: BoardA
     };
 
     const handleCreate = async () => {
+        if (!canManageAutomations) return;
         if (!triggerCondition || !actionType) return;
         if (['AssignToUser', 'AddLabel', 'SetPriority'].includes(actionType) && !actionValue) return;
 
@@ -95,6 +98,7 @@ export default function BoardAutomationsModal({ opened, onClose, board }: BoardA
     };
 
     const handleDelete = async (id: number) => {
+        if (!canManageAutomations) return;
         try {
             await deleteAutomation(id);
             setAutomations(automations.filter(a => a.id !== id));
@@ -183,9 +187,11 @@ export default function BoardAutomationsModal({ opened, onClose, board }: BoardA
                                             )}
                                         </Group>
                                     </Stack>
-                                    <ActionIcon color="red" variant="subtle" onClick={() => handleDelete(a.id)}>
-                                        <IconTrash size={18} />
-                                    </ActionIcon>
+                                    {canManageAutomations && (
+                                        <ActionIcon color="red" variant="subtle" onClick={() => handleDelete(a.id)}>
+                                            <IconTrash size={18} />
+                                        </ActionIcon>
+                                    )}
                                 </Group>
                             </Paper>
                         ))}
@@ -194,7 +200,7 @@ export default function BoardAutomationsModal({ opened, onClose, board }: BoardA
                             <Text c="dimmed" size="sm" ta="center" py="md">No automations created yet.</Text>
                         )}
 
-                        {!showForm ? (
+                        {canManageAutomations && !showForm && (
                             <Button
                                 variant="light"
                                 color="violet"
@@ -205,7 +211,8 @@ export default function BoardAutomationsModal({ opened, onClose, board }: BoardA
                             >
                                 Add Rule
                             </Button>
-                        ) : (
+                        )}
+                        {canManageAutomations && showForm && (
                             <Paper withBorder p="md" radius="md">
                                 <Stack gap="md">
                                     <Text fw={600} size="sm">Create New Rule</Text>

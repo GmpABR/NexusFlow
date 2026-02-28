@@ -94,6 +94,8 @@ const callOpenRouter = async (prompt: string, isJson: boolean = false, useFallba
             headers: {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${API_KEY}`,
+                "HTTP-Referer": window.location.origin,
+                "X-Title": "NexusFlow AI Architect"
             },
             body: JSON.stringify({
                 model: model,

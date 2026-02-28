@@ -319,6 +319,10 @@ export default function BoardPage() {
         onMemberJoined: (member: BoardMember) => {
             setBoard((prev) => {
                 if (!prev) return prev;
+                // Prevent duplicates
+                const exists = (prev.members || []).some(m => m.userId === member.userId);
+                if (exists) return prev;
+
                 return {
                     ...prev,
                     members: [...(prev.members || []), member],
@@ -692,10 +696,10 @@ export default function BoardPage() {
         if (!searchValue.trim() || !boardId || board?.isClosed) return;
         setInviting(true);
         try {
-            await inviteMember(boardId, searchValue.trim());
+            await inviteMember(boardId, searchValue.trim(), inviteRole);
             setSearchValue('');
             setSearchResults([]);
-            notifications.show({ title: 'Invited!', message: `${searchValue} has been added to the board.`, color: 'green' });
+            notifications.show({ title: 'Invited!', message: `${searchValue} has been invited/updated as ${inviteRole}.`, color: 'green' });
             fetchBoard();
         } catch {
             notifications.show({ title: 'Error', message: 'Could not invite user. Check the username or permissions.', color: 'red' });
@@ -1420,33 +1424,51 @@ export default function BoardPage() {
                     {isOwner && (
                         <Box mb="md">
                             <Text size="sm" fw={500} mb="xs" c="dimmed">Invite a collaborator</Text>
-                            <Group gap="xs" align="flex-start">
-                                <Autocomplete
-                                    placeholder="Search by username..."
-                                    value={searchValue}
-                                    onChange={setSearchValue}
-                                    data={searchResults.map(u => u.username)}
-                                    // ...
-                                    rightSection={searchLoading ? <Loader size="xs" /> : null}
-                                    style={{ flex: 1 }}
-                                    styles={{
-                                        input: {
-                                            background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.4)' : 'white',
-                                            color: computedColorScheme === 'dark' ? 'white' : 'black'
-                                        }
-                                    }}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
-                                />
-                                <Button
-                                    leftSection={<IconUserPlus size={16} />}
-                                    variant="outline"
-                                    color="violet"
-                                    loading={inviting}
-                                    onClick={handleInvite}
-                                >
-                                    Invite
-                                </Button>
-                            </Group>
+                            <Stack gap="xs">
+                                <Group gap="xs" align="flex-end">
+                                    <Autocomplete
+                                        label="Username"
+                                        placeholder="Search by username..."
+                                        value={searchValue}
+                                        onChange={setSearchValue}
+                                        data={searchResults.map(u => u.username)}
+                                        rightSection={searchLoading ? <Loader size="xs" /> : null}
+                                        style={{ flex: 1 }}
+                                        styles={{
+                                            input: {
+                                                background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.4)' : 'white',
+                                                color: computedColorScheme === 'dark' ? 'white' : 'black'
+                                            }
+                                        }}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
+                                    />
+                                    <Select
+                                        label="Role"
+                                        data={[
+                                            { value: 'Member', label: 'Member' },
+                                            { value: 'Viewer', label: 'Viewer' }
+                                        ]}
+                                        value={inviteRole}
+                                        onChange={(val) => setInviteRole(val || 'Member')}
+                                        w={120}
+                                        styles={{
+                                            input: {
+                                                background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.4)' : 'white',
+                                                color: computedColorScheme === 'dark' ? 'white' : 'black'
+                                            }
+                                        }}
+                                    />
+                                    <Button
+                                        leftSection={<IconUserPlus size={16} />}
+                                        variant="outline"
+                                        color="violet"
+                                        loading={inviting}
+                                        onClick={handleInvite}
+                                    >
+                                        Invite
+                                    </Button>
+                                </Group>
+                            </Stack>
 
                             <Divider label="or" labelPosition="center" my="lg" />
 

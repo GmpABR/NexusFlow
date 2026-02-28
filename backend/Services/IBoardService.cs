@@ -9,8 +9,8 @@ public interface IBoardService
     Task<BoardDetailDto?> GetBoardDetailAsync(int boardId, int userId);
     Task<BoardSummaryDto> CreateBoardAsync(CreateBoardDto dto, int userId);
     Task<List<BoardMemberDto>> GetBoardMembersAsync(int boardId, int userId);
-    Task<BoardMemberDto?> InviteMemberAsync(int boardId, string username, int inviterId);
-    Task<bool> RespondToInvitationAsync(int boardId, int userId, bool accept);
+    Task<BoardMemberDto?> InviteMemberAsync(int boardId, string username, string role, int inviterId);
+    Task<BoardMemberDto?> RespondToInvitationAsync(int boardId, int userId, bool accept);
     Task<bool> RemoveMemberAsync(int boardId, int userId, int requesterId);
     Task<bool> UpdateBoardAsync(int boardId, UpdateBoardDto dto, int requesterId);
     Task<bool> CloseBoardAsync(int boardId, int requesterId);
@@ -24,6 +24,6 @@ public interface IBoardService
     // Invite Link Management
     Task<BoardInviteDto> CreateBoardInviteAsync(int boardId, string role, int requesterId);
     Task<BoardInviteDto?> GetBoardInviteByTokenAsync(string token);
-    Task<bool> AcceptBoardInviteAsync(string token, int userId);
+    Task<BoardMemberDto?> AcceptBoardInviteAsync(string token, int userId);
 }
 

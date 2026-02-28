@@ -21,8 +21,15 @@ public class BoardAutomationService : IAutomationService
         _scopeFactory = scopeFactory;
     }
 
-    public async Task<List<AutomationDto>> GetAutomationsAsync(int boardId)
+    public async Task<List<AutomationDto>> GetAutomationsAsync(int boardId, int userId)
     {
+        // Basic access check: must be a member of the board (or workspace)
+        var hasAccess = await _db.Boards.AnyAsync(b => b.Id == boardId && 
+            (b.OwnerId == userId || b.Members.Any(m => m.UserId == userId && m.Status == "Accepted") ||
+             _db.WorkspaceMembers.Any(wm => wm.WorkspaceId == b.WorkspaceId && wm.UserId == userId && wm.Status == "Accepted")));
+
+        if (!hasAccess) throw new UnauthorizedAccessException("You do not have access to this board's automations.");
+
         return await _db.BoardAutomations
             .AsNoTracking()
             .Where(a => a.BoardId == boardId)
@@ -39,11 +46,14 @@ public class BoardAutomationService : IAutomationService
             .ToListAsync();
     }
 
-    public async Task<AutomationDto> CreateAutomationAsync(int boardId, CreateAutomationDto dto)
+    public async Task<AutomationDto> CreateAutomationAsync(int boardId, CreateAutomationDto dto, int userId)
     {
+        // Permission check: Must be Owner or Admin
+        await VerifyManagementAccessAsync(boardId, userId);
+
         var automation = new BoardAutomation
         {
-            BoardId = boardId,
+            BoardId = boardId, 
             TriggerType = dto.TriggerType,
             TriggerCondition = dto.TriggerCondition,
             ActionType = dto.ActionType,
@@ -66,14 +76,34 @@ public class BoardAutomationService : IAutomationService
         };
     }
 
-    public async Task<bool> DeleteAutomationAsync(int automationId)
+    public async Task<bool> DeleteAutomationAsync(int automationId, int userId)
     {
         var automation = await _db.BoardAutomations.FindAsync(automationId);
         if (automation == null) return false;
 
+        // Permission check: Must be Owner or Admin of the board this automation belongs to
+        await VerifyManagementAccessAsync(automation.BoardId, userId);
+
         _db.BoardAutomations.Remove(automation);
         await _db.SaveChangesAsync();
         return true;
+    }
+
+    private async Task VerifyManagementAccessAsync(int boardId, int userId)
+    {
+        var board = await _db.Boards
+            .Include(b => b.Members)
+            .FirstOrDefaultAsync(b => b.Id == boardId);
+
+        if (board == null) throw new KeyNotFoundException("Board not found.");
+
+        bool isOwner = board.OwnerId == userId;
+        bool isAdmin = board.Members.Any(m => m.UserId == userId && m.Role == "Admin" && m.Status == "Accepted");
+
+        if (!isOwner && !isAdmin)
+        {
+            throw new UnauthorizedAccessException("Only board owners and admins can manage automations.");
+        }
     }
 
     public async Task<bool> ExecuteTaskMovedAutomationsAsync(int boardId, int taskId, int newColumnId, int userId)

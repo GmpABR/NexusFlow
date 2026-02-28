@@ -535,7 +535,7 @@ public class TaskService : ITaskService
         }
 
         var boardMember = await _db.BoardMembers
-            .FirstOrDefaultAsync(bm => bm.BoardId == activity.TaskCard.Column.BoardId && bm.UserId == userId);
+            .FirstOrDefaultAsync(bm => bm.BoardId == activity.TaskCard.Column.BoardId && bm.UserId == userId && bm.Status == "Accepted");
 
         if (boardMember != null && (boardMember.Role == "Owner" || boardMember.Role == "Admin"))
         {
