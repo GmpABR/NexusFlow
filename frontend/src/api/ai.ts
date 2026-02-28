@@ -51,7 +51,7 @@ export const validateApiKey = async (key: string): Promise<boolean> => {
     }
 };
 const PRIMARY_MODEL = "stepfun/step-3.5-flash:free";
-const FALLBACK_MODEL = "google/gemini-2.0-flash-exp:free";
+const FALLBACK_MODEL = "arcee-ai/trinity-large-preview:free";
 const BASE_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 export type AIMode = 'enhance' | 'grammar' | 'shorten' | 'professional' | 'custom' | 'write_title';

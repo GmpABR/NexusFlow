@@ -193,6 +193,11 @@ export default function BoardsPage() {
     const handleGenerateBoard = async () => {
         if (!projectIdea.trim()) return;
 
+        if (!selectedWorkspaceId) {
+            notifications.show({ title: 'Workspace Required', message: 'Please select a workspace for the AI generated board.', color: 'red' });
+            return;
+        }
+
         if (!getApiKey()) {
             notifications.show({
                 title: 'AI Key Required',
@@ -237,10 +242,6 @@ export default function BoardsPage() {
                 'Bug Tracking': 'red'
             };
             const theme = themeMap[projectType || ''] || 'purple';
-            if (!selectedWorkspaceId) {
-                notifications.show({ title: 'Error', message: 'Please select a workspace for the AI generated board.', color: 'red' });
-                return;
-            }
             const newBoard = await createBoard(boardName, parseInt(selectedWorkspaceId), theme, true);
 
             const columnMap: Record<string, number> = {};
@@ -857,7 +858,7 @@ export default function BoardsPage() {
             {/* AI Architect Modal */}
             <Modal
                 opened={aiModalOpen}
-                onClose={() => setAiModalOpen(false)}
+                onClose={() => { setAiModalOpen(false); setSelectedWorkspaceId(null); }}
                 title="AI Board Architect"
                 centered
                 radius="lg"
@@ -871,14 +872,15 @@ export default function BoardsPage() {
                 </Text>
 
                 <Select
-                    label="Workspace (Optional)"
-                    placeholder="Select a workspace for the board"
+                    label="Workspace"
+                    placeholder="Select a workspace"
                     data={workspaces.map(w => ({ value: w.id.toString(), label: w.name }))}
                     value={selectedWorkspaceId}
                     onChange={setSelectedWorkspaceId}
                     mb="md"
                     searchable
-                    clearable
+                    required
+                    withAsterisk
                 />
 
                 <Select

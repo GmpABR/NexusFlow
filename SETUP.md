@@ -1,58 +1,121 @@
-# NexusFlow Setup Guide
+# NexusFlow – Setup Guide
 
-Welcome to NexusFlow! There are two ways to run this application: using a **Local Docker Environment** (recommended for active development) or connecting to a **Cloud Supabase Database** (easiest if you don't want to install Docker).
+Welcome! There are two ways to run NexusFlow: **Local Docker** (recommended for development) or **Cloud Supabase** (no Docker needed).
 
 ---
 
-## Option 1: The Local Docker Environment (Recommended)
-This approach spins up the entire Supabase ecosystem (PostgreSQL database, Auth, Storage) on your own machine. You don't need to manually configure complicated `docker-compose.yml` files.
+## ⚠️ First: Configure Your Secrets
 
-### Prerequisites:
-1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and ensure it is running.
-2. Install [Node.js](https://nodejs.org/) (for the frontend and `npx`).
-3. Install the [.NET 9.0 SDK](https://dotnet.microsoft.com/download) (for the C# backend).
+After cloning, you need to fill in two files with your local credentials. These files are **git-ignored** — they will never be committed.
+
+### Backend secrets → `backend/appsettings.Development.json`
+Create this file (copy the template below) and fill in your values:
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=127.0.0.1;Port=54322;Database=postgres;Username=postgres;Password=postgres;Trust Server Certificate=true"
+  },
+  "JwtSettings": {
+    "SecretKey": "REPLACE_WITH_A_STRONG_RANDOM_STRING_AT_LEAST_32_CHARS",
+    "Issuer": "NexusFlowBackend",
+    "Audience": "NexusFlowFrontend"
+  },
+  "AllowedOrigins": "http://localhost:5173"
+}
+```
+> 💡 **SecretKey tip:** Generate a strong key with: `openssl rand -base64 48` or use any random 32+ character string.
+
+### Frontend secrets → `frontend/.env`
+Create this file (a template exists at `frontend/.env.example`):
+```env
+VITE_API_URL=http://localhost:5145/api
+```
+
+---
+
+## Option 1: Local Docker (Recommended)
+
+Run the entire Supabase stack (PostgreSQL, Auth, Storage) on your machine.
+
+### Prerequisites
+1. [Docker Desktop](https://www.docker.com/products/docker-desktop/) — must be running
+2. [Node.js](https://nodejs.org/) (for the frontend)
+3. [.NET 9.0 SDK](https://dotnet.microsoft.com/download) (for the C# backend)
 
 ### First-Time Setup
-If this is your very first time cloning the repository, you need to download the database containers and apply the schema:
-1. Open PowerShell.
-2. Navigate to the project root: `cd path/to/Scrum Trello`
-3. Run the initialization script: `.\init-dev.ps1`
-   *(This downloads Supabase CLI, restores C# packages, and builds your empty database tables automatically.)*
+Only needed once after cloning:
+1. Make sure [Docker Desktop](https://www.docker.com/products/docker-desktop/) is installed.
+2. Open PowerShell in the project root.
+3. Run the initialization script:
+   ```powershell
+   .\init-dev.ps1
+   ```
+   This automatically:
+   - Checks that Docker is running (and starts it if needed)
+   - Downloads and starts the local Supabase containers (PostgreSQL + Auth + Storage)
+   - Restores .NET backend packages (`dotnet restore`)
+   - Applies all database migrations (`dotnet ef database update`)
 
 ### Daily Development
-Once setup is complete, you only need one command to start coding every day:
-1. Make sure Docker Desktop is open.
-2. Run `.\start-dev.ps1`
-
-*(This script automatically verifies Supabase is running, starts the C# Backend on `localhost:5145`, and starts the React Frontend on `localhost:5173`.)*
+Once setup is complete, just run this every time you want to code:
+1. Open PowerShell in the project root.
+2. Run:
+   ```powershell
+   .\start-dev.ps1
+   ```
+   This automatically:
+   - Checks Docker is running (and starts it if not)
+   - Starts/resumes local Supabase containers
+   - Starts the .NET backend in a new window on `http://localhost:5145`
+   - Starts the React frontend in the current window on `http://localhost:5173`
 
 ---
 
-## Option 2: Using a Cloud Supabase Database
-If you do not want to run Docker on your machine, you can point the application to a cloud-hosted Supabase project.
+## Option 2: Cloud Supabase (No Docker)
 
-### 1. Set up Cloud Supabase
-1. Go to [Supabase.com](https://supabase.com/) and create a new project.
-2. Go to **Project Settings -> Database** and copy the **Connection string (URI)**.
-3. Go to **Project Settings -> API** and copy your **Project URL** and **anon public key**.
+Connect to a cloud-hosted Supabase project instead.
 
-### 2. Configure the Backend (C#)
-1. Open `backend/appsettings.json`.
-2. Locate the `ConnectionStrings:DefaultConnection`.
-3. Replace the `Host=127.0.0.1;...` string with the Connection URI you copied from Supabase. Make sure to include `Trust Server Certificate=true` if required by EF Core.
+### 1. Create a Supabase Project
+1. Go to [supabase.com](https://supabase.com/) and create a new project.
+2. Go to **Project Settings → Database** → copy the **Connection string (URI)**.
 
-### 3. Configure the Frontend (React)
-1. Open `frontend/src/api/storage.ts`.
-2. Locate `const SUPABASE_URL` and `const SUPABASE_ANON_KEY`.
-3. Replace the local `127.0.0.1:54321` values with the Project URL and anon key from your Cloud Supabase dashboard.
+### 2. Configure Backend
+In `backend/appsettings.Development.json`, replace the `DefaultConnection` value with your Supabase URI:
+```json
+"DefaultConnection": "Host=db.YOURPROJECT.supabase.co;Database=postgres;Username=postgres;Password=YOUR_DB_PASSWORD;SSL Mode=Require"
+```
 
-### 4. Build the Database Tables
-Because you are using an empty cloud database, you need to build the tables:
-1. Open a terminal in the `/backend` folder.
-2. Run `dotnet ef database update`
-   *(This reads your C# migrations and pushes all the tables up to your Cloud Supabase instance).*
+> ⚠️ Never put production secrets in `appsettings.json` — that file is committed to Git. Always use `appsettings.Development.json`.
 
-### 5. Run the Application
-You can now start the frontend and backend normally:
-- Backend: Open terminal in `/backend` -> `dotnet run`
-- Frontend: Open terminal in `/frontend` -> `npm install` -> `npm run dev`
+### 3. Configure Frontend
+Update `frontend/.env`:
+```env
+VITE_API_URL=http://localhost:5145/api
+```
+*(No change needed for local testing — this points to your local backend which connects to the cloud DB.)*
+
+### 4. Apply Database Migrations
+```bash
+cd backend
+dotnet ef database update
+```
+
+### 5. Run the App
+```bash
+# Terminal 1 – Backend
+cd backend && dotnet run
+
+# Terminal 2 – Frontend
+cd frontend && npm install && npm run dev
+```
+
+---
+
+## Optional: AI Features (OpenRouter)
+
+NexusFlow supports AI-powered board generation. To enable it:
+1. Get a free API key from [openrouter.ai](https://openrouter.ai/)
+2. Log in to NexusFlow → go to **Profile → AI Configuration**
+3. Paste your key there — it's stored per-account in the database.
+
+> Your OpenRouter key is personal — treat it like a password.
