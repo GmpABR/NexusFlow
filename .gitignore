@@ -1,4 +1,4 @@
-# .gitignore for Scrum Trello (Dotnet + React)
+# .gitignore for NexusFlow (Dotnet + React)
 
 # .NET
 [Bb]in/
@@ -10,6 +10,9 @@
 .vscode/
 *.db
 *.db-journal
+
+# Secrets (NEVER commit real values)
+appsettings.Development.json
 
 # Node / React
 node_modules/
@@ -35,3 +38,11 @@ Thumbs.db
 .env.local
 .env.production
 .env.test
+
+# Debug / Temp files (should never be committed)
+git_status.txt
+register_error.json
+test_reg.js
+fix_db.sql
+*.sql
+testAi.ts

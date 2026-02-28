@@ -5,6 +5,8 @@ using Backend.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -53,15 +55,32 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
+// ── Rate Limiting (auth endpoints) ─────────────────────────────────────────
+builder.Services.AddRateLimiter(options =>
+{
+    // 10 requests per minute per IP on auth routes
+    options.AddFixedWindowLimiter("auth", limiterOptions =>
+    {
+        limiterOptions.PermitLimit = 10;
+        limiterOptions.Window = TimeSpan.FromMinutes(1);
+        limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        limiterOptions.QueueLimit = 2;
+    });
+    options.RejectionStatusCode = 429;
+});
+
 // ── SignalR ────────────────────────────────────────────────────────────────
 builder.Services.AddSignalR();
 
 // ── CORS ───────────────────────────────────────────────────────────────────
+// Origin is read from config so it can be overridden per environment
+var allowedOrigin = builder.Configuration["AllowedOrigins"] ?? "http://localhost:5173";
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins(allowedOrigin.Split(',', StringSplitOptions.TrimEntries))
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -89,6 +108,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("AllowFrontend");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
