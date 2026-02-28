@@ -18,6 +18,9 @@ public class TaskService : ITaskService
 
     public async Task<TaskCardDto> CreateTaskAsync(CreateTaskDto dto, int userId)
     {
+        if (!await VerifyColumnAccessAsync(dto.ColumnId, userId))
+            throw new UnauthorizedAccessException("User does not have access to this column.");
+
         var maxOrder = await _db.TaskCards
             .Where(t => t.ColumnId == dto.ColumnId)
             .MaxAsync(t => (int?)t.Order) ?? -1;
@@ -81,6 +84,9 @@ public class TaskService : ITaskService
             .FirstOrDefaultAsync(t => t.Id == taskId);
             
         if (task == null) return null;
+
+        if (!await VerifyTaskAccessAsync(taskId, userId))
+            throw new UnauthorizedAccessException("User does not have access to this task.");
 
         var changes = new List<string>();
         if (task.Title != dto.Title) changes.Add($"Title changed to '{dto.Title}'");
@@ -161,6 +167,9 @@ public class TaskService : ITaskService
             
         if (task == null) return null;
 
+        if (!await VerifyTaskAccessAsync(taskId, userId))
+            throw new UnauthorizedAccessException("User does not have access to this task.");
+
         int oldColumnId = task.ColumnId;
         
         // 1. Get all tasks in the target column (excluding the moved task)
@@ -204,6 +213,9 @@ public class TaskService : ITaskService
             
         if (task == null) return null;
 
+        if (!await VerifyTaskAccessAsync(taskId, userId))
+            throw new UnauthorizedAccessException("User does not have access to this task.");
+
         int boardId = task.Column.BoardId;
         
         // Log before delete? Or just delete. 
@@ -219,6 +231,9 @@ public class TaskService : ITaskService
     // Subtask Methods
     public async Task<SubtaskDto> CreateSubtaskAsync(int taskId, CreateSubtaskDto dto, int userId)
     {
+        if (!await VerifyTaskAccessAsync(taskId, userId))
+            throw new UnauthorizedAccessException("User does not have access to this task.");
+
         var subtask = new Subtask
         {
             TaskCardId = taskId,
@@ -236,6 +251,9 @@ public class TaskService : ITaskService
 
     public async Task<SubtaskDto?> UpdateSubtaskAsync(int subtaskId, UpdateSubtaskDto dto, int userId)
     {
+        if (!await VerifySubtaskAccessAsync(subtaskId, userId))
+            throw new UnauthorizedAccessException("User does not have access to this subtask.");
+
         var subtask = await _db.Subtasks.FindAsync(subtaskId);
         if (subtask == null) return null;
 
@@ -280,8 +298,10 @@ public class TaskService : ITaskService
         return true;
     }
 
-    public async Task<TaskCardDto?> GetTaskByIdAsync(int taskId)
+    public async Task<TaskCardDto?> GetTaskByIdAsync(int taskId, int userId)
     {
+        if (!await VerifyTaskAccessAsync(taskId, userId)) return null;
+
         return await _db.TaskCards
             .AsNoTracking()
             .AsSplitQuery()
@@ -330,8 +350,10 @@ public class TaskService : ITaskService
             .FirstOrDefaultAsync();
     }
     
-    public async Task<List<TaskActivityDto>> GetTaskActivitiesAsync(int taskId)
+    public async Task<List<TaskActivityDto>> GetTaskActivitiesAsync(int taskId, int userId)
     {
+        if (!await VerifyTaskAccessAsync(taskId, userId)) return new List<TaskActivityDto>();
+
         // 1. Fetch activities without Joins
         var activitiesData = await _db.TaskActivities
             .AsNoTracking()
@@ -414,6 +436,9 @@ public class TaskService : ITaskService
 
     public async Task<TaskActivityDto> AddCommentAsync(int taskId, string text, int userId)
     {
+        if (!await VerifyTaskAccessAsync(taskId, userId))
+            throw new UnauthorizedAccessException("User does not have access to this task.");
+
         var activity = new TaskActivity
         {
             TaskCardId = taskId,
@@ -524,8 +549,16 @@ public class TaskService : ITaskService
 
     public async Task<TaskActivityReactionDto?> ToggleReactionAsync(int activityId, string emoji, int userId)
     {
-        var activity = await _db.TaskActivities.FindAsync(activityId);
+        var activity = await _db.TaskActivities
+            .Include(a => a.TaskCard)
+                .ThenInclude(t => t.Column)
+                    .ThenInclude(c => c.Board)
+            .FirstOrDefaultAsync(a => a.Id == activityId);
+
         if (activity == null) return null;
+
+        if (!await VerifyTaskAccessAsync(activity.TaskCardId, userId))
+            throw new UnauthorizedAccessException("User does not have access to this task.");
 
         var existing = await _db.TaskActivityReactions
             .FirstOrDefaultAsync(r => r.TaskActivityId == activityId && r.UserId == userId && r.Emoji == emoji);
@@ -580,6 +613,9 @@ public class TaskService : ITaskService
     // Time Tracking Methods
     public async Task<TimeLogDto?> StartTimerAsync(int taskId, int userId)
     {
+        if (!await VerifyTaskAccessAsync(taskId, userId))
+            throw new UnauthorizedAccessException("User does not have access to this task.");
+
         // Check if there's already a running timer for this user on this task
         var existingLog = await _db.TimeLogs
             .FirstOrDefaultAsync(tl => tl.TaskCardId == taskId && tl.UserId == userId && tl.StoppedAt == null);
@@ -603,6 +639,9 @@ public class TaskService : ITaskService
 
     public async Task<TimeLogDto?> StopTimerAsync(int taskId, int userId, DateTime? stoppedAt = null)
     {
+        if (!await VerifyTaskAccessAsync(taskId, userId))
+            throw new UnauthorizedAccessException("User does not have access to this task.");
+
         var timeLog = await _db.TimeLogs
             .FirstOrDefaultAsync(tl => tl.TaskCardId == taskId && tl.UserId == userId && tl.StoppedAt == null);
 
@@ -621,6 +660,9 @@ public class TaskService : ITaskService
 
     public async Task<TimeLogDto> AddManualTimeLogAsync(int taskId, int userId, AddManualTimeLogDto dto)
     {
+        if (!await VerifyTaskAccessAsync(taskId, userId))
+            throw new UnauthorizedAccessException("User does not have access to this task.");
+
         var duration = dto.StoppedAt - dto.StartedAt;
         int durationMinutes = (int)Math.Max(1, Math.Round(duration.TotalMinutes));
 
@@ -658,8 +700,10 @@ public class TaskService : ITaskService
         return true;
     }
 
-    public async Task<List<TimeLogDto>> GetTaskTimeLogsAsync(int taskId)
+    public async Task<List<TimeLogDto>> GetTaskTimeLogsAsync(int taskId, int userId)
     {
+        if (!await VerifyTaskAccessAsync(taskId, userId)) return new List<TimeLogDto>();
+
         var logs = await _db.TimeLogs
             .Include(tl => tl.User)
             .Where(tl => tl.TaskCardId == taskId)
@@ -809,6 +853,9 @@ public class TaskService : ITaskService
     // Label Methods Implementation
     public async Task<bool> AddLabelToTaskAsync(int taskId, int labelId, int userId)
     {
+        if (!await VerifyTaskAccessAsync(taskId, userId))
+            throw new UnauthorizedAccessException("User does not have access to this task.");
+
         var existing = await _db.TaskLabels.AnyAsync(tl => tl.TaskCardId == taskId && tl.LabelId == labelId);
         if (existing) return true;
 
@@ -852,8 +899,10 @@ public class TaskService : ITaskService
     }
 
     // Attachment Methods
-    public async Task<List<AttachmentDto>> GetAttachmentsAsync(int taskId)
+    public async Task<List<AttachmentDto>> GetAttachmentsAsync(int taskId, int userId)
     {
+        if (!await VerifyTaskAccessAsync(taskId, userId)) return new List<AttachmentDto>();
+
         return await _db.Attachments
             .AsNoTracking()
             .Where(a => a.TaskCardId == taskId)
@@ -877,6 +926,9 @@ public class TaskService : ITaskService
 
     public async Task<AttachmentDto> AddAttachmentAsync(int taskId, CreateAttachmentDto dto, int userId)
     {
+        if (!await VerifyTaskAccessAsync(taskId, userId))
+            throw new UnauthorizedAccessException("User does not have access to this task.");
+
         var attachment = new Attachment
         {
             TaskCardId = taskId,
@@ -954,5 +1006,33 @@ public class TaskService : ITaskService
                 Username = r.User?.Username ?? "Unknown"
             }).ToList()
         };
+    }
+
+    private async Task<bool> VerifyTaskAccessAsync(int taskId, int userId)
+    {
+        // Check if user has access to the board this task belongs to
+        return await _db.TaskCards
+            .Where(t => t.Id == taskId)
+            .AnyAsync(t => t.Column.Board.OwnerId == userId 
+                     || t.Column.Board.Members.Any(m => m.UserId == userId && m.Status == "Accepted") 
+                     || (t.Column.Board.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted")));
+    }
+
+    private async Task<bool> VerifyColumnAccessAsync(int columnId, int userId)
+    {
+        return await _db.Columns
+            .Where(c => c.Id == columnId)
+            .AnyAsync(c => c.Board.OwnerId == userId 
+                     || c.Board.Members.Any(m => m.UserId == userId && m.Status == "Accepted") 
+                     || (c.Board.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted")));
+    }
+
+    private async Task<bool> VerifySubtaskAccessAsync(int subtaskId, int userId)
+    {
+        return await _db.Subtasks
+            .Where(s => s.Id == subtaskId)
+            .AnyAsync(s => s.TaskCard.Column.Board.OwnerId == userId 
+                     || s.TaskCard.Column.Board.Members.Any(m => m.UserId == userId && m.Status == "Accepted") 
+                     || (s.TaskCard.Column.Board.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted")));
     }
 }

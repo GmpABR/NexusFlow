@@ -25,7 +25,7 @@ public class AttachmentsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAttachments(int taskId)
     {
-        var attachments = await _taskService.GetAttachmentsAsync(taskId);
+        var attachments = await _taskService.GetAttachmentsAsync(taskId, GetUserId());
         return Ok(attachments);
     }
 
@@ -35,7 +35,7 @@ public class AttachmentsController : ControllerBase
         var attachment = await _taskService.AddAttachmentAsync(taskId, dto, GetUserId());
 
         // Notify board
-        var task = await _taskService.GetTaskByIdAsync(taskId);
+        var task = await _taskService.GetTaskByIdAsync(taskId, GetUserId());
         if (task != null)
         {
             await _hubContext.Clients.Group($"board_{task.BoardId}")
@@ -52,7 +52,7 @@ public class AttachmentsController : ControllerBase
         if (!result) return NotFound();
 
         // Notify board
-        var task = await _taskService.GetTaskByIdAsync(taskId);
+        var task = await _taskService.GetTaskByIdAsync(taskId, GetUserId());
         if (task != null)
         {
             await _hubContext.Clients.Group($"board_{task.BoardId}")

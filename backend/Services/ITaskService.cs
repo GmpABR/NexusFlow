@@ -16,8 +16,8 @@ public interface ITaskService
     Task<bool> DeleteSubtaskAsync(int subtaskId, int userId);
     Task<Subtask?> GetSubtaskByIdAsync(int subtaskId);
     
-    Task<TaskCardDto?> GetTaskByIdAsync(int taskId);
-    Task<List<TaskActivityDto>> GetTaskActivitiesAsync(int taskId);
+    Task<TaskCardDto?> GetTaskByIdAsync(int taskId, int userId);
+    Task<List<TaskActivityDto>> GetTaskActivitiesAsync(int taskId, int userId);
     Task<TaskActivityDto> AddCommentAsync(int taskId, string text, int userId);
     Task<TaskActivityDto?> UpdateActivityAsync(int activityId, string text, int userId);
     Task<bool> DeleteActivityAsync(int activityId, int userId);
@@ -28,10 +28,10 @@ public interface ITaskService
     Task<TimeLogDto?> StopTimerAsync(int taskId, int userId, DateTime? stoppedAt = null);
     Task<TimeLogDto> AddManualTimeLogAsync(int taskId, int userId, AddManualTimeLogDto dto);
     Task<bool> DeleteTimeLogAsync(int timeLogId, int userId);
-    Task<List<TimeLogDto>> GetTaskTimeLogsAsync(int taskId);
+    Task<List<TimeLogDto>> GetTaskTimeLogsAsync(int taskId, int userId);
 
     // Attachment Methods
-    Task<List<AttachmentDto>> GetAttachmentsAsync(int taskId);
+    Task<List<AttachmentDto>> GetAttachmentsAsync(int taskId, int userId);
     Task<AttachmentDto> AddAttachmentAsync(int taskId, CreateAttachmentDto dto, int userId);
     Task<bool> DeleteAttachmentAsync(int attachmentId, int userId);
 

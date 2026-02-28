@@ -55,7 +55,7 @@ public class TimeLogsController : ControllerBase
     [HttpGet("task/{taskId}")]
     public async Task<IActionResult> GetTaskTimeLogs(int taskId)
     {
-        var logs = await _taskService.GetTaskTimeLogsAsync(taskId);
+        var logs = await _taskService.GetTaskTimeLogsAsync(taskId, GetUserId());
         return Ok(logs);
     }
 
@@ -69,7 +69,7 @@ public class TimeLogsController : ControllerBase
 
     private async Task NotifyTaskUpdated(int taskId)
     {
-        var task = await _taskService.GetTaskByIdAsync(taskId);
+        var task = await _taskService.GetTaskByIdAsync(taskId, GetUserId());
         if (task != null)
         {
             await _hubContext.Clients.Group($"board_{task.BoardId}").SendAsync("TaskUpdated", task);

@@ -292,7 +292,7 @@ public class BoardAutomationService : IAutomationService
                                     await scopedTaskService.AddAttachmentAsync(taskId, attDto, userId == 0 ? 1 : userId);
 
                                     // Broadcast update to sync new attachment on frontend
-                                    var updatedDto = await scopedTaskService.GetTaskByIdAsync(taskId);
+                                    var updatedDto = await scopedTaskService.GetTaskByIdAsync(taskId, userId == 0 ? 1 : userId);
                                     if (updatedDto != null) {
                                         await scopedHub.Clients.Group($"board_{bTask.Column.BoardId}").SendAsync("TaskUpdated", updatedDto);
                                         Console.WriteLine($"[Automation] AI Summary attachment created and broadcasted for Task {taskId}");

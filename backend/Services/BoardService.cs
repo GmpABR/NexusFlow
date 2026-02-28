@@ -245,8 +245,17 @@ public class BoardService : IBoardService
         };
     }
 
-    public async Task<List<BoardMemberDto>> GetBoardMembersAsync(int boardId)
+    public async Task<List<BoardMemberDto>> GetBoardMembersAsync(int boardId, int userId)
     {
+        // Check if user has access to the board
+        var hasAccess = await _db.Boards
+            .Where(b => b.Id == boardId)
+            .AnyAsync(b => b.OwnerId == userId 
+                     || b.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
+                     || (b.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted")));
+
+        if (!hasAccess) return new List<BoardMemberDto>();
+
         return await _db.BoardMembers
             .Where(m => m.BoardId == boardId && m.Status == "Accepted")
             .Select(m => new BoardMemberDto

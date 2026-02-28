@@ -60,7 +60,8 @@ public class BoardsController : ControllerBase
     [HttpGet("{id}/members")]
     public async Task<IActionResult> GetMembers(int id)
     {
-        var members = await _boardService.GetBoardMembersAsync(id);
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var members = await _boardService.GetBoardMembersAsync(id, userId);
         return Ok(members);
     }
 
