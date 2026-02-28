@@ -15,7 +15,7 @@ import { getBoards, getBoardDetail, type BoardSummary, type TaskCard, type Colum
 import { getNotifications } from '../api/notifications';
 import NotificationDrawer from './NotificationDrawer';
 import { useSignalR } from '../hooks/useSignalR';
-import { usePresence } from '../contexts/PresenceContext';
+
 import { OnlineIndicator } from './OnlineIndicator';
 import { notifications } from '@mantine/notifications';
 
@@ -64,8 +64,7 @@ export default function AppNavbar() {
     const [loadingCards, setLoadingCards] = useState(false);
     const searchRef = useRef<HTMLInputElement>(null);
 
-    // Presence
-    const { onlineUserIds } = usePresence();
+
 
     // Notification state
     const [notifDrawerOpen, setNotifDrawerOpen] = useState(false);
@@ -483,7 +482,7 @@ export default function AppNavbar() {
                                 >
                                     {getInitials(username)}
                                 </Avatar>
-                                <OnlineIndicator isOnline={user?.id ? onlineUserIds.has(user.id) : false} size={10} offset={0} />
+                                <OnlineIndicator isOnline={!user?.displayOfflineAlways} size={10} offset={0} />
                             </Box>
                         </Group>
                     </Menu.Target>

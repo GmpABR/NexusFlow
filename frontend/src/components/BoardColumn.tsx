@@ -1,6 +1,6 @@
 import { useState, memo, useRef, useEffect } from 'react';
 import { Text, Group, Badge, TextInput, ActionIcon, Box, Menu, useComputedColorScheme, Modal, Button, Stack } from '@mantine/core';
-import { IconPlus, IconDots, IconTrash, IconPencil, IconSparkles, IconWand } from '@tabler/icons-react';
+import { IconPlus, IconDots, IconTrash, IconPencil, IconSparkles, IconWand, IconArrowRight, IconArrowLeft } from '@tabler/icons-react';
 import { Droppable } from '@hello-pangea/dnd';
 import TaskCard from './TaskCard';
 import type { Column, TaskCard as TaskCardType } from '../api/boards';
@@ -63,6 +63,14 @@ const BoardColumn = memo(function BoardColumn({
     const [aiModalOpen, setAiModalOpen] = useState(false);
     const [aiInstruction, setAiInstruction] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isCollapsed, setIsCollapsed] = useState(() => {
+        const saved = localStorage.getItem(`nexus-collapsed-${column.id}`);
+        return saved === 'true';
+    });
+
+    useEffect(() => {
+        localStorage.setItem(`nexus-collapsed-${column.id}`, isCollapsed.toString());
+    }, [isCollapsed, column.id]);
 
     const accentColor = COLUMN_COLORS[column.name] || '#a855f7';
 
@@ -142,13 +150,14 @@ const BoardColumn = memo(function BoardColumn({
             ref={innerRef}
             {...draggableProps}
             style={{
-                minWidth: 320,
-                maxWidth: 360,
-                width: '100%',
+                minWidth: isCollapsed ? 50 : 320,
+                maxWidth: isCollapsed ? 50 : 360,
+                width: isCollapsed ? 50 : '100%',
                 display: 'flex',
                 flexDirection: 'column',
                 maxHeight: '100%',
                 position: 'relative',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                 ...draggableProps?.style,
             }}
         >
@@ -178,119 +187,187 @@ const BoardColumn = memo(function BoardColumn({
                 }}
             >
                 {/* Column Header */}
-                <Group justify="space-between" mb="md" {...dragHandleProps} style={{ cursor: isClosed ? 'default' : 'grab' }}>
-                    <Group gap="sm" style={{ flex: 1 }}>
-                        <Box
-                            style={{
-                                width: 10,
-                                height: 10,
-                                borderRadius: '50%',
-                                background: accentColor,
-                                boxShadow: `0 0 12px ${accentColor}80`,
-                            }}
-                        />
-                        {isRenaming ? (
-                            <TextInput
-                                ref={renameInputRef}
-                                value={renameValue}
-                                onChange={(e) => setRenameValue(e.currentTarget.value)}
-                                onBlur={handleRename}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') handleRename();
-                                    if (e.key === 'Escape') {
-                                        setRenameValue(column.name);
-                                        setIsRenaming(false);
-                                    }
+                <Group
+                    justify="space-between"
+                    mb={isCollapsed ? 0 : "md"}
+                    {...dragHandleProps}
+                    style={{
+                        cursor: isClosed ? 'default' : 'grab',
+                        flexDirection: isCollapsed ? 'column' : 'row',
+                        alignItems: isCollapsed ? 'center' : 'center',
+                        gap: isCollapsed ? 12 : 'md'
+                    }}
+                >
+                    {!isCollapsed ? (
+                        <Group gap="sm" style={{ flex: 1 }}>
+                            <Box
+                                style={{
+                                    width: 10,
+                                    height: 10,
+                                    borderRadius: '50%',
+                                    background: accentColor,
+                                    boxShadow: `0 0 12px ${accentColor}80`,
                                 }}
-                                size="xs"
-                                styles={{ input: { fontWeight: 700, height: 24, padding: '0 8px' } }}
                             />
-                        ) : (
+                            {isRenaming ? (
+                                <TextInput
+                                    ref={renameInputRef}
+                                    value={renameValue}
+                                    onChange={(e) => setRenameValue(e.currentTarget.value)}
+                                    onBlur={handleRename}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleRename();
+                                        if (e.key === 'Escape') {
+                                            setRenameValue(column.name);
+                                            setIsRenaming(false);
+                                        }
+                                    }}
+                                    size="xs"
+                                    styles={{ input: { fontWeight: 700, height: 24, padding: '0 8px' } }}
+                                />
+                            ) : (
+                                <Text
+                                    fw={700}
+                                    size="md"
+                                    c={computedColorScheme === 'dark' ? 'white' : 'dark'}
+                                    style={{ letterSpacing: '0.2px', cursor: (isClosed || isViewer) ? 'default' : 'pointer' }}
+                                    onDoubleClick={() => {
+                                        if (isClosed || isViewer) return;
+                                        setIsRenaming(true);
+                                    }}
+                                >
+                                    {column.name}
+                                </Text>
+                            )}
+                            <Badge variant="filled" color={computedColorScheme === 'dark' ? 'dark' : 'gray'} size="md" radius="sm" styles={{ root: { background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', color: computedColorScheme === 'dark' ? 'white' : 'black' } }}>
+                                {visibleTaskIds
+                                    ? `${column.taskCards.filter(t => visibleTaskIds.has(t.id)).length}/${column.taskCards.length}`
+                                    : column.taskCards.length}
+                            </Badge>
+                        </Group>
+                    ) : (
+                        <Stack gap="sm" align="center" style={{ width: '100%' }}>
+                            <ActionIcon
+                                variant="subtle"
+                                c={accentColor}
+                                size="sm"
+                                onClick={() => setIsCollapsed(false)}
+                                title="Expand List"
+                            >
+                                <Group gap={0} wrap="nowrap">
+                                    <IconArrowLeft size={11} stroke={2.5} />
+                                    <IconArrowRight size={11} stroke={2.5} />
+                                </Group>
+                            </ActionIcon>
                             <Text
-                                fw={700}
-                                size="md"
+                                fw={800}
+                                size="sm"
                                 c={computedColorScheme === 'dark' ? 'white' : 'dark'}
-                                style={{ letterSpacing: '0.2px', cursor: (isClosed || isViewer) ? 'default' : 'pointer' }}
-                                onDoubleClick={() => {
-                                    if (isClosed || isViewer) return;
-                                    setIsRenaming(true);
+                                style={{
+                                    writingMode: 'vertical-rl',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '1px',
+                                    opacity: 0.8,
+                                    marginTop: 8
                                 }}
                             >
                                 {column.name}
                             </Text>
-                        )}
-                        <Badge variant="filled" color={computedColorScheme === 'dark' ? 'dark' : 'gray'} size="md" radius="sm" styles={{ root: { background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)', color: computedColorScheme === 'dark' ? 'white' : 'black' } }}>
-                            {visibleTaskIds
-                                ? `${column.taskCards.filter(t => visibleTaskIds.has(t.id)).length}/${column.taskCards.length}`
-                                : column.taskCards.length}
-                        </Badge>
-                    </Group>
+                            <Box
+                                style={{
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: '50%',
+                                    background: accentColor,
+                                    boxShadow: `0 0 10px ${accentColor}80`,
+                                    marginTop: 4
+                                }}
+                            />
+                        </Stack>
+                    )}
 
-                    {/* Column Actions Menu */}
-                    {(!isClosed && !isViewer) && (
-                        <Menu position="bottom-end" shadow="md" width={160}>
-                            <Menu.Target>
-                                <ActionIcon variant="subtle" color="gray" size="sm">
-                                    <IconDots size={16} />
-                                </ActionIcon>
-                            </Menu.Target>
-                            <Menu.Dropdown>
-                                <Menu.Item leftSection={<IconPencil size={14} />} onClick={() => setIsRenaming(true)}>
-                                    Rename
-                                </Menu.Item>
-                                <Menu.Item
-                                    leftSection={<IconTrash size={14} />}
-                                    color="red"
-                                    onClick={() => onDeleteColumn(column.id)}
-                                >
-                                    Delete List
-                                </Menu.Item>
-                            </Menu.Dropdown>
-                        </Menu>
+                    {!isCollapsed && (
+                        <Group gap={4}>
+                            <ActionIcon
+                                variant="subtle"
+                                c={accentColor}
+                                size="sm"
+                                onClick={() => setIsCollapsed(true)}
+                                title="Collapse List"
+                            >
+                                <Group gap={0} wrap="nowrap">
+                                    <IconArrowRight size={11} stroke={2.5} />
+                                    <IconArrowLeft size={11} stroke={2.5} />
+                                </Group>
+                            </ActionIcon>
+
+                            {(!isClosed && !isViewer) && (
+                                <Menu position="bottom-end" shadow="md" width={160}>
+                                    <Menu.Target>
+                                        <ActionIcon variant="subtle" color="gray" size="sm">
+                                            <IconDots size={16} />
+                                        </ActionIcon>
+                                    </Menu.Target>
+                                    <Menu.Dropdown>
+                                        <Menu.Item leftSection={<IconPencil size={14} />} onClick={() => setIsRenaming(true)}>
+                                            Rename
+                                        </Menu.Item>
+                                        <Menu.Item
+                                            leftSection={<IconTrash size={14} />}
+                                            color="red"
+                                            onClick={() => onDeleteColumn(column.id)}
+                                        >
+                                            Delete List
+                                        </Menu.Item>
+                                    </Menu.Dropdown>
+                                </Menu>
+                            )}
+                        </Group>
                     )}
                 </Group>
 
-                {/* Task List (Droppable) */}
-                <Droppable droppableId={`column-${column.id}`} type="TASK">
-                    {(provided, snapshot) => (
-                        <Box
-                            ref={provided.innerRef}
-                            {...provided.droppableProps}
-                            style={{
-                                flex: 1,
-                                overflowY: 'auto',
-                                minHeight: 0,
-                                padding: 4,
-                                borderRadius: 8,
-                                background: snapshot.isDraggingOver
-                                    ? 'rgba(124, 58, 237, 0.06)'
-                                    : 'transparent',
-                                transition: 'background 0.2s ease',
-                            }}
-                        >
-                            {column.taskCards.map((task: TaskCardType, index: number) => (
-                                <div
-                                    key={task.id}
-                                    style={visibleTaskIds && !visibleTaskIds.has(task.id)
-                                        ? { display: 'none' }
-                                        : undefined}
-                                >
-                                    <TaskCard
-                                        task={task}
-                                        index={index}
-                                        onDelete={onDeleteTask}
-                                        onClick={onTaskClick}
-                                        isViewer={isViewer}
-                                    />
-                                </div>
-                            ))}
-                            {provided.placeholder}
-                        </Box>
-                    )}
-                </Droppable>
+                {!isCollapsed && (
+                    <Droppable droppableId={`column-${column.id}`} type="TASK">
+                        {(provided, snapshot) => (
+                            <Box
+                                ref={provided.innerRef}
+                                {...provided.droppableProps}
+                                style={{
+                                    flex: 1,
+                                    overflowY: 'auto',
+                                    minHeight: 0,
+                                    padding: 4,
+                                    borderRadius: 8,
+                                    background: snapshot.isDraggingOver
+                                        ? 'rgba(124, 58, 237, 0.06)'
+                                        : 'transparent',
+                                    transition: 'background 0.2s ease',
+                                }}
+                            >
+                                {column.taskCards.map((task: TaskCardType, index: number) => (
+                                    <div
+                                        key={task.id}
+                                        style={visibleTaskIds && !visibleTaskIds.has(task.id)
+                                            ? { display: 'none' }
+                                            : undefined}
+                                    >
+                                        <TaskCard
+                                            task={task}
+                                            index={index}
+                                            onDelete={onDeleteTask}
+                                            onClick={onTaskClick}
+                                            isViewer={isViewer}
+                                        />
+                                    </div>
+                                ))}
+                                {provided.placeholder}
+                            </Box>
+                        )}
+                    </Droppable>
+                )}
 
                 {/* Add Task */}
-                {(!isClosed && !isViewer) && (
+                {(!isClosed && !isViewer && !isCollapsed) && (
                     <Group mt="md" gap="xs">
                         {showInput ? (
                             <Box style={{ flex: 1 }}>

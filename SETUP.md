@@ -8,7 +8,7 @@ Welcome to NexusFlow! There are two ways to run this application: using a **Loca
 This approach spins up the entire Supabase ecosystem (PostgreSQL database, Auth, Storage) on your own machine. You don't need to manually configure complicated `docker-compose.yml` files.
 
 ### Prerequisites:
-1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and ensure it is running.
 2. Install [Node.js](https://nodejs.org/) (for the frontend and `npx`).
 3. Install the [.NET 9.0 SDK](https://dotnet.microsoft.com/download) (for the C# backend).
 
@@ -17,13 +17,14 @@ If this is your very first time cloning the repository, you need to download the
 1. Open PowerShell.
 2. Navigate to the project root: `cd path/to/Scrum Trello`
 3. Run the initialization script: `.\init-dev.ps1`
-   *(This script will automatically attempt to start Docker Desktop if it's closed, download Supabase CLI, restore C# packages, and build your database schema.)*
+   *(This downloads Supabase CLI, restores C# packages, and builds your empty database tables automatically.)*
 
 ### Daily Development
 Once setup is complete, you only need one command to start coding every day:
-1. Run `.\start-dev.ps1`
+1. Make sure Docker Desktop is open.
+2. Run `.\start-dev.ps1`
 
-*(This script automatically verifies/starts Docker, ensures Supabase is running, starts the C# Backend on `localhost:5145`, and starts the React Frontend on `localhost:5173`. You don't even need to open Docker Desktop manually!)*
+*(This script automatically verifies Supabase is running, starts the C# Backend on `localhost:5145`, and starts the React Frontend on `localhost:5173`.)*
 
 ---
 

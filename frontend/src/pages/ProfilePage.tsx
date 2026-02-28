@@ -745,6 +745,7 @@ export default function ProfilePage() {
                                                     const parsed = JSON.parse(stored);
                                                     parsed.displayOfflineAlways = u.displayOfflineAlways;
                                                     localStorage.setItem('user', JSON.stringify(parsed));
+                                                    window.dispatchEvent(new Event('profile-updated'));
                                                 }
                                                 // Event is fired across SignalR so we don't need local notifs here really, but good for feedback
                                                 notifications.show({ title: 'Privacy Settings Updated', message: isChecked ? 'You now appear offline.' : 'You appear online when active.', color: 'green' });
