@@ -509,7 +509,12 @@ These are the engineering decisions worth discussing in a technical interview:
 
 ## 📄 License
 
-This project is open source and available under the [MIT License](LICENSE).
+This project is licensed under a **Custom Proprietary License** (Non-Commercial, No-Derivatives). 
+
+- ✅ **Allowed**: Personal use, educational testing, and private forks.
+- ❌ **Forbidden**: Commercial use, selling as a product, or redistributing modified versions as your own.
+
+See the [LICENSE](LICENSE) file for the full legal text.
 
 ---
 
