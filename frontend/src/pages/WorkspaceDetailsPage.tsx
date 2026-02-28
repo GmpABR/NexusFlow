@@ -21,14 +21,16 @@ import {
     Menu,
     ActionIcon,
     ThemeIcon,
+    TextInput,
     useComputedColorScheme,
 } from '@mantine/core';
-import { IconLayoutBoard, IconUsers, IconPlus, IconArrowLeft, IconCheck, IconPalette, IconChartBar } from '@tabler/icons-react';
+import { IconLayoutBoard, IconUsers, IconPlus, IconArrowLeft, IconCheck, IconPalette, IconChartBar, IconSettings, IconLock, IconTrash, IconLink, IconCopy } from '@tabler/icons-react';
 import WorkspaceOverview from '../components/WorkspaceOverview';
 import { useDebouncedValue } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { getWorkspace, getWorkspaceBoards, addWorkspaceMember, removeWorkspaceMember, type Workspace } from '../api/workspaces';
-import { updateBoard, type BoardSummary } from '../api/boards';
+import { getWorkspace, getWorkspaceBoards, addWorkspaceMember, removeWorkspaceMember, createWorkspaceInvite, type Workspace } from '../api/workspaces';
+import { useClipboard } from '@mantine/hooks';
+import { updateBoard, closeBoard, deleteBoard, type BoardSummary } from '../api/boards';
 import { searchUsers, type UserSummary } from '../api/users';
 import { BOARD_THEMES, type ThemeColor } from '../constants/themes';
 
@@ -54,6 +56,13 @@ export default function WorkspaceDetailsPage() {
     const [removeModalOpen, setRemoveModalOpen] = useState(false);
     const [memberToRemove, setMemberToRemove] = useState<number | null>(null);
     const [removing, setRemoving] = useState(false);
+
+    // Board Action State
+    const [closeBoardTarget, setCloseBoardTarget] = useState<number | null>(null);
+    const [deleteBoardTarget, setDeleteBoardTarget] = useState<number | null>(null);
+    const [inviteLink, setInviteLink] = useState<string | null>(null);
+    const [generatingLink, setGeneratingLink] = useState(false);
+    const clipboard = useClipboard({ timeout: 2000 });
 
     useEffect(() => {
         if (debouncedSearch) {
@@ -155,6 +164,48 @@ export default function WorkspaceDetailsPage() {
         }
     };
 
+    const handleCloseBoard = async () => {
+        if (!closeBoardTarget) return;
+        try {
+            await closeBoard(closeBoardTarget);
+            notifications.show({ title: 'Success', message: 'Board closed successfully.', color: 'green' });
+            setCloseBoardTarget(null);
+            if (id) fetchWorkspace(parseInt(id));
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to close board.', color: 'red' });
+        }
+    };
+
+    const handleDeleteBoard = async () => {
+        if (!deleteBoardTarget) return;
+        try {
+            await deleteBoard(deleteBoardTarget);
+            notifications.show({ title: 'Success', message: 'Board deleted permanently.', color: 'green' });
+            setDeleteBoardTarget(null);
+            if (id) fetchWorkspace(parseInt(id));
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to delete board.', color: 'red' });
+        };
+    };
+    const handleGenerateInviteLink = async () => {
+        if (!workspace) return;
+        setGeneratingLink(true);
+        try {
+            const invite = await createWorkspaceInvite(workspace.id, 'Member');
+            const url = `${window.location.origin}/join/workspace/${invite.token}`;
+            setInviteLink(url);
+            notifications.show({
+                title: 'Link Generated',
+                message: 'Invite link created successfully.',
+                color: 'violet'
+            });
+        } catch (error) {
+            notifications.show({ title: 'Error', message: 'Failed to generate invite link.', color: 'red' });
+        } finally {
+            setGeneratingLink(false);
+        }
+    };
+
     if (loading) return <Center h="100%"><Loader color="violet" /></Center>;
     if (!workspace) return null;
 
@@ -206,7 +257,7 @@ export default function WorkspaceDetailsPage() {
                             <Text c="dimmed" ta="center" py="xl">No boards in this workspace yet.</Text>
                         ) : (
                             <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="lg">
-                                {boards.map((board) => (
+                                {boards.filter(b => !b.isClosed).map((board) => (
                                     <Card
                                         key={board.id}
                                         shadow="sm"
@@ -238,50 +289,79 @@ export default function WorkspaceDetailsPage() {
                                         <Group justify="space-between" mb="xs" align="flex-start">
                                             <Text fw={600} size="lg" c={computedColorScheme === 'dark' ? 'white' : 'black'} style={{ flex: 1 }}>{board.name}</Text>
 
-                                            {/* Theme Switcher - stopPropagation to prevent navigation */}
+                                            {/* Settings Menu - stopPropagation to prevent navigation */}
                                             {(board.role === 'Owner') && (
-                                                <Menu shadow="md" width={200} position="bottom-end">
-                                                    <Menu.Target>
-                                                        <ActionIcon
-                                                            variant="subtle"
-                                                            color="gray"
-                                                            size="sm"
-                                                            onClick={(e) => e.stopPropagation()}
-                                                        >
-                                                            <IconPalette size={16} />
-                                                        </ActionIcon>
-                                                    </Menu.Target>
-                                                    <Menu.Dropdown>
-                                                        <Menu.Label>Change Theme</Menu.Label>
-                                                        <Group gap="xs" p="xs">
-                                                            {Object.entries(BOARD_THEMES).map(([key, value]) => (
-                                                                <ThemeIcon
-                                                                    key={key}
-                                                                    size="md"
-                                                                    radius="xl"
-                                                                    style={{
-                                                                        cursor: 'pointer',
-                                                                        backgroundColor: value.background,
-                                                                        border: board.themeColor === key ? '2px solid white' : 'none',
-                                                                        boxShadow: board.themeColor === key ? '0 0 0 2px #000' : 'none'
-                                                                    }}
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleUpdateTheme(board.id, key as ThemeColor);
-                                                                    }}
-                                                                >
-                                                                    {board.themeColor === key && <IconCheck size={12} />}
-                                                                </ThemeIcon>
-                                                            ))}
-                                                        </Group>
-                                                    </Menu.Dropdown>
-                                                </Menu>
+                                                <Group gap={8}>
+                                                    <Menu shadow="md" width={200} position="bottom-end">
+                                                        <Menu.Target>
+                                                            <ActionIcon
+                                                                variant="subtle"
+                                                                color="gray"
+                                                                size="sm"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <IconPalette size={16} />
+                                                            </ActionIcon>
+                                                        </Menu.Target>
+                                                        <Menu.Dropdown>
+                                                            <Menu.Label>Change Theme</Menu.Label>
+                                                            <Group gap="xs" p="xs">
+                                                                {Object.entries(BOARD_THEMES).map(([key, value]) => (
+                                                                    <ThemeIcon
+                                                                        key={key}
+                                                                        size="md"
+                                                                        radius="xl"
+                                                                        style={{
+                                                                            cursor: 'pointer',
+                                                                            backgroundColor: value.background,
+                                                                            border: board.themeColor === key ? '2px solid white' : 'none',
+                                                                            boxShadow: board.themeColor === key ? '0 0 0 2px #000' : 'none'
+                                                                        }}
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleUpdateTheme(board.id, key as ThemeColor);
+                                                                        }}
+                                                                    >
+                                                                        {board.themeColor === key && <IconCheck size={12} />}
+                                                                    </ThemeIcon>
+                                                                ))}
+                                                            </Group>
+                                                        </Menu.Dropdown>
+                                                    </Menu>
+
+                                                    <Menu shadow="md" width={200} position="bottom-end">
+                                                        <Menu.Target>
+                                                            <ActionIcon
+                                                                variant="subtle"
+                                                                color="gray"
+                                                                size="sm"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <IconSettings size={16} />
+                                                            </ActionIcon>
+                                                        </Menu.Target>
+                                                        <Menu.Dropdown>
+                                                            {!board.isClosed ? (
+                                                                <Menu.Item leftSection={<IconLock size={14} />} onClick={(e) => { e.stopPropagation(); setCloseBoardTarget(board.id); }}>
+                                                                    Close Board
+                                                                </Menu.Item>
+                                                            ) : (
+                                                                <Menu.Item color="red" leftSection={<IconTrash size={14} />} onClick={(e) => { e.stopPropagation(); setDeleteBoardTarget(board.id); }}>
+                                                                    Delete Board
+                                                                </Menu.Item>
+                                                            )}
+                                                        </Menu.Dropdown>
+                                                    </Menu>
+                                                </Group>
                                             )}
                                         </Group>
 
-                                        <Text size="xs" c="dimmed">
-                                            Created {new Date(board.createdAt).toLocaleDateString()}
-                                        </Text>
+                                        <Group justify="space-between" align="center">
+                                            <Text size="xs" c="dimmed">
+                                                Created {new Date(board.createdAt).toLocaleDateString()}
+                                            </Text>
+                                            {board.isClosed && <Badge size="xs" color="red" variant="light">Closed</Badge>}
+                                        </Group>
                                     </Card>
                                 ))}
                             </SimpleGrid>
@@ -299,6 +379,71 @@ export default function WorkspaceDetailsPage() {
                                 Add Member
                             </Button>
                         </Group>
+
+                        <Paper
+                            p="md"
+                            mb="xl"
+                            radius="md"
+                            withBorder
+                            style={{
+                                background: computedColorScheme === 'dark' ? 'rgba(124, 58, 237, 0.05)' : '#f3f0ff',
+                                borderColor: 'rgba(124, 58, 237, 0.2)'
+                            }}
+                        >
+                            <Stack gap="sm">
+                                <Group justify="space-between">
+                                    <Group gap="xs">
+                                        <ThemeIcon color="violet" variant="light" radius="md">
+                                            <IconLink size={18} />
+                                        </ThemeIcon>
+                                        <div>
+                                            <Text fw={600} size="sm">Invite via link</Text>
+                                            <Text size="xs" c="dimmed">Anyone with the link can join as a member</Text>
+                                        </div>
+                                    </Group>
+                                    {!inviteLink ? (
+                                        <Button
+                                            variant="light"
+                                            color="violet"
+                                            size="xs"
+                                            onClick={handleGenerateInviteLink}
+                                            loading={generatingLink}
+                                        >
+                                            Create Link
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            variant="light"
+                                            color="gray"
+                                            size="xs"
+                                            onClick={() => setInviteLink(null)}
+                                        >
+                                            Reset
+                                        </Button>
+                                    )}
+                                </Group>
+
+                                {inviteLink && (
+                                    <Group gap="xs">
+                                        <TextInput
+                                            variant="filled"
+                                            value={inviteLink}
+                                            readOnly
+                                            style={{ flex: 1 }}
+                                            styles={{ input: { fontSize: '12px' } }}
+                                        />
+                                        <Button
+                                            color={clipboard.copied ? 'teal' : 'violet'}
+                                            variant="light"
+                                            onClick={() => clipboard.copy(inviteLink)}
+                                            leftSection={clipboard.copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
+                                        >
+                                            {clipboard.copied ? 'Copied' : 'Copy'}
+                                        </Button>
+                                    </Group>
+                                )}
+                            </Stack>
+                        </Paper>
                         <Stack>
                             {workspace.members.map((member) => (
                                 <Paper
@@ -391,6 +536,50 @@ export default function WorkspaceDetailsPage() {
                             Remove
                         </Button>
                     </Group>
+                </Modal>
+
+                {/* Board Close Confirmation Modal */}
+                <Modal
+                    opened={closeBoardTarget !== null}
+                    onClose={() => setCloseBoardTarget(null)}
+                    title="Close Board"
+                    centered
+                    styles={{
+                        content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                        header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    }}
+                >
+                    <Stack>
+                        <Text size="sm">
+                            Are you sure you want to close this board? You can still access it from the workspace later.
+                        </Text>
+                        <Group justify="flex-end">
+                            <Button variant="subtle" color="gray" onClick={() => setCloseBoardTarget(null)}>Cancel</Button>
+                            <Button color="red" onClick={handleCloseBoard}>Close Board</Button>
+                        </Group>
+                    </Stack>
+                </Modal>
+
+                {/* Board Delete Confirmation Modal */}
+                <Modal
+                    opened={deleteBoardTarget !== null}
+                    onClose={() => setDeleteBoardTarget(null)}
+                    title="Delete Board"
+                    centered
+                    styles={{
+                        content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                        header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    }}
+                >
+                    <Stack>
+                        <Text size="sm">
+                            Are you sure you want to permanently delete this board? <b>This action cannot be undone.</b>
+                        </Text>
+                        <Group justify="flex-end">
+                            <Button variant="subtle" color="gray" onClick={() => setDeleteBoardTarget(null)}>Cancel</Button>
+                            <Button color="red" onClick={handleDeleteBoard}>Delete Permanently</Button>
+                        </Group>
+                    </Stack>
                 </Modal>
             </Container>
         </Box >

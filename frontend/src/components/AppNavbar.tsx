@@ -16,6 +16,9 @@ import { getNotifications } from '../api/notifications';
 import NotificationDrawer from './NotificationDrawer';
 import { useSignalR } from '../hooks/useSignalR';
 
+import { OnlineIndicator } from './OnlineIndicator';
+import { notifications } from '@mantine/notifications';
+
 function getInitials(name: string) {
     const parts = name.trim().split(/\s+/);
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
@@ -61,15 +64,25 @@ export default function AppNavbar() {
     const [loadingCards, setLoadingCards] = useState(false);
     const searchRef = useRef<HTMLInputElement>(null);
 
+
+
     // Notification state
     const [notifDrawerOpen, setNotifDrawerOpen] = useState(false);
     const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
     // SignalR for real-time notifications
     useSignalR(null, {
-        onNotificationReceived: () => {
+        onNotificationReceived: (notification) => {
             setUnreadNotifCount(prev => prev + 1);
-            // Optionally show a momentary mantine notification toast here too
+
+            // Show a toast for the incoming notification
+            notifications.show({
+                title: notification.type === 'Error' ? 'Automation Alert' : 'New Notification',
+                message: notification.message,
+                color: notification.type === 'Error' ? 'red' : 'blue',
+                icon: <IconBell size={16} />,
+                autoClose: 6000,
+            });
         }
     });
 
@@ -459,15 +472,18 @@ export default function AppNavbar() {
                                 (e.currentTarget as HTMLElement).style.background = 'transparent';
                             }}
                         >
-                            <Avatar
-                                src={avatarUrl || undefined}
-                                size={34}
-                                radius="xl"
-                                color="violet"
-                                style={{ boxShadow: '0 0 0 1px #30363d' }}
-                            >
-                                {getInitials(username)}
-                            </Avatar>
+                            <Box style={{ position: 'relative', display: 'flex' }}>
+                                <Avatar
+                                    src={avatarUrl || undefined}
+                                    size={34}
+                                    radius="xl"
+                                    color="violet"
+                                    style={{ boxShadow: '0 0 0 1px #30363d' }}
+                                >
+                                    {getInitials(username)}
+                                </Avatar>
+                                <OnlineIndicator isOnline={!user?.displayOfflineAlways} size={10} offset={0} />
+                            </Box>
                         </Group>
                     </Menu.Target>
                     <Menu.Dropdown>

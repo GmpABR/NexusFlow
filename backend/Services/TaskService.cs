@@ -32,7 +32,8 @@ public class TaskService : ITaskService
             DueDate = dto.DueDate.HasValue ? DateTime.SpecifyKind(dto.DueDate.Value, DateTimeKind.Utc) : null,
             StoryPoints = dto.StoryPoints,
             AssigneeId = dto.AssigneeId,
-            Tags = dto.Tags
+            Tags = dto.Tags,
+            ErDiagramPuml = dto.ErDiagramPuml
         };
 
         _db.TaskCards.Add(task);
@@ -72,6 +73,11 @@ public class TaskService : ITaskService
     {
         var task = await _db.TaskCards
             .Include(t => t.Assignee)
+            .Include(t => t.Assignees).ThenInclude(a => a.User)
+            .Include(t => t.Subtasks)
+            .Include(t => t.Attachments).ThenInclude(a => a.UploadedBy)
+            .Include(t => t.TimeLogs)
+            .Include(t => t.Column)
             .FirstOrDefaultAsync(t => t.Id == taskId);
             
         if (task == null) return null;
@@ -93,6 +99,7 @@ public class TaskService : ITaskService
         task.StoryPoints = dto.StoryPoints;
         task.AssigneeId = (dto.AssigneeId == 0) ? null : dto.AssigneeId;
         task.Tags = dto.Tags;
+        task.ErDiagramPuml = dto.ErDiagramPuml;
 
         await _db.SaveChangesAsync();
 
@@ -143,7 +150,15 @@ public class TaskService : ITaskService
     public async Task<TaskCardDto?> MoveTaskAsync(int taskId, MoveTaskDto dto, int userId)
     {
         Console.WriteLine($"[MoveTask] Moving Task {taskId} to Column {dto.TargetColumnId} at Order {dto.NewOrder}");
-        var task = await _db.TaskCards.FindAsync(taskId);
+        var task = await _db.TaskCards
+            .Include(t => t.Column)
+            .Include(t => t.Assignee)
+            .Include(t => t.Assignees).ThenInclude(a => a.User)
+            .Include(t => t.Subtasks)
+            .Include(t => t.Attachments).ThenInclude(a => a.UploadedBy)
+            .Include(t => t.TimeLogs)
+            .FirstOrDefaultAsync(t => t.Id == taskId);
+            
         if (task == null) return null;
 
         int oldColumnId = task.ColumnId;
@@ -244,6 +259,11 @@ public class TaskService : ITaskService
         return new SubtaskDto { Id = subtask.Id, Title = subtask.Title, IsCompleted = subtask.IsCompleted, TaskCardId = subtask.TaskCardId };
     }
 
+    public async Task<Subtask?> GetSubtaskByIdAsync(int subtaskId)
+    {
+        return await _db.Subtasks.FindAsync(subtaskId);
+    }
+
     public async Task<bool> DeleteSubtaskAsync(int subtaskId, int userId)
     {
         var subtask = await _db.Subtasks.FindAsync(subtaskId);
@@ -264,6 +284,7 @@ public class TaskService : ITaskService
     {
         return await _db.TaskCards
             .AsNoTracking()
+            .AsSplitQuery()
             .Where(t => t.Id == taskId)
             .Select(t => new TaskCardDto
             {
@@ -281,6 +302,7 @@ public class TaskService : ITaskService
                 AssigneeName = t.Assignee != null ? t.Assignee.Username : null,
                 AssigneeAvatar = null,
                 Tags = t.Tags,
+                ErDiagramPuml = t.ErDiagramPuml,
                 TotalTimeSpentMinutes = t.TimeLogs.Where(tl => tl.DurationMinutes.HasValue).Sum(tl => tl.DurationMinutes!.Value),
                 IsTimerRunning = t.TimeLogs.Any(tl => tl.StoppedAt == null),
                 Assignees = t.Assignees.Select(ta => new AssigneeDto { UserId = ta.UserId, Username = ta.User.Username }).ToList(),
@@ -310,31 +332,84 @@ public class TaskService : ITaskService
     
     public async Task<List<TaskActivityDto>> GetTaskActivitiesAsync(int taskId)
     {
-        var activities = await _db.TaskActivities
+        // 1. Fetch activities without Joins
+        var activitiesData = await _db.TaskActivities
             .AsNoTracking()
             .Where(a => a.TaskCardId == taskId)
-            .Select(a => new TaskActivityDto
+            .OrderByDescending(a => a.Timestamp)
+            .Select(a => new 
+            {
+                a.Id,
+                a.TaskCardId,
+                a.UserId,
+                a.Action,
+                a.Details,
+                a.Timestamp
+            })
+            .ToListAsync();
+
+        var activityIds = activitiesData.Select(a => a.Id).ToList();
+        var userIds = activitiesData.Select(a => a.UserId).ToHashSet();
+
+        // 2. Fetch reactions without Joins
+        var reactionsData = await _db.TaskActivityReactions
+            .AsNoTracking()
+            .Where(r => activityIds.Contains(r.TaskActivityId))
+            .Select(r => new 
+            {
+                r.Id,
+                r.TaskActivityId,
+                r.Emoji,
+                r.UserId
+            })
+            .ToListAsync();
+
+        foreach (var r in reactionsData)
+        {
+            userIds.Add(r.UserId);
+        }
+
+        var reactionsByActivity = reactionsData
+            .GroupBy(r => r.TaskActivityId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        // 3. Fetch referenced Users dictionary
+        var users = await _db.Users
+            .AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => new { u.Username, u.AvatarUrl });
+
+        // 4. Map to DTO in memory 
+        var dtos = activitiesData.Select(a => 
+        {
+            users.TryGetValue(a.UserId, out var actUser);
+            return new TaskActivityDto
             {
                 Id = a.Id,
                 TaskCardId = a.TaskCardId,
                 UserId = a.UserId,
-                Username = a.User != null ? a.User.Username : "Unknown",
-                UserAvatarUrl = a.User != null ? a.User.AvatarUrl : null,
+                Username = actUser?.Username ?? "Unknown",
+                UserAvatarUrl = actUser?.AvatarUrl,
                 Action = a.Action,
                 Details = a.Details,
                 Timestamp = a.Timestamp,
-                Reactions = a.Reactions.Select(r => new ActivityReactionDto
-                {
-                    Id = r.Id,
-                    Emoji = r.Emoji,
-                    UserId = r.UserId,
-                    Username = r.User != null ? r.User.Username : "Unknown"
-                }).ToList()
-            })
-            .OrderByDescending(a => a.Timestamp) // Newest first
-            .ToListAsync();
+                Reactions = reactionsByActivity.TryGetValue(a.Id, out var rels) 
+                    ? rels.Select(r => 
+                    {
+                        users.TryGetValue(r.UserId, out var reacUser);
+                        return new ActivityReactionDto
+                        {
+                            Id = r.Id,
+                            Emoji = r.Emoji,
+                            UserId = r.UserId,
+                            Username = reacUser?.Username ?? "Unknown"
+                        };
+                    }).ToList() 
+                    : new List<ActivityReactionDto>()
+            };
+        }).ToList();
 
-        return activities;
+        return dtos;
     }
 
     public async Task<TaskActivityDto> AddCommentAsync(int taskId, string text, int userId)
@@ -649,15 +724,15 @@ public class TaskService : ITaskService
         {
             await _db.Entry(task).Reference(t => t.Column).LoadAsync();
         }
-        if (task.Subtasks == null) 
+        if (!_db.Entry(task).Collection(t => t.Subtasks).IsLoaded) 
         {
             await _db.Entry(task).Collection(t => t.Subtasks).LoadAsync();
         }
-        if (task.TimeLogs == null)
+        if (!_db.Entry(task).Collection(t => t.TimeLogs).IsLoaded)
         {
             await _db.Entry(task).Collection(t => t.TimeLogs).LoadAsync();
         }
-        if (task.Labels == null)
+        if (!_db.Entry(task).Collection(t => t.Labels).IsLoaded)
         {
             await _db.Entry(task).Collection(t => t.Labels).LoadAsync();
         }
@@ -697,6 +772,7 @@ public class TaskService : ITaskService
             AssigneeName = task.Assignee?.Username,
             AssigneeAvatar = null,
             Tags = task.Tags,
+            ErDiagramPuml = task.ErDiagramPuml,
             TotalTimeSpentMinutes = (task.TimeLogs ?? new List<TimeLog>()).Where(tl => tl.DurationMinutes.HasValue).Sum(tl => tl.DurationMinutes!.Value),
             IsTimerRunning = (task.TimeLogs ?? new List<TimeLog>()).Any(tl => tl.StoppedAt == null),
             Assignees = assignees.Select(ta => new AssigneeDto { UserId = ta.UserId, Username = ta.User.Username }).ToList(),

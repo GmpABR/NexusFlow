@@ -17,4 +17,5 @@ public class BoardMemberDto
     public string Role { get; set; } = string.Empty;
     public DateTime JoinedAt { get; set; }
     public string? AvatarUrl { get; set; }
+    public bool IsWorkspaceMember { get; set; }
 }

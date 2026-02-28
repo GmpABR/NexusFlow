@@ -125,6 +125,48 @@ public class BoardsController : ControllerBase
         return Ok(updatedBoard);
     }
 
+    [HttpPut("{id}/close")]
+    public async Task<IActionResult> CloseBoard(int id)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var result = await _boardService.CloseBoardAsync(id, userId);
+        
+        if (!result) return BadRequest(new { message = "Could not close board. You may not be the owner." });
+
+        await _hubContext.Clients.Group($"board_{id}")
+            .SendAsync("BoardClosed", id);
+
+        return NoContent();
+    }
+
+    [HttpPut("{id}/reopen")]
+    public async Task<IActionResult> ReopenBoard(int id)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var result = await _boardService.ReopenBoardAsync(id, userId);
+        
+        if (!result) return BadRequest(new { message = "Could not reopen board. You may not be the owner." });
+
+        await _hubContext.Clients.Group($"board_{id}")
+            .SendAsync("BoardReopened", id);
+
+        return NoContent();
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteBoard(int id)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var result = await _boardService.DeleteBoardAsync(id, userId);
+        
+        if (!result) return BadRequest(new { message = "Could not delete board. It must be closed first and you must be the owner." });
+
+        await _hubContext.Clients.Group($"board_{id}")
+            .SendAsync("BoardDeleted", id);
+
+        return NoContent();
+    }
+
     [HttpPost("{id}/columns")]
     public async Task<IActionResult> CreateColumn(int id, [FromBody] CreateColumnDto dto)
     {
@@ -189,6 +231,39 @@ public class BoardsController : ControllerBase
             .SendAsync("ColumnUpdated", column);
 
         return Ok(column);
+    }
+
+    [HttpPost("{id}/invites")]
+    public async Task<IActionResult> CreateInvite(int id, [FromBody] string role)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        try
+        {
+            var invite = await _boardService.CreateBoardInviteAsync(id, role, userId);
+            return Ok(invite);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Forbid(ex.Message);
+        }
+    }
+
+    [HttpGet("invites/{token}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetInvite(string token)
+    {
+        var invite = await _boardService.GetBoardInviteByTokenAsync(token);
+        if (invite == null) return NotFound("Invite not found or expired.");
+        return Ok(invite);
+    }
+
+    [HttpPost("invites/{token}/join")]
+    public async Task<IActionResult> JoinBoard(string token)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var result = await _boardService.AcceptBoardInviteAsync(token, userId);
+        if (!result) return BadRequest("Could not join board.");
+        return Ok();
     }
 }
 

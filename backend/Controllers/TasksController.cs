@@ -16,11 +16,13 @@ public class TasksController : ControllerBase
 {
     private readonly ITaskService _taskService;
     private readonly IHubContext<BoardHub> _hubContext;
+    private readonly IAutomationService _automationService;
 
-    public TasksController(ITaskService taskService, IHubContext<BoardHub> hubContext)
+    public TasksController(ITaskService taskService, IHubContext<BoardHub> hubContext, IAutomationService automationService)
     {
         _taskService = taskService;
         _hubContext = hubContext;
+        _automationService = automationService;
     }
 
 
@@ -28,6 +30,10 @@ public class TasksController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateTask([FromBody] CreateTaskDto dto)
     {
+        Console.WriteLine($"[TasksController] CREATE TASK RECEIVED: Title={dto.Title}");
+        Console.WriteLine($"[TasksController] -> Desc Length: {dto.Description?.Length ?? 0}");
+        Console.WriteLine($"[TasksController] -> Desc Snippet: {dto.Description?.Substring(0, Math.Min(dto.Description?.Length ?? 0, 100))}");
+        
         var task = await _taskService.CreateTaskAsync(dto, GetUserId());
 
         // Notify all clients viewing the board
@@ -60,12 +66,36 @@ public class TasksController : ControllerBase
     [HttpPut("{id}/move")]
     public async Task<IActionResult> MoveTask(int id, [FromBody] MoveTaskDto dto)
     {
-        var task = await _taskService.MoveTaskAsync(id, dto, GetUserId());
+        int userId = GetUserId();
+        var task = await _taskService.MoveTaskAsync(id, dto, userId);
         if (task == null) return NotFound();
 
-        // Notify all clients on the board
+        // 1. Notify all clients on the board that the task moved columns
         await _hubContext.Clients.Group($"board_{task.BoardId}")
             .SendAsync("TaskMoved", task);
+
+        // 2. Execute automations and check if they modified the task natively
+        try 
+        {
+            bool wasModified = await _automationService.ExecuteTaskMovedAutomationsAsync(task.BoardId, task.Id, dto.TargetColumnId, userId);
+            
+            // 3. Since automations might have changed the task (assigned user, completed subtasks)
+            // if it was truly modified, fetch the latest task state and emit a TaskUpdated to sync clients.
+            if (wasModified)
+            {
+                var updatedTask = await _taskService.GetTaskByIdAsync(task.Id);
+                if (updatedTask != null)
+                {
+                    await _hubContext.Clients.Group($"board_{task.BoardId}")
+                        .SendAsync("TaskUpdated", updatedTask);
+                    return Ok(updatedTask);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[TasksController] Automations failed for task {id}: {ex.Message}");
+        }
 
         return Ok(task);
     }
@@ -120,8 +150,20 @@ public class TasksController : ControllerBase
     [HttpDelete("subtasks/{subtaskId}")]
     public async Task<IActionResult> DeleteSubtask(int subtaskId)
     {
+        // Fetch subtask before deletion to get TaskCardId for SignalR
+        var subtask = await _taskService.GetSubtaskByIdAsync(subtaskId);
+        if (subtask == null) return NotFound();
+
         var result = await _taskService.DeleteSubtaskAsync(subtaskId, GetUserId());
         if (!result) return NotFound();
+
+        // Notify board
+        var task = await _taskService.GetTaskByIdAsync(subtask.TaskCardId);
+        if (task != null)
+        {
+             await _hubContext.Clients.Group($"board_{task.BoardId}")
+                .SendAsync("TaskUpdated", task);
+        }
 
         return NoContent();
     }

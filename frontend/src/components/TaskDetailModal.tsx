@@ -1,13 +1,16 @@
-import { Modal, Avatar, TextInput, Select, MultiSelect, NumberInput, Button, Group, Badge, TagsInput, Stack, Text, Progress, Checkbox, ActionIcon, ScrollArea, Loader, Menu, Box, Popover, ColorInput, useComputedColorScheme } from '@mantine/core';
+import { Modal, Avatar, TextInput, Select, MultiSelect, NumberInput, Button, Group, Badge, TagsInput, Stack, Text, Progress, Checkbox, ActionIcon, ScrollArea, Loader, Menu, Box, Popover, ColorInput, useComputedColorScheme, Tooltip, TypographyStylesProvider, Title, Paper, CopyButton } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
 import { useEffect, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { TaskCard, Attachment } from '../api/boards';
 import type { Label } from '../api/labels';
 import { updateTask, createSubtask, updateSubtask, deleteSubtask, type Subtask, getTaskActivities, type TaskActivity, addComment, registerAttachment, deleteAttachment } from '../api/tasks';
+import { generateSubtasks, getApiKey, generateErDiagram } from '../api/ai';
 import { startTimer, stopTimer } from '../api/timelogs';
 import { notifications } from '@mantine/notifications';
-import { IconCalendar, IconUser, IconTag, IconTrash, IconMessageCircle, IconClock, IconPlayerPlay, IconPlayerStop, IconAlertCircle, IconPaperclip, IconDownload, IconUpload, IconX, IconPlus } from '@tabler/icons-react';
+import { IconCalendar, IconUser, IconTag, IconTrash, IconMessageCircle, IconClock, IconPlayerPlay, IconPlayerStop, IconAlertCircle, IconPaperclip, IconDownload, IconUpload, IconX, IconPlus, IconWand, IconDatabase, IconFileDescription, IconFileText, IconCopy, IconCheck, IconSparkles } from '@tabler/icons-react';
+import plantumlEncoder from 'plantuml-encoder';
 import '@mantine/dates/styles.css';
 import dayjs from 'dayjs';
 import RichText from './RichText';
@@ -28,6 +31,7 @@ interface TaskDetailModalProps {
 type BoardMember = import('../api/boards').BoardMember;
 
 export default function TaskDetailModal({ opened, onClose, task, members, boardLabels, boardRole, onTaskUpdated }: TaskDetailModalProps) {
+    const navigate = useNavigate();
     const computedColorScheme = useComputedColorScheme('dark');
     const userStr = localStorage.getItem('user');
     const currentUser = userStr ? JSON.parse(userStr) : null;
@@ -37,16 +41,17 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
 
     const form = useForm({
         initialValues: {
-            title: '',
-            description: '',
-            priority: 'Low',
-            dueDate: null as Date | null,
-            storyPoints: 0 as number | null,
-            assigneeId: null as string | null,
-            assigneeIds: [] as string[],
-            tags: [] as string[],
-            subtasks: [] as Subtask[],
-            labelIds: [] as string[]
+            title: task?.title || '',
+            description: task?.description || '',
+            priority: (task?.priority as any) || 'Low',
+            dueDate: task?.dueDate ? new Date(task.dueDate) : null,
+            storyPoints: task?.storyPoints || 0,
+            assigneeId: task?.assigneeId ? task.assigneeId.toString() : null,
+            assigneeIds: task?.assignees?.map(a => a.userId.toString()) ?? (task?.assigneeId ? [task.assigneeId.toString()] : []),
+            tags: task?.tags ? task.tags.split(',') : [],
+            subtasks: task?.subtasks || [],
+            labelIds: task?.labels?.map(l => l.id.toString()) || [],
+            erDiagramPuml: task?.erDiagramPuml || ''
         },
     });
 
@@ -56,8 +61,16 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
 
     const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
     const [isAddingSubtask, setIsAddingSubtask] = useState(false);
+    const [isGeneratingSubtasks, setIsGeneratingSubtasks] = useState(false);
     const [activities, setActivities] = useState<TaskActivity[]>([]);
     const [isActivitiesLoading, setIsActivitiesLoading] = useState(false);
+    const [isGeneratingErDiagram, setIsGeneratingErDiagram] = useState(false);
+    const [, setErDiagramOpened] = useState(false);
+    const [diagramType, setDiagramType] = useState('Entity-Relationship (ER)');
+    const [isExporting, setIsExporting] = useState(false);
+    const [isSavingToAttachments, setIsSavingToAttachments] = useState(false);
+    const [previewDiagramData, setPreviewDiagramData] = useState<{ url: string, puml?: string, title: string } | null>(null);
+    const [previewMarkdownData, setPreviewMarkdownData] = useState<{ content: string, title: string } | null>(null);
 
     // Comments
     const [newComment, setNewComment] = useState('');
@@ -69,46 +82,35 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
     const [mentionSearch, setMentionSearch] = useState('');
     const [mentionIndex, setMentionIndex] = useState(-1);
 
-    const [activitiesCache, setActivitiesCache] = useState<Record<number, TaskActivity[]>>({});
-
     useEffect(() => {
-        if (task) {
-            const isDescDirty = form.isDirty('description');
-            const currentDesc = form.values.description;
+        if (task && opened) {
+            console.log(`[TaskDetailModal] Mounted for Task ID: ${task.id}`, task.title);
 
             form.setValues({
-                title: task.title,
-                description: isDescDirty ? currentDesc : (task.description || ''),
-                priority: task.priority || 'Low',
+                title: task.title || '',
+                description: task.description || '',
+                priority: (task.priority as any) || 'Low',
                 dueDate: task.dueDate ? new Date(task.dueDate) : null,
                 storyPoints: task.storyPoints || 0,
                 assigneeId: task.assigneeId ? task.assigneeId.toString() : null,
                 assigneeIds: task.assignees?.map(a => a.userId.toString()) ?? (task.assigneeId ? [task.assigneeId.toString()] : []),
                 tags: task.tags ? task.tags.split(',') : [],
                 subtasks: task.subtasks || [],
-                labelIds: task.labels?.map(l => l.id.toString()) || []
+                labelIds: task.labels?.map(l => l.id.toString()) || [],
+                erDiagramPuml: task.erDiagramPuml || ''
             });
 
             setAttachments(task.attachments ?? []);
-
-            // Check cache for instant load
-            if (activitiesCache[task.id]) {
-                setActivities(activitiesCache[task.id]);
-                setIsActivitiesLoading(false);
-            } else {
-                setActivities([]); // Prevent stale comments flashing
-                setIsActivitiesLoading(true);
-            }
-
+            setActivities([]);
+            setIsActivitiesLoading(true);
             fetchActivities(task.id);
         }
-    }, [task]);
+    }, [task, opened]);
 
     const fetchActivities = async (taskId: number) => {
         try {
             const data = await getTaskActivities(taskId);
             setActivities(data);
-            setActivitiesCache(prev => ({ ...prev, [taskId]: data }));
         } catch (error) {
             console.error("Failed to fetch activities", error);
         } finally {
@@ -140,7 +142,6 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
         setActivities(prev => {
             // Prepend for Descending order (newest at top)
             const prepended = [tempActivity, ...prev];
-            setActivitiesCache(c => ({ ...c, [task.id]: prepended }));
             return prepended;
         });
 
@@ -151,7 +152,6 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
             // This ensures we have the correct ID and server-side data (username, pfp)
             setActivities(prev => {
                 const updated = prev.map(a => a.id === tempActivity.id ? result : a);
-                setActivitiesCache(c => ({ ...c, [task.id]: updated }));
                 return updated;
             });
 
@@ -162,7 +162,6 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
             // Revert on failure
             setActivities(prev => {
                 const reverted = prev.filter(a => a.id !== tempActivity.id);
-                setActivitiesCache(c => ({ ...c, [task.id]: reverted }));
                 return reverted;
             });
         } finally {
@@ -176,6 +175,63 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
         return (completed / subtasks.length) * 100;
     };
 
+    const handleGenerateSubtasks = async () => {
+        if (!task || !form.values.description.trim() || isGeneratingSubtasks) return;
+
+        if (!getApiKey()) {
+            notifications.show({
+                title: 'AI Key Required',
+                message: (
+                    <Stack gap={8}>
+                        <Text size="sm">Please add your OpenRouter API key in your profile settings to use AI features.</Text>
+                        <Button
+                            size="xs"
+                            variant="light"
+                            color="cyan"
+                            onClick={() => {
+                                navigate('/profile#ai-configuration');
+                                notifications.clean();
+                            }}
+                        >
+                            Configure AI Settings
+                        </Button>
+                    </Stack>
+                ),
+                color: 'orange',
+                autoClose: 10000
+            });
+            return;
+        }
+
+        setIsGeneratingSubtasks(true);
+        try {
+            notifications.show({ title: 'AI Generating', message: 'Analyzing description to build subtasks...', color: 'blue' });
+            const subtaskTitles = await generateSubtasks(form.values.description);
+            let currentSubtasks = [...(form.values.subtasks || [])];
+
+            // Sequentially create subtasks for stability, or parallelize
+            for (const title of subtaskTitles) {
+                const newSubtask = await createSubtask(task.id, title);
+                currentSubtasks.push(newSubtask);
+            }
+            form.setFieldValue('subtasks', currentSubtasks);
+            notifications.show({ title: 'AI Breakdown Complete', message: `Added ${subtaskTitles.length} subtasks.`, color: 'green' });
+            fetchActivities(task.id);
+
+            // Force a parent task update to trigger a SignalR broadcast so all clients see the AI breakdown immediately
+            setTimeout(() => {
+                if (task) {
+                    onTaskUpdated({ ...task, subtasks: currentSubtasks });
+                }
+            }, 100);
+
+        } catch (error) {
+            notifications.show({ title: 'AI Breakdown Failed', message: 'Could not generate subtasks from description.', color: 'red' });
+        } finally {
+            setIsGeneratingSubtasks(false);
+        }
+    };
+
     const handleAddSubtask = async () => {
         if (!task || !newSubtaskTitle.trim() || isAddingSubtask) return;
         setIsAddingSubtask(true);
@@ -183,8 +239,12 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
             const newSubtask = await createSubtask(task.id, newSubtaskTitle);
             const currentSubtasks = form.values.subtasks || [];
             const exists = currentSubtasks.some(s => String(s.id) === String(newSubtask.id));
+            const updatedSubtasks = [...currentSubtasks, newSubtask];
             if (!exists) {
-                form.setFieldValue('subtasks', [...currentSubtasks, newSubtask]);
+                form.setFieldValue('subtasks', updatedSubtasks);
+            }
+            if (task) {
+                onTaskUpdated({ ...task, subtasks: updatedSubtasks });
             }
             setNewSubtaskTitle('');
             notifications.show({ title: 'Subtask added', message: 'New subtask created', color: 'green' });
@@ -196,6 +256,176 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
         }
     };
 
+    const handleGenerateErDiagram = async () => {
+        if (!task || isGeneratingErDiagram) return;
+        if (!getApiKey()) {
+            notifications.show({ title: 'AI Key Required', message: 'Please add your OpenRouter API key in your profile settings to use AI features.', color: 'orange' });
+            return;
+        }
+
+        setIsGeneratingErDiagram(true);
+        try {
+            notifications.show({ title: 'Generating Diagram', message: `Analyzing task context to build ${diagramType} diagram...`, color: 'blue' });
+
+            const context = `Task Title: ${form.values.title}\nDescription: ${form.values.description || 'No description provided'}`;
+            const plantUml = await generateErDiagram(context, diagramType);
+
+            const values = form.values;
+            const assigneeId = values.assigneeId ? parseInt(values.assigneeId) : null;
+            const assigneeIds = values.assigneeIds.map(Number).filter(Boolean);
+            const payload = {
+                title: values.title,
+                description: values.description,
+                priority: values.priority,
+                dueDate: values.dueDate ? dayjs(values.dueDate).toISOString() : null,
+                storyPoints: values.storyPoints,
+                assigneeId: (assigneeId && !isNaN(assigneeId)) ? assigneeId : null,
+                assigneeIds,
+                tags: values.tags.length > 0 ? values.tags.join(',') : null,
+                labelIds: values.labelIds.map(Number),
+                erDiagramPuml: plantUml
+            };
+
+            const updatedTask = await updateTask(task.id, payload as any);
+            onTaskUpdated(updatedTask);
+
+            form.setFieldValue('erDiagramPuml', plantUml);
+
+            notifications.show({ title: 'ER Diagram Generated', message: 'Successfully generated and saved.', color: 'green' });
+        } catch (error) {
+            notifications.show({ title: 'Error', message: 'Failed to generate ER diagram', color: 'red' });
+        } finally {
+            setIsGeneratingErDiagram(false);
+        }
+    };
+
+    const handleDownloadDiagram = async (format: 'png' | 'svg' | 'puml') => {
+        const puml = previewDiagramData?.puml || form.values.erDiagramPuml;
+        if (!puml) return;
+
+        if (format === 'puml') {
+            const blob = new Blob([puml], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `task-${task?.id}-diagram.puml`;
+            a.click();
+            URL.revokeObjectURL(url);
+            return;
+        }
+
+        setIsExporting(true);
+        try {
+            const encoded = plantumlEncoder.encode(puml);
+            const url = `https://www.plantuml.com/plantuml/${format}/${encoded}`;
+
+            // Try fetching directly to trigger a proper download prompt
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Network error');
+            const blob = await response.blob();
+
+            const downloadUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = `task-${task?.id}-diagram.${format}`;
+            a.click();
+            URL.revokeObjectURL(downloadUrl);
+        } catch (error) {
+            console.error('Download failed / CORS block:', error);
+            // Fallback to opening in new tab
+            const encoded = plantumlEncoder.encode(form.values.erDiagramPuml);
+            const url = `https://www.plantuml.com/plantuml/${format}/${encoded}`;
+            window.open(url, '_blank');
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    const handleExportToPDF = (attachment: Attachment | null = null, currentPuml: string | null = null) => {
+        let imageUrl = '';
+        let title = 'Diagram Export';
+
+        if (attachment) {
+            imageUrl = attachment.publicUrl;
+            title = attachment.fileName;
+        } else if (currentPuml) {
+            const encoded = plantumlEncoder.encode(currentPuml);
+            imageUrl = `https://www.plantuml.com/plantuml/png/${encoded}`;
+        }
+
+        if (!imageUrl) return;
+
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+            printWindow.document.write(`
+                <html>
+                    <head>
+                        <title>${title}</title>
+                        <style>
+                            @page { size: auto; margin: 20mm; }
+                            body { margin: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; font-family: sans-serif; }
+                            img { max-width: 100%; height: auto; box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 8px; }
+                            .header { margin-bottom: 20px; text-align: center; }
+                            @media print {
+                                body { min-height: unset; }
+                                .no-print { display: none; }
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="header">
+                            <h2>${title}</h2>
+                            <p style="color: #666; font-size: 14px;">Generated via NexusFlow on ${new Date().toLocaleDateString()}</p>
+                        </div>
+                        <img src="${imageUrl}" onload="setTimeout(() => { window.print(); window.close(); }, 500);" />
+                    </body>
+                </html>
+            `);
+            printWindow.document.close();
+        }
+    };
+
+    const handleSaveDiagramToAttachments = async () => {
+        const puml = previewDiagramData?.puml || form.values.erDiagramPuml;
+        if (!task || !puml) return;
+
+        setIsSavingToAttachments(true);
+        try {
+            notifications.show({ title: 'Saving Diagram', message: 'Uploading diagram to attachments...', color: 'blue', autoClose: 2000 });
+
+            const encoded = plantumlEncoder.encode(puml);
+            const url = `https://www.plantuml.com/plantuml/png/${encoded}`;
+
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Failed to fetch diagram image');
+            const blob = await response.blob();
+
+            const file = new File([blob], `diagram-${diagramType.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}.png`, { type: 'image/png' });
+
+            const { path, publicUrl } = await uploadTaskAttachment(file, task.id);
+            const saved = await registerAttachment(task.id, {
+                fileName: file.name,
+                storagePath: path,
+                publicUrl,
+                contentType: file.type || 'image/png',
+                fileSizeBytes: file.size
+            });
+
+            const newAttachments = [saved, ...attachments];
+            setAttachments(newAttachments);
+            if (task) {
+                onTaskUpdated({ ...task, attachments: newAttachments });
+            }
+            notifications.show({ title: 'Saved', message: 'Diagram added to attachments successfully!', color: 'green' });
+            setErDiagramOpened(false);
+        } catch (error: any) {
+            console.error('Failed to save diagram:', error);
+            notifications.show({ title: 'Error', message: 'Failed to save diagram to attachments', color: 'red' });
+        } finally {
+            setIsSavingToAttachments(false);
+        }
+    };
+
     const handleToggleSubtask = async (subtaskId: number, checked: boolean) => {
         const subtasks = form.values.subtasks;
         const index = subtasks.findIndex(s => s.id === subtaskId);
@@ -203,7 +433,12 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
         form.setFieldValue(`subtasks.${index}.isCompleted`, checked);
         try {
             await updateSubtask(subtaskId, { isCompleted: checked });
-            if (task) fetchActivities(task.id);
+            if (task) {
+                const updatedSubtasks = [...subtasks];
+                updatedSubtasks[index] = { ...updatedSubtasks[index], isCompleted: checked };
+                onTaskUpdated({ ...task, subtasks: updatedSubtasks });
+                fetchActivities(task.id);
+            }
         } catch {
             form.setFieldValue(`subtasks.${index}.isCompleted`, !checked);
             notifications.show({ title: 'Error', message: 'Failed to update subtask', color: 'red' });
@@ -216,7 +451,10 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
         form.setFieldValue('subtasks', updatedSubtasks);
         try {
             await deleteSubtask(subtaskId);
-            if (task) fetchActivities(task.id);
+            if (task) {
+                onTaskUpdated({ ...task, subtasks: updatedSubtasks });
+                fetchActivities(task.id);
+            }
         } catch {
             form.setFieldValue('subtasks', subtasks);
             notifications.show({ title: 'Error', message: 'Failed to delete subtask', color: 'red' });
@@ -236,7 +474,11 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                 contentType: file.type || 'application/octet-stream',
                 fileSizeBytes: file.size
             });
-            setAttachments(prev => [saved, ...prev]);
+            const newAttachments = [saved, ...attachments];
+            setAttachments(newAttachments);
+            if (task) {
+                onTaskUpdated({ ...task, attachments: newAttachments });
+            }
             notifications.show({ title: 'Uploaded', message: file.name, color: 'green' });
             if (fileInputRef.current) fileInputRef.current.value = '';
         } catch (err: any) {
@@ -251,10 +493,30 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
         try {
             await deleteAttachment(task.id, att.id);
             await removeTaskAttachment(att.storagePath);
-            setAttachments(prev => prev.filter(a => a.id !== att.id));
+            const newAttachments = attachments.filter(a => a.id !== att.id);
+            setAttachments(newAttachments);
+            if (task) {
+                onTaskUpdated({ ...task, attachments: newAttachments });
+            }
             notifications.show({ title: 'Removed', message: att.fileName, color: 'blue' });
         } catch {
             notifications.show({ title: 'Error', message: 'Failed to remove attachment', color: 'red' });
+        }
+    };
+
+    const handlePreviewMarkdown = (att: Attachment) => {
+        if (att.publicUrl.startsWith('data:')) {
+            const base64 = att.publicUrl.split(',')[1];
+            try {
+                // Decode base64 to UTF-8 text
+                const decoded = decodeURIComponent(escape(window.atob(base64)));
+                setPreviewMarkdownData({ content: decoded, title: att.fileName });
+            } catch (e) {
+                console.error("Failed to decode markdown", e);
+                window.open(att.publicUrl, '_blank');
+            }
+        } else {
+            window.open(att.publicUrl, '_blank');
         }
     };
 
@@ -272,7 +534,8 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                 assigneeId: (assigneeId && !isNaN(assigneeId)) ? assigneeId : null,
                 assigneeIds,
                 tags: values.tags.length > 0 ? values.tags.join(',') : null,
-                labelIds: values.labelIds.map(Number)
+                labelIds: values.labelIds.map(Number),
+                erDiagramPuml: values.erDiagramPuml
             });
             onTaskUpdated(updatedTask);
             notifications.show({ title: 'Success', message: 'Task updated', color: 'green' });
@@ -341,515 +604,886 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
     })();
 
     return (
-        <Modal
-            opened={opened}
-            onClose={onClose}
-            title={<Group>
-                <Badge size="lg" variant="dot" color={getPriorityColor(task.priority)}>{task.priority}</Badge>
-                {dueDateStatus === 'overdue' && (
-                    <Badge size="sm" color="red" variant="light" leftSection={<IconAlertCircle size={10} />}>Overdue</Badge>
-                )}
-                {dueDateStatus === 'due-soon' && (
-                    <Badge size="sm" color="yellow" variant="light" leftSection={<IconAlertCircle size={10} />}>Due Soon</Badge>
-                )}
-                {task.isTimerRunning && <Badge size="sm" color="blue" variant="light" leftSection={<IconClock size={10} />}>Timer Running</Badge>}
-            </Group>}
-            size={1100}
-            centered
-            styles={{
-                content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
-                header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
-                body: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', padding: 0 }
-            }}
-            zIndex={2000}
-        >
-            <div style={{ display: 'flex', height: '600px' }}>
+        <>
+            <Modal
+                opened={opened}
+                onClose={onClose}
+                title={<Group>
+                    <Badge size="lg" variant="dot" color={getPriorityColor(task.priority)}>{task.priority}</Badge>
+                    {dueDateStatus === 'overdue' && (
+                        <Badge size="sm" color="red" variant="light" leftSection={<IconAlertCircle size={10} />}>Overdue</Badge>
+                    )}
+                    {dueDateStatus === 'due-soon' && (
+                        <Badge size="sm" color="yellow" variant="light" leftSection={<IconAlertCircle size={10} />}>Due Soon</Badge>
+                    )}
+                    {task.isTimerRunning && <Badge size="sm" color="blue" variant="light" leftSection={<IconClock size={10} />}>Timer Running</Badge>}
+                    {attachments.some(a => a.fileName.endsWith('.md')) && (
+                        <Button
+                            size="compact-xs"
+                            variant="light"
+                            color="violet"
+                            leftSection={<IconSparkles size={12} />}
+                            onClick={() => {
+                                const sum = attachments.find(a => a.fileName.endsWith('.md'));
+                                if (sum) handlePreviewMarkdown(sum);
+                            }}
+                        >
+                            View AI Summary
+                        </Button>
+                    )}
+                </Group>}
+                size={1100}
+                centered
+                styles={{
+                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    body: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', padding: 0 }
+                }}
+                zIndex={2000}
+            >
+                <div style={{ display: 'flex', height: '600px' }}>
 
-                {/* ── Left Column: Task Form ── */}
-                <ScrollArea style={{ flex: 1, minWidth: 0 }} styles={{ viewport: { padding: '20px 24px 24px' } }}>
-                    <form onSubmit={form.onSubmit(handleSubmit)}>
-                        <Group align="flex-end" mb="md" gap="md">
-                            <TextInput
-                                style={{ flex: 1 }}
-                                label="Title"
-                                placeholder="Task title"
-                                required
-                                {...form.getInputProps('title')}
-                                styles={{
-                                    input: {
-                                        background: computedColorScheme === 'dark' ? '#25262b' : 'white',
-                                        color: computedColorScheme === 'dark' ? 'white' : 'black',
-                                        borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6',
-                                        fontSize: '1.2rem',
-                                        fontWeight: 600
-                                    }
-                                }}
-                            />
-
-                            <Stack gap={2} align="center">
-                                <Text size="xs" c="dimmed" fw={600}>TIME SPENT</Text>
-                                <Group gap="xs">
-                                    <Badge size="lg" variant="filled" color={task.isTimerRunning ? 'blue' : 'dark'} styles={{ root: { minWidth: 80 } }}>
-                                        {Math.floor(task.totalTimeSpentMinutes / 60)}h {task.totalTimeSpentMinutes % 60}m
-                                    </Badge>
-                                    <Button
-                                        size="compact-md"
-                                        variant={task.isTimerRunning ? "light" : "filled"}
-                                        color={task.isTimerRunning ? "red" : "blue"}
-                                        onClick={handleToggleTimer}
-                                        leftSection={task.isTimerRunning ? <IconPlayerStop size={14} /> : <IconPlayerPlay size={14} />}
-                                    >
-                                        {task.isTimerRunning ? "Stop" : "Start"}
-                                    </Button>
-                                </Group>
-                            </Stack>
-                        </Group>
-
-                        <Stack gap={4} mb="md">
-                            <Text size="sm" fw={500}>Description</Text>
-                            <RichText
-                                key={task.id}
-                                content={form.values.description}
-                                onChange={(val) => form.setFieldValue('description', val)}
-                            />
-                        </Stack>
-
-                        <Stack gap={4} mb="md">
-                            <Group justify="space-between">
-                                <Text size="sm" fw={500}>Subtasks</Text>
-                                <Text size="xs" c="dimmed">
-                                    {form.values.subtasks?.filter(s => s.isCompleted).length || 0}/{form.values.subtasks?.length || 0}
-                                </Text>
-                            </Group>
-                            <Progress
-                                value={calculateProgress(form.values.subtasks)}
-                                size="sm"
-                                color={calculateProgress(form.values.subtasks) === 100 ? 'teal' : 'blue'}
-                                mb="xs"
-                            />
-                            <Stack gap="xs">
-                                {form.values.subtasks?.map(subtask => (
-                                    <Group key={subtask.id} align="center" gap="sm">
-                                        <Checkbox
-                                            checked={subtask.isCompleted}
-                                            onChange={(e) => handleToggleSubtask(subtask.id, e.currentTarget.checked)}
-                                            color="teal"
-                                        />
-                                        <Text
-                                            size="sm"
-                                            td={subtask.isCompleted ? 'line-through' : 'none'}
-                                            c={subtask.isCompleted ? 'dimmed' : (computedColorScheme === 'dark' ? 'white' : 'black')}
-                                            style={{ flex: 1 }}
-                                        >
-                                            {subtask.title}
-                                        </Text>
-                                        <ActionIcon color="red" variant="subtle" size="sm" onClick={() => handleDeleteSubtask(subtask.id)}>
-                                            <IconTrash size={14} />
-                                        </ActionIcon>
-                                    </Group>
-                                ))}
-                            </Stack>
-                            <Group gap="xs" mt="xs">
+                    {/* ── Left Column: Task Form ── */}
+                    <ScrollArea style={{ flex: 1, minWidth: 0 }} styles={{ viewport: { padding: '20px 24px 24px' } }}>
+                        <form onSubmit={form.onSubmit(handleSubmit)}>
+                            <Group align="flex-end" mb="md" gap="md">
                                 <TextInput
-                                    placeholder="Add a subtask..."
                                     style={{ flex: 1 }}
-                                    value={newSubtaskTitle}
-                                    onChange={(e) => setNewSubtaskTitle(e.currentTarget.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') { e.preventDefault(); handleAddSubtask(); }
+                                    label="Title"
+                                    placeholder="Task title"
+                                    required
+                                    {...form.getInputProps('title')}
+                                    disabled={boardRole === 'Viewer'}
+                                    styles={{
+                                        input: {
+                                            background: computedColorScheme === 'dark' ? '#25262b' : 'white',
+                                            color: computedColorScheme === 'dark' ? 'white' : 'black',
+                                            borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6',
+                                            fontSize: '1.2rem',
+                                            fontWeight: 600,
+                                            opacity: boardRole === 'Viewer' ? 0.9 : undefined
+                                        }
                                     }}
+                                />
+
+                                <Stack gap={2} align="center">
+                                    <Text size="xs" c="dimmed" fw={600}>TIME SPENT</Text>
+                                    <Group gap="xs">
+                                        <Badge size="lg" variant="filled" color={task.isTimerRunning ? 'blue' : 'dark'} styles={{ root: { minWidth: 80 } }}>
+                                            {Math.floor(task.totalTimeSpentMinutes / 60)}h {task.totalTimeSpentMinutes % 60}m
+                                        </Badge>
+                                        <Button
+                                            size="compact-md"
+                                            variant={task.isTimerRunning ? "light" : "filled"}
+                                            color={task.isTimerRunning ? "red" : "blue"}
+                                            onClick={handleToggleTimer}
+                                            disabled={boardRole === 'Viewer'}
+                                            leftSection={task.isTimerRunning ? <IconPlayerStop size={14} /> : <IconPlayerPlay size={14} />}
+                                        >
+                                            {task.isTimerRunning ? "Stop" : "Start"}
+                                        </Button>
+                                    </Group>
+                                </Stack>
+                            </Group>
+
+                            <Stack gap={4} mb="md">
+                                <Text size="sm" fw={500}>Description</Text>
+                                <RichText
+                                    key={task.id}
+                                    content={form.values.description}
+                                    onChange={(val) => form.setFieldValue('description', val)}
+                                    title={form.values.title}
+                                    editable={boardRole !== 'Viewer'}
+                                />
+                            </Stack>
+
+                            <Stack gap={4} mb="md">
+                                <Group justify="space-between">
+                                    <Text size="sm" fw={500}>Subtasks</Text>
+                                    <Group gap="sm">
+                                        <Button
+                                            size="compact-xs"
+                                            variant="light"
+                                            color="violet"
+                                            leftSection={isGeneratingSubtasks ? <Loader size={10} color="violet" /> : <IconWand size={12} />}
+                                            onClick={handleGenerateSubtasks}
+                                            disabled={isGeneratingSubtasks || !form.values.description.trim() || boardRole === 'Viewer'}
+                                        >
+                                            AI Breakdown
+                                        </Button>
+                                        <Text size="xs" c="dimmed">
+                                            {form.values.subtasks?.filter(s => s.isCompleted).length || 0}/{form.values.subtasks?.length || 0}
+                                        </Text>
+                                    </Group>
+                                </Group>
+                                <Progress
+                                    value={calculateProgress(form.values.subtasks)}
+                                    size="sm"
+                                    color={calculateProgress(form.values.subtasks) === 100 ? 'teal' : 'blue'}
+                                    mb="xs"
+                                />
+                                <Stack gap="xs">
+                                    {form.values.subtasks?.map(subtask => (
+                                        <Group key={subtask.id} align="center" gap="sm">
+                                            <Checkbox
+                                                checked={subtask.isCompleted}
+                                                onChange={(e) => handleToggleSubtask(subtask.id, e.currentTarget.checked)}
+                                                color="teal"
+                                                disabled={boardRole === 'Viewer'}
+                                            />
+                                            <Text
+                                                size="sm"
+                                                td={subtask.isCompleted ? 'line-through' : 'none'}
+                                                c={subtask.isCompleted ? 'dimmed' : (computedColorScheme === 'dark' ? 'white' : 'black')}
+                                                style={{ flex: 1 }}
+                                            >
+                                                {subtask.title}
+                                            </Text>
+                                            {boardRole !== 'Viewer' && (
+                                                <ActionIcon color="red" variant="subtle" size="sm" onClick={() => handleDeleteSubtask(subtask.id)}>
+                                                    <IconTrash size={14} />
+                                                </ActionIcon>
+                                            )}
+                                        </Group>
+                                    ))}
+                                </Stack>
+                                {boardRole !== 'Viewer' && (
+                                    <Group gap="xs" mt="xs">
+                                        <TextInput
+                                            placeholder="Add a subtask..."
+                                            style={{ flex: 1 }}
+                                            value={newSubtaskTitle}
+                                            onChange={(e) => setNewSubtaskTitle(e.currentTarget.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') { e.preventDefault(); handleAddSubtask(); }
+                                            }}
+                                            styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
+                                        />
+                                        <Button size="sm" color="violet" onClick={handleAddSubtask} disabled={!newSubtaskTitle.trim() || isAddingSubtask} type="button">
+                                            {isAddingSubtask ? 'Adding...' : 'Add'}
+                                        </Button>
+                                    </Group>
+                                )}
+                            </Stack>
+
+                            <Group grow mb="md">
+                                <Select
+                                    label="Priority"
+                                    data={['Low', 'Medium', 'High', 'Urgent']}
+                                    {...form.getInputProps('priority')}
+                                    comboboxProps={{ zIndex: 3000 }}
+                                    disabled={boardRole === 'Viewer'}
                                     styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
                                 />
-                                <Button size="sm" color="violet" onClick={handleAddSubtask} disabled={!newSubtaskTitle.trim() || isAddingSubtask} type="button">
-                                    {isAddingSubtask ? 'Adding...' : 'Add'}
-                                </Button>
-                            </Group>
-                        </Stack>
-
-                        <Group grow mb="md">
-                            <Select
-                                label="Priority"
-                                data={['Low', 'Medium', 'High', 'Urgent']}
-                                {...form.getInputProps('priority')}
-                                comboboxProps={{ zIndex: 3000 }}
-                                styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
-                            />
-                            <NumberInput
-                                label="Story Points"
-                                min={0}
-                                {...form.getInputProps('storyPoints')}
-                                styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
-                            />
-                        </Group>
-
-                        <Group grow mb="md">
-                            <DateInput
-                                label={<span style={{ color: dueDateStatus === 'overdue' ? '#ff6b6b' : dueDateStatus === 'due-soon' ? '#fbbf24' : 'inherit' }}>
-                                    Due Date{dueDateStatus === 'overdue' ? ' ⚠ Overdue' : dueDateStatus === 'due-soon' ? ' ⚠ Due Soon' : ''}
-                                </span>}
-                                placeholder="Pick date"
-                                leftSection={<IconCalendar size={16} color={dueDateStatus === 'overdue' ? '#ff6b6b' : dueDateStatus === 'due-soon' ? '#fbbf24' : undefined} />}
-                                clearable
-                                {...form.getInputProps('dueDate')}
-                                popoverProps={{ zIndex: 3000 }}
-                                styles={{
-                                    input: {
-                                        background: computedColorScheme === 'dark' ? '#25262b' : 'white',
-                                        color: computedColorScheme === 'dark' ? 'white' : 'black',
-                                        borderColor: dueDateStatus === 'overdue' ? 'rgba(255,107,107,0.5)' : dueDateStatus === 'due-soon' ? 'rgba(251,191,36,0.4)' : (computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'),
-                                    }
-                                }}
-                            />
-                            <MultiSelect
-                                label="Assignees"
-                                placeholder="Pick members"
-                                data={members.map(m => ({ value: m.userId.toString(), label: m.username, avatarUrl: m.avatarUrl }))}
-                                leftSection={<IconUser size={16} />}
-                                clearable
-                                searchable
-                                {...form.getInputProps('assigneeIds')}
-                                comboboxProps={{ zIndex: 3000 }}
-                                renderOption={({ option }) => {
-                                    const m = members.find(mbr => mbr.userId.toString() === option.value);
-                                    return (
-                                        <Group gap="sm">
-                                            <Avatar src={m?.avatarUrl} size="xs" radius="xl">
-                                                {option.label.slice(0, 2).toUpperCase()}
-                                            </Avatar>
-                                            <Text size="sm">{option.label}</Text>
-                                        </Group>
-                                    );
-                                }}
-                                styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
-                            />
-                        </Group>
-
-                        {/* Labels Section */}
-                        <Stack gap={6} mb="md">
-                            <Text size="sm" fw={500}>Labels</Text>
-                            <Group gap={8} wrap="wrap">
-                                {form.values.labelIds.map(id => {
-                                    const label = boardLabels.find(l => l.id.toString() === id);
-                                    if (!label) return null;
-                                    return (
-                                        <Badge
-                                            key={id}
-                                            variant="filled"
-                                            size="sm"
-                                            radius="xs"
-                                            styles={{
-                                                root: { backgroundColor: label.color, height: 20 },
-                                                label: { color: 'white', fontWeight: 700 }
-                                            }}
-                                            rightSection={
-                                                <ActionIcon
-                                                    size={14}
-                                                    color="white"
-                                                    variant="transparent"
-                                                    onClick={() => {
-                                                        const newIds = form.values.labelIds.filter(lid => lid !== id);
-                                                        form.setFieldValue('labelIds', newIds);
-                                                    }}
-                                                >
-                                                    <IconX size={10} />
-                                                </ActionIcon>
-                                            }
-                                        >
-                                            {label.name}
-                                        </Badge>
-                                    );
-                                })}
-
-                                <Menu position="bottom-start" shadow="md" withinPortal closeOnItemClick={false}>
-                                    <Menu.Target>
-                                        <ActionIcon variant="light" color="gray" radius="xl" size="sm">
-                                            <IconPlus size={14} />
-                                        </ActionIcon>
-                                    </Menu.Target>
-                                    <Menu.Dropdown styles={{ dropdown: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', border: `1px solid ${computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'}`, width: 220, zIndex: 3000 } }}>
-                                        <Box p="xs">
-                                            <Text size="xs" fw={700} c="dimmed" mb={8} style={{ textTransform: 'uppercase' }}>Select Label</Text>
-                                            <TextInput
-                                                placeholder="Search labels..."
-                                                size="xs"
-                                                value={labelSearch}
-                                                onChange={(e) => setLabelSearch(e.currentTarget.value)}
-                                                mb={4}
-                                                autoFocus
-                                                styles={{ input: { background: computedColorScheme === 'dark' ? '#1a1b1e' : '#f8f9fa', color: computedColorScheme === 'dark' ? 'white' : 'black' } }}
-                                            />
-                                        </Box>
-                                        <ScrollArea.Autosize mah={200} offsetScrollbars>
-                                            <Stack gap={4} p="xs">
-                                                {boardLabels
-                                                    .filter(l => l.name.toLowerCase().includes(labelSearch.toLowerCase()))
-                                                    .map(label => (
-                                                        <Group
-                                                            key={label.id}
-                                                            gap="xs"
-                                                            style={{
-                                                                padding: '4px 8px',
-                                                                borderRadius: 4,
-                                                                cursor: 'pointer',
-                                                                background: form.values.labelIds.includes(label.id.toString()) ? (computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)') : 'transparent'
-                                                            }}
-                                                            onClick={() => {
-                                                                const idStr = label.id.toString();
-                                                                const current = form.values.labelIds;
-                                                                if (current.includes(idStr)) {
-                                                                    form.setFieldValue('labelIds', current.filter(cid => cid !== idStr));
-                                                                } else {
-                                                                    form.setFieldValue('labelIds', [...current, idStr]);
-                                                                }
-                                                            }}
-                                                        >
-                                                            <Box style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: label.color }} />
-                                                            <Text size="sm" style={{ flex: 1 }} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{label.name}</Text>
-                                                            {form.values.labelIds.includes(label.id.toString()) && <Badge size="xs" variant="dot" color="blue">Selected</Badge>}
-                                                        </Group>
-                                                    ))}
-                                            </Stack>
-                                        </ScrollArea.Autosize>
-
-                                        <Menu.Divider />
-                                        <div style={{ padding: 8 }}>
-                                            <CreateNewLabelPopover boardId={task.boardId} onCreated={(newLabel) => {
-                                                const currentIds = form.values.labelIds;
-                                                if (!currentIds.includes(newLabel.id.toString())) {
-                                                    form.setFieldValue('labelIds', [...currentIds, newLabel.id.toString()]);
-                                                }
-                                            }} />
-                                        </div>
-                                    </Menu.Dropdown>
-                                </Menu>
-                            </Group>
-                        </Stack>
-
-                        {/* Attachments Section */}
-                        <Stack gap={6} mb="md">
-                            <Group justify="space-between">
-                                <Group gap={6}>
-                                    <IconPaperclip size={14} color="rgba(255,255,255,0.5)" />
-                                    <Text size="sm" fw={500}>Attachments</Text>
-                                    {attachments.length > 0 && (
-                                        <Badge size="xs" variant="filled" color="dark">{attachments.length}</Badge>
-                                    )}
-                                </Group>
-                                <Button
-                                    size="compact-xs"
-                                    variant="light"
-                                    color="violet"
-                                    leftSection={isUploading ? <Loader size={10} color="white" /> : <IconUpload size={12} />}
-                                    disabled={isUploading}
-                                    onClick={() => fileInputRef.current?.click()}
-                                    type="button"
-                                >
-                                    {isUploading ? 'Uploading…' : 'Attach File'}
-                                </Button>
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    style={{ display: 'none' }}
-                                    onChange={handleUpload}
-                                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
+                                <NumberInput
+                                    label="Story Points"
+                                    min={0}
+                                    {...form.getInputProps('storyPoints')}
+                                    disabled={boardRole === 'Viewer'}
+                                    styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
                                 />
                             </Group>
-                            {attachments.length === 0 ? (
-                                <Text size="xs" c="dimmed">No attachments yet</Text>
-                            ) : (
-                                <Stack gap={4}>
-                                    {attachments.map(att => {
-                                        const isImage = att.contentType.startsWith('image/');
-                                        const sizeKb = (att.fileSizeBytes / 1024).toFixed(1);
+
+                            <Group grow mb="md">
+                                <DateInput
+                                    label={<span style={{ color: dueDateStatus === 'overdue' ? '#ff6b6b' : dueDateStatus === 'due-soon' ? '#fbbf24' : 'inherit' }}>
+                                        Due Date{dueDateStatus === 'overdue' ? ' ⚠ Overdue' : dueDateStatus === 'due-soon' ? ' ⚠ Due Soon' : ''}
+                                    </span>}
+                                    placeholder="Pick date"
+                                    leftSection={<IconCalendar size={16} color={dueDateStatus === 'overdue' ? '#ff6b6b' : dueDateStatus === 'due-soon' ? '#fbbf24' : undefined} />}
+                                    clearable
+                                    {...form.getInputProps('dueDate')}
+                                    popoverProps={{ zIndex: 3000 }}
+                                    disabled={boardRole === 'Viewer'}
+                                    styles={{
+                                        input: {
+                                            background: computedColorScheme === 'dark' ? '#25262b' : 'white',
+                                            color: computedColorScheme === 'dark' ? 'white' : 'black',
+                                            borderColor: dueDateStatus === 'overdue' ? 'rgba(255,107,107,0.5)' : dueDateStatus === 'due-soon' ? 'rgba(251,191,36,0.4)' : (computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'),
+                                        }
+                                    }}
+                                />
+                                <MultiSelect
+                                    label="Assignees"
+                                    placeholder="Pick members"
+                                    data={members.map(m => ({ value: m.userId.toString(), label: m.username, avatarUrl: m.avatarUrl }))}
+                                    leftSection={<IconUser size={16} />}
+                                    clearable
+                                    searchable
+                                    {...form.getInputProps('assigneeIds')}
+                                    comboboxProps={{ zIndex: 3000 }}
+                                    disabled={boardRole === 'Viewer'}
+                                    renderOption={({ option }) => {
+                                        const m = members.find(mbr => mbr.userId.toString() === option.value);
                                         return (
-                                            <Group key={att.id} gap={8} style={{
-                                                padding: '6px 8px',
-                                                background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8f9fa',
-                                                borderRadius: 6,
-                                                border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.07)' : '#dee2e6'}`
-                                            }}>
-                                                {isImage ? (
-                                                    <img
-                                                        src={att.publicUrl}
-                                                        alt={att.fileName}
-                                                        style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }}
-                                                    />
-                                                ) : (
-                                                    <div style={{
-                                                        width: 36, height: 36, borderRadius: 4, flexShrink: 0,
-                                                        background: 'rgba(139,92,246,0.2)',
-                                                        display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                                    }}>
-                                                        <IconPaperclip size={16} color="#a78bfa" />
-                                                    </div>
-                                                )}
-                                                <Stack gap={1} style={{ flex: 1, minWidth: 0 }}>
-                                                    <Text size="xs" fw={600} c={computedColorScheme === 'dark' ? 'white' : 'black'} truncate>{att.fileName}</Text>
-                                                    <Text size="xs" c="dimmed">{sizeKb} KB · {att.uploadedByUsername}</Text>
-                                                </Stack>
-                                                <Group gap={4}>
-                                                    <ActionIcon
-                                                        component="a"
-                                                        href={att.publicUrl}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        size="sm" variant="subtle" color="gray"
-                                                    >
-                                                        <IconDownload size={14} />
-                                                    </ActionIcon>
-                                                    <ActionIcon
-                                                        size="sm" variant="subtle" color="red"
-                                                        onClick={() => handleDeleteAttachment(att)}
-                                                    >
-                                                        <IconTrash size={14} />
-                                                    </ActionIcon>
-                                                </Group>
+                                            <Group gap="sm">
+                                                <Avatar src={m?.avatarUrl} size="xs" radius="xl">
+                                                    {option.label.slice(0, 2).toUpperCase()}
+                                                </Avatar>
+                                                <Text size="sm">{option.label}</Text>
                                             </Group>
                                         );
-                                    })}
-                                </Stack>
-                            )}
-                        </Stack>
-
-                        <TagsInput
-                            label="Tags"
-                            placeholder="Type and press Enter"
-                            data={['Frontend', 'Backend', 'Bug', 'Feature', 'Refactor', 'Design']}
-                            clearable
-                            leftSection={<IconTag size={16} />}
-                            mb="xl"
-                            {...form.getInputProps('tags')}
-                            comboboxProps={{ zIndex: 3001 }}
-                            styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
-                        />
-
-                        <Group justify="flex-end" mt="md" pb="lg">
-                            <Button variant="default" onClick={onClose} styles={{ root: { background: 'transparent', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}>
-                                Cancel
-                            </Button>
-                            <Button type="submit" color="violet">Save Changes</Button>
-                        </Group>
-                    </form>
-                </ScrollArea>
-
-                {/* ── Right Column: Activity & Comments ── */}
-                <div style={{
-                    width: 340,
-                    flexShrink: 0,
-                    borderLeft: `1px solid ${computedColorScheme === 'dark' ? '#2C2E33' : '#dee2e6'}`,
-                    background: computedColorScheme === 'dark' ? '#16171a' : '#f9fafb',
-                    display: 'flex',
-                    flexDirection: 'column',
-                }}>
-                    {/* Sidebar header */}
-                    <div style={{ padding: '14px 16px 12px', borderBottom: `1px solid ${computedColorScheme === 'dark' ? '#2C2E33' : '#dee2e6'}` }}>
-                        <Group gap={8}>
-                            <IconMessageCircle size={14} color="#6c757d" />
-                            <Text
-                                size="xs"
-                                fw={700}
-                                c="dimmed"
-                                style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}
-                            >
-                                Activity &amp; Comments
-                            </Text>
-                        </Group>
-                    </div>
-
-                    {/* Scrollable activity list - flex: 1 ensures it fills available space */}
-                    <div style={{ flex: 1, minHeight: 0 }}>
-                        <ActivityLog
-                            activities={activities}
-                            currentUserId={currentUserId}
-                            boardRole={boardRole}
-                            onRefresh={() => task && fetchActivities(task.id)}
-                            loading={isActivitiesLoading}
-                        />
-                    </div>
-
-                    {/* Add Comment Input */}
-                    <div style={{ padding: '12px 16px', borderTop: `1px solid ${computedColorScheme === 'dark' ? '#2C2E33' : '#dee2e6'}`, background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white' }}>
-                        <Popover
-                            opened={mentionOpened && filteredMembers.length > 0}
-                            position="top-start"
-                            width="target"
-                            styles={{ dropdown: { padding: 4, background: computedColorScheme === 'dark' ? '#25262b' : 'white', border: `1px solid ${computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'}`, zIndex: 3000 } }}
-                        >
-                            <Popover.Target>
-                                <TextInput
-                                    ref={commentInputRef}
-                                    placeholder="Write a comment..."
-                                    value={newComment}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        setNewComment(val);
-                                        const pos = e.target.selectionStart || 0;
-                                        const lastAtPos = val.lastIndexOf('@', pos - 1);
-                                        if (lastAtPos !== -1) {
-                                            const textAfterAt = val.slice(lastAtPos + 1, pos);
-                                            if (!textAfterAt.includes(' ')) {
-                                                setMentionIndex(lastAtPos);
-                                                setMentionSearch(textAfterAt);
-                                                setMentionOpened(true);
-                                                return;
-                                            }
-                                        }
-                                        setMentionOpened(false);
-                                    }}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            if (mentionOpened && filteredMembers.length > 0) {
-                                                e.preventDefault();
-                                                handleSelectMember(filteredMembers[0].username);
-                                            } else {
-                                                e.preventDefault();
-                                                handleAddComment();
-                                            }
-                                        }
-                                        if (e.key === 'Escape') setMentionOpened(false);
                                     }}
                                     styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
-                                    rightSection={
-                                        <ActionIcon
-                                            size={28}
-                                            color="violet"
-                                            variant="filled"
-                                            onClick={handleAddComment}
-                                            disabled={!newComment.trim() || isSubmittingComment}
-                                        >
-                                            <IconMessageCircle size={16} />
-                                        </ActionIcon>
-                                    }
                                 />
-                            </Popover.Target>
-                            <Popover.Dropdown>
-                                <ScrollArea.Autosize mah={200}>
-                                    <Stack gap={2}>
-                                        {filteredMembers.map(m => (
-                                            <Group
-                                                key={m.userId}
-                                                gap="sm"
-                                                p={6}
-                                                style={{ cursor: 'pointer', borderRadius: 4 }}
-                                                className="mention-item"
-                                                onMouseEnter={(e) => e.currentTarget.style.background = computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}
-                                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                                                onClick={() => handleSelectMember(m.username)}
+                            </Group>
+
+                            {/* Labels Section */}
+                            <Stack gap={6} mb="md">
+                                <Text size="sm" fw={500}>Labels</Text>
+                                <Group gap={8} wrap="wrap">
+                                    {form.values.labelIds.map(id => {
+                                        const label = boardLabels.find(l => l.id.toString() === id);
+                                        if (!label) return null;
+                                        return (
+                                            <Badge
+                                                key={id}
+                                                variant="filled"
+                                                size="sm"
+                                                radius="xs"
+                                                styles={{
+                                                    root: { backgroundColor: label.color, height: 20 },
+                                                    label: { color: 'white', fontWeight: 700 }
+                                                }}
+                                                rightSection={
+                                                    <ActionIcon
+                                                        size={14}
+                                                        color="white"
+                                                        variant="transparent"
+                                                        onClick={() => {
+                                                            const newIds = form.values.labelIds.filter(lid => lid !== id);
+                                                            form.setFieldValue('labelIds', newIds);
+                                                        }}
+                                                    >
+                                                        <IconX size={10} />
+                                                    </ActionIcon>
+                                                }
                                             >
-                                                <Avatar src={m.avatarUrl} size="xs" radius="xl">
-                                                    {m.username.slice(0, 2).toUpperCase()}
-                                                </Avatar>
-                                                <Text size="sm" fw={500}>{m.username}</Text>
-                                            </Group>
-                                        ))}
+                                                {label.name}
+                                            </Badge>
+                                        );
+                                    })}
+
+                                    {boardRole !== 'Viewer' && (
+                                        <Menu position="bottom-start" shadow="md" withinPortal closeOnItemClick={false}>
+                                            <Menu.Target>
+                                                <ActionIcon variant="light" color="gray" radius="xl" size="sm">
+                                                    <IconPlus size={14} />
+                                                </ActionIcon>
+                                            </Menu.Target>
+                                            <Menu.Dropdown styles={{ dropdown: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', border: `1px solid ${computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'}`, width: 220, zIndex: 3000 } }}>
+                                                <Box p="xs">
+                                                    <Text size="xs" fw={700} c="dimmed" mb={8} style={{ textTransform: 'uppercase' }}>Select Label</Text>
+                                                    <TextInput
+                                                        placeholder="Search labels..."
+                                                        size="xs"
+                                                        value={labelSearch}
+                                                        onChange={(e) => setLabelSearch(e.currentTarget.value)}
+                                                        mb={4}
+                                                        autoFocus
+                                                        styles={{ input: { background: computedColorScheme === 'dark' ? '#1a1b1e' : '#f8f9fa', color: computedColorScheme === 'dark' ? 'white' : 'black' } }}
+                                                    />
+                                                </Box>
+                                                <ScrollArea.Autosize mah={200} offsetScrollbars>
+                                                    <Stack gap={4} p="xs">
+                                                        {boardLabels
+                                                            .filter(l => l.name.toLowerCase().includes(labelSearch.toLowerCase()))
+                                                            .map(label => (
+                                                                <Group
+                                                                    key={label.id}
+                                                                    gap="xs"
+                                                                    style={{
+                                                                        padding: '4px 8px',
+                                                                        borderRadius: 4,
+                                                                        cursor: 'pointer',
+                                                                        background: form.values.labelIds.includes(label.id.toString()) ? (computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)') : 'transparent'
+                                                                    }}
+                                                                    onClick={() => {
+                                                                        const idStr = label.id.toString();
+                                                                        const current = form.values.labelIds;
+                                                                        if (current.includes(idStr)) {
+                                                                            form.setFieldValue('labelIds', current.filter(cid => cid !== idStr));
+                                                                        } else {
+                                                                            form.setFieldValue('labelIds', [...current, idStr]);
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <Box style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: label.color }} />
+                                                                    <Text size="sm" style={{ flex: 1 }} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{label.name}</Text>
+                                                                    {form.values.labelIds.includes(label.id.toString()) && <Badge size="xs" variant="dot" color="blue">Selected</Badge>}
+                                                                </Group>
+                                                            ))}
+                                                    </Stack>
+                                                </ScrollArea.Autosize>
+
+                                                <Menu.Divider />
+                                                <div style={{ padding: 8 }}>
+                                                    <CreateNewLabelPopover boardId={task.boardId} onCreated={(newLabel) => {
+                                                        const currentIds = form.values.labelIds;
+                                                        if (!currentIds.includes(newLabel.id.toString())) {
+                                                            form.setFieldValue('labelIds', [...currentIds, newLabel.id.toString()]);
+                                                        }
+                                                    }} />
+                                                </div>
+                                            </Menu.Dropdown>
+                                        </Menu>
+                                    )}
+                                </Group>
+                            </Stack>
+
+                            {/* Attachments Section */}
+                            <Stack gap={6} mb="md">
+                                <Group justify="space-between">
+                                    <Group gap={6}>
+                                        <IconPaperclip size={14} color="rgba(255,255,255,0.5)" />
+                                        <Text size="sm" fw={500}>Attachments</Text>
+                                        {attachments.length > 0 && (
+                                            <Badge size="xs" variant="filled" color="dark">{attachments.length}</Badge>
+                                        )}
+                                    </Group>
+                                    <Button
+                                        size="compact-xs"
+                                        variant="light"
+                                        color="violet"
+                                        leftSection={isUploading ? <Loader size={10} color="white" /> : <IconUpload size={12} />}
+                                        disabled={isUploading || boardRole === 'Viewer'}
+                                        onClick={() => fileInputRef.current?.click()}
+                                        type="button"
+                                    >
+                                        {isUploading ? 'Uploading…' : 'Attach File'}
+                                    </Button>
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        style={{ display: 'none' }}
+                                        onChange={handleUpload}
+                                        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
+                                    />
+                                </Group>
+                                {attachments.length === 0 ? (
+                                    <Text size="xs" c="dimmed">No attachments yet</Text>
+                                ) : (
+                                    <Stack gap={4}>
+                                        {attachments.map(att => {
+                                            const isImage = att.contentType.startsWith('image/');
+                                            const sizeKb = (att.fileSizeBytes / 1024).toFixed(1);
+                                            return (
+                                                <Group
+                                                    key={att.id}
+                                                    gap={8}
+                                                    style={{
+                                                        padding: '6px 8px',
+                                                        background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8f9fa',
+                                                        borderRadius: 6,
+                                                        border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.07)' : '#dee2e6'}`,
+                                                        cursor: (att.fileName.endsWith('.md') || isImage) ? 'pointer' : 'default',
+                                                        transition: 'background 0.2s ease',
+                                                    }}
+                                                    onClick={() => {
+                                                        if (att.fileName.endsWith('.md')) handlePreviewMarkdown(att);
+                                                        else if (isImage) window.open(att.publicUrl, '_blank');
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        if (att.fileName.endsWith('.md') || isImage) {
+                                                            e.currentTarget.style.background = computedColorScheme === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f3f5';
+                                                        }
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.currentTarget.style.background = computedColorScheme === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8f9fa';
+                                                    }}
+                                                >
+                                                    {isImage ? (
+                                                        <img
+                                                            src={att.publicUrl}
+                                                            alt={att.fileName}
+                                                            style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }}
+                                                        />
+                                                    ) : (
+                                                        <div style={{
+                                                            width: 36, height: 36, borderRadius: 4, flexShrink: 0,
+                                                            background: att.fileName.endsWith('.md') ? 'rgba(34,139,230,0.15)' : 'rgba(139,92,246,0.2)',
+                                                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                                        }}>
+                                                            {att.fileName.endsWith('.md') ? (
+                                                                <IconFileDescription size={18} color="#228be6" />
+                                                            ) : att.contentType.startsWith('text/') ? (
+                                                                <IconFileText size={18} color="#40c057" />
+                                                            ) : (
+                                                                <IconPaperclip size={16} color="#a78bfa" />
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    <Stack gap={1} style={{ flex: 1, minWidth: 0 }}>
+                                                        <Text size="xs" fw={600} c={computedColorScheme === 'dark' ? 'white' : 'black'} truncate>{att.fileName}</Text>
+                                                        <Text size="xs" c="dimmed">{sizeKb} KB · {att.uploadedByUsername}</Text>
+                                                    </Stack>
+                                                    <Group gap={4}>
+                                                        {att.fileName.endsWith('.md') && (
+                                                            <Tooltip label="View Summary">
+                                                                <ActionIcon
+                                                                    size="sm" variant="subtle" color="violet"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handlePreviewMarkdown(att);
+                                                                    }}
+                                                                >
+                                                                    <IconFileDescription size={16} />
+                                                                </ActionIcon>
+                                                            </Tooltip>
+                                                        )}
+                                                        <Tooltip label={att.publicUrl.startsWith('data:') ? "Download Summary" : "Download"}>
+                                                            <ActionIcon
+                                                                component="a"
+                                                                href={att.publicUrl}
+                                                                download={att.fileName}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                size="sm" variant="subtle" color="gray"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                <IconDownload size={14} />
+                                                            </ActionIcon>
+                                                        </Tooltip>
+                                                        <Tooltip label="Delete">
+                                                            <ActionIcon
+                                                                size="sm" variant="subtle" color="red"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteAttachment(att);
+                                                                }}
+                                                            >
+                                                                <IconTrash size={14} />
+                                                            </ActionIcon>
+                                                        </Tooltip>
+                                                    </Group>
+                                                </Group>
+                                            );
+                                        })}
                                     </Stack>
-                                </ScrollArea.Autosize>
-                            </Popover.Dropdown>
-                        </Popover>
+                                )}
+                            </Stack>
+
+                            {/* System Tools / ER Diagram Section */}
+                            <Stack gap={6} mb="md">
+                                <Group gap={6}>
+                                    <IconWand size={14} color="rgba(255,255,255,0.5)" />
+                                    <Text size="sm" fw={500}>System Tools</Text>
+                                </Group>
+                                <Box style={{
+                                    padding: '12px',
+                                    background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8f9fa',
+                                    borderRadius: 8,
+                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : '#dee2e6'}`,
+                                }}>
+                                    <Group justify="space-between" align="center">
+                                        <Stack gap={2}>
+                                            <Text size="sm" fw={600} c={computedColorScheme === 'dark' ? 'white' : 'black'}>Diagram Generator</Text>
+                                            <Text size="xs" c="dimmed">Generate a PlantUML diagram based on task context.</Text>
+                                        </Stack>
+                                        <Group gap={8}>
+                                            <Select
+                                                size="xs"
+                                                data={['Entity-Relationship (ER)', 'Use Case', 'Class', 'Sequence', 'State', 'Activity']}
+                                                value={diagramType}
+                                                onChange={(val) => setDiagramType(val || 'Entity-Relationship (ER)')}
+                                                styles={{ input: { width: 170, background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
+                                                comboboxProps={{ zIndex: 3000 }}
+                                                allowDeselect={false}
+                                            />
+                                            {form.values.erDiagramPuml && (
+                                                <Button
+                                                    size="xs"
+                                                    variant="light"
+                                                    color="blue"
+                                                    onClick={() => setPreviewDiagramData({
+                                                        puml: form.values.erDiagramPuml || '',
+                                                        url: `https://www.plantuml.com/plantuml/svg/${plantumlEncoder.encode(form.values.erDiagramPuml || '')}`,
+                                                        title: 'New Generated Diagram'
+                                                    })}
+                                                >
+                                                    View Diagram
+                                                </Button>
+                                            )}
+                                            <Button
+                                                size="xs"
+                                                variant="light"
+                                                color="violet"
+                                                leftSection={isGeneratingErDiagram ? <Loader size={12} /> : <IconDatabase size={14} />}
+                                                onClick={handleGenerateErDiagram}
+                                                disabled={isGeneratingErDiagram || !form.values.title || boardRole === 'Viewer'}
+                                                loading={isGeneratingErDiagram}
+                                            >
+                                                {form.values.erDiagramPuml ? 'Regenerate' : 'Generate'}
+                                            </Button>
+                                        </Group>
+                                    </Group>
+
+                                    {/* Diagram History */}
+                                    {attachments.some(a => a.fileName.startsWith('diagram-')) && (
+                                        <Stack gap={8} mt="md" style={{ borderTop: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : '#dee2e6'}`, paddingTop: '12px' }}>
+                                            <Text size="xs" fw={700} c="dimmed" style={{ textTransform: 'uppercase' }}>Previous Diagrams</Text>
+                                            <Stack gap={4}>
+                                                {attachments.filter(a => a.fileName.startsWith('diagram-')).map(dia => (
+                                                    <Group key={dia.id} justify="space-between" p={6} style={{
+                                                        borderRadius: 4,
+                                                        background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+                                                        border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : '#dee2e6'}`
+                                                    }}>
+                                                        <Group gap="xs" style={{ flex: 1, minWidth: 0 }}>
+                                                            <IconDatabase size={12} color="#7950f2" />
+                                                            <Text size="xs" fw={500} truncate>{dia.fileName}</Text>
+                                                            <Text size="xs" c="dimmed">{(dia.fileSizeBytes / 1024).toFixed(1)} KB</Text>
+                                                        </Group>
+                                                        <Group gap={4}>
+                                                            <Tooltip label="View Big">
+                                                                <ActionIcon size="sm" variant="subtle" color="blue" onClick={() => setPreviewDiagramData({
+                                                                    url: dia.publicUrl,
+                                                                    title: dia.fileName
+                                                                })}>
+                                                                    <IconPlus size={14} style={{ transform: 'rotate(45deg)' }} />
+                                                                </ActionIcon>
+                                                            </Tooltip>
+                                                            {boardRole !== 'Viewer' && (
+                                                                <Tooltip label="Delete">
+                                                                    <ActionIcon size="sm" variant="subtle" color="red" onClick={() => handleDeleteAttachment(dia)}>
+                                                                        <IconTrash size={14} />
+                                                                    </ActionIcon>
+                                                                </Tooltip>
+                                                            )}
+                                                        </Group>
+                                                    </Group>
+                                                ))}
+                                            </Stack>
+                                        </Stack>
+                                    )}
+                                </Box>
+                            </Stack>
+
+                            <TagsInput
+                                label="Tags"
+                                placeholder="Type and press Enter"
+                                data={['Frontend', 'Backend', 'Bug', 'Feature', 'Refactor', 'Design']}
+                                clearable
+                                leftSection={<IconTag size={16} />}
+                                mb="xl"
+                                {...form.getInputProps('tags')}
+                                disabled={boardRole === 'Viewer'}
+                                comboboxProps={{ zIndex: 3001 }}
+                                styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
+                            />
+
+                            <Group justify="flex-end" mt="md" pb="lg">
+                                <Button variant="default" onClick={onClose} styles={{ root: { background: 'transparent', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}>
+                                    {boardRole === 'Viewer' ? 'Close' : 'Cancel'}
+                                </Button>
+                                {boardRole !== 'Viewer' && (
+                                    <Button type="submit" color="violet">Save Changes</Button>
+                                )}
+                            </Group>
+                        </form>
+                    </ScrollArea>
+
+                    {/* ── Right Column: Activity & Comments ── */}
+                    <div style={{
+                        width: 340,
+                        flexShrink: 0,
+                        borderLeft: `1px solid ${computedColorScheme === 'dark' ? '#2C2E33' : '#dee2e6'}`,
+                        background: computedColorScheme === 'dark' ? '#16171a' : '#f9fafb',
+                        display: 'flex',
+                        flexDirection: 'column',
+                    }}>
+                        {/* Sidebar header */}
+                        <div style={{ padding: '14px 16px 12px', borderBottom: `1px solid ${computedColorScheme === 'dark' ? '#2C2E33' : '#dee2e6'}` }}>
+                            <Group gap={8}>
+                                <IconMessageCircle size={14} color="#6c757d" />
+                                <Text
+                                    size="xs"
+                                    fw={700}
+                                    c="dimmed"
+                                    style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}
+                                >
+                                    Activity &amp; Comments
+                                </Text>
+                            </Group>
+                        </div>
+
+                        {/* Scrollable activity list - flex: 1 ensures it fills available space */}
+                        <div style={{ flex: 1, minHeight: 0 }}>
+                            <ActivityLog
+                                activities={activities}
+                                currentUserId={currentUserId}
+                                boardRole={boardRole}
+                                onRefresh={() => task && fetchActivities(task.id)}
+                                loading={isActivitiesLoading}
+                            />
+                        </div>
+
+                        {/* Add Comment Input */}
+                        <div style={{ padding: '12px 16px', borderTop: `1px solid ${computedColorScheme === 'dark' ? '#2C2E33' : '#dee2e6'}`, background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white' }}>
+                            <Popover
+                                opened={mentionOpened && filteredMembers.length > 0}
+                                position="top-start"
+                                width="target"
+                                styles={{ dropdown: { padding: 4, background: computedColorScheme === 'dark' ? '#25262b' : 'white', border: `1px solid ${computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'}`, zIndex: 3000 } }}
+                            >
+                                <Popover.Target>
+                                    <TextInput
+                                        ref={commentInputRef}
+                                        placeholder="Write a comment..."
+                                        value={newComment}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setNewComment(val);
+                                            const pos = e.target.selectionStart || 0;
+                                            const lastAtPos = val.lastIndexOf('@', pos - 1);
+                                            if (lastAtPos !== -1) {
+                                                const textAfterAt = val.slice(lastAtPos + 1, pos);
+                                                if (!textAfterAt.includes(' ')) {
+                                                    setMentionIndex(lastAtPos);
+                                                    setMentionSearch(textAfterAt);
+                                                    setMentionOpened(true);
+                                                    return;
+                                                }
+                                            }
+                                            setMentionOpened(false);
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                if (mentionOpened && filteredMembers.length > 0) {
+                                                    e.preventDefault();
+                                                    handleSelectMember(filteredMembers[0].username);
+                                                } else {
+                                                    e.preventDefault();
+                                                    handleAddComment();
+                                                }
+                                            }
+                                            if (e.key === 'Escape') setMentionOpened(false);
+                                        }}
+                                        styles={{ input: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black', borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6' } }}
+                                        rightSection={
+                                            <ActionIcon
+                                                size={28}
+                                                color="violet"
+                                                variant="filled"
+                                                onClick={handleAddComment}
+                                                disabled={!newComment.trim() || isSubmittingComment}
+                                            >
+                                                <IconMessageCircle size={16} />
+                                            </ActionIcon>
+                                        }
+                                    />
+                                </Popover.Target>
+                                <Popover.Dropdown>
+                                    <ScrollArea.Autosize mah={200}>
+                                        <Stack gap={2}>
+                                            {filteredMembers.map(m => (
+                                                <Group
+                                                    key={m.userId}
+                                                    gap="sm"
+                                                    p={6}
+                                                    style={{ cursor: 'pointer', borderRadius: 4 }}
+                                                    className="mention-item"
+                                                    onMouseEnter={(e) => e.currentTarget.style.background = computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                                    onClick={() => handleSelectMember(m.username)}
+                                                >
+                                                    <Avatar src={m.avatarUrl} size="xs" radius="xl">
+                                                        {m.username.slice(0, 2).toUpperCase()}
+                                                    </Avatar>
+                                                    <Text size="sm" fw={500}>{m.username}</Text>
+                                                </Group>
+                                            ))}
+                                        </Stack>
+                                    </ScrollArea.Autosize>
+                                </Popover.Dropdown>
+                            </Popover>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </Modal>
+            </Modal>
+
+            {/* ER Diagram Display Modal */}
+            <Modal
+                opened={!!previewDiagramData}
+                onClose={() => setPreviewDiagramData(null)}
+                title={
+                    <Group gap="xs">
+                        <IconDatabase size={18} color="#7950f2" />
+                        <Text fw={600}>{previewDiagramData?.title || 'Diagram Preview'}</Text>
+                    </Group>
+                }
+                size="xl"
+                centered
+                zIndex={3100}
+                styles={{
+                    header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : '#f8f9fa', borderBottom: `1px solid ${computedColorScheme === 'dark' ? '#2C2E33' : '#dee2e6'}` },
+                    body: { background: computedColorScheme === 'dark' ? '#141517' : 'white', padding: 0 }
+                }}
+            >
+                {previewDiagramData ? (
+                    <Stack gap="md" p="md">
+                        <div style={{ padding: 20, textAlign: 'center', overflowX: 'auto', maxHeight: '75vh', background: 'white', borderRadius: 8 }}>
+                            <img
+                                src={previewDiagramData.url}
+                                alt="Diagram preview"
+                                style={{ maxWidth: '100%', height: 'auto' }}
+                            />
+                        </div>
+                        <Group justify="space-between" align="center" style={{ borderTop: `1px solid ${computedColorScheme === 'dark' ? '#2C2E33' : '#dee2e6'}`, paddingTop: 16 }}>
+                            <Group gap="xs">
+                                {previewDiagramData.puml && (
+                                    <>
+                                        <Button size="xs" variant="default" onClick={() => handleDownloadDiagram('puml')} disabled={isExporting}>
+                                            Download .puml
+                                        </Button>
+                                        <Button size="xs" variant="default" onClick={() => handleDownloadDiagram('svg')} disabled={isExporting}>
+                                            Download SVG
+                                        </Button>
+                                        <Button size="xs" variant="default" onClick={() => handleDownloadDiagram('png')} disabled={isExporting}>
+                                            Download PNG
+                                        </Button>
+                                    </>
+                                )}
+                                <Button size="xs" color="blue" variant="light" leftSection={<IconDownload size={14} />} onClick={() => handleExportToPDF(null, previewDiagramData.puml || null)} disabled={isExporting}>
+                                    Export to PDF
+                                </Button>
+                            </Group>
+                            <Group gap="xs">
+                                <Button size="xs" variant="subtle" color="gray" onClick={() => setPreviewDiagramData(null)}>Close</Button>
+                                {previewDiagramData.puml && (
+                                    <Button
+                                        size="xs"
+                                        variant="filled"
+                                        color="violet"
+                                        leftSection={isSavingToAttachments ? <Loader size={12} color="white" /> : <IconPaperclip size={14} />}
+                                        onClick={handleSaveDiagramToAttachments}
+                                        loading={isSavingToAttachments}
+                                    >
+                                        Save to Attachments
+                                    </Button>
+                                )}
+                            </Group>
+                        </Group>
+                    </Stack>
+                ) : (
+                    <Text p="xl" ta="center" c="dimmed">No diagram available.</Text>
+                )}
+            </Modal>
+
+            {/* Markdown Summary Preview Modal */}
+            <Modal
+                opened={!!previewMarkdownData}
+                onClose={() => setPreviewMarkdownData(null)}
+                title={
+                    <Group gap="xs">
+                        <IconSparkles size={18} color="#7c3aed" />
+                        <Title order={4} style={{ color: computedColorScheme === 'dark' ? 'white' : 'black' }}>
+                            {previewMarkdownData?.title || 'Summary Preview'}
+                        </Title>
+                    </Group>
+                }
+                size="lg"
+                centered
+                zIndex={3100}
+                overlayProps={{
+                    backgroundOpacity: 0.55,
+                    blur: 3,
+                }}
+                styles={{
+                    header: {
+                        background: computedColorScheme === 'dark' ? '#1a1b1e' : '#f8f9fa',
+                        borderBottom: `1px solid ${computedColorScheme === 'dark' ? '#2C2E33' : '#dee2e6'}`,
+                        padding: '16px 20px'
+                    },
+                    body: {
+                        background: computedColorScheme === 'dark' ? '#141517' : '#ffffff',
+                        padding: '30px',
+                        maxHeight: '85vh',
+                    }
+                }}
+            >
+                {previewMarkdownData ? (
+                    <Stack gap="xl">
+                        <Paper
+                            p="xl"
+                            radius="md"
+                            withBorder
+                            style={{
+                                background: computedColorScheme === 'dark' ? '#1a1b1e' : '#fafafa',
+                                borderStyle: 'dashed',
+                                borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'
+                            }}
+                        >
+                            <TypographyStylesProvider>
+                                <Box style={{
+                                    lineHeight: 1.7,
+                                    fontSize: '16px',
+                                    color: computedColorScheme === 'dark' ? '#e9ecef' : '#343a40'
+                                }}>
+                                    {/* Advanced inline Markdown rendering for the summary */}
+                                    <div dangerouslySetInnerHTML={{
+                                        __html: previewMarkdownData.content
+                                            .replace(/^# (.*$)/gim, '<h1 style="margin-bottom: 20px; font-weight: 800;">$1</h1>')
+                                            .replace(/^## (.*$)/gim, '<h2 style="margin-top: 24px; margin-bottom: 12px; font-weight: 700;">$1</h2>')
+                                            .replace(/^### (.*$)/gim, '<h3 style="margin-top: 20px; margin-bottom: 8px; font-weight: 600;">$1</h3>')
+                                            .replace(/^---/gim, '<hr style="margin: 24px 0; border: 0; border-top: 1px solid #373A40; opacity: 0.3;" />')
+                                            .replace(/^\* (.*$)/gim, '<li style="margin-bottom: 8px; margin-left: 20px;">$1</li>')
+                                            .replace(/^- (.*$)/gim, '<li style="margin-bottom: 8px; margin-left: 20px;">$1</li>')
+                                            .replace(/\*\*(.*)\*\*/gim, '<strong style="color: #7c3aed;">$1</strong>')
+                                            .replace(/__(.*)__/gim, '<strong style="color: #7c3aed;">$1</strong>')
+                                            .replace(/\*(.*)\*/gim, '<em>$1</em>')
+                                            .replace(/_(.*)_/gim, '<em>$1</em>')
+                                            .split('\n')
+                                            .map(line => {
+                                                const trimmed = line.trim();
+                                                if (!trimmed) return '<br/>';
+                                                if (trimmed.startsWith('<h') || trimmed.startsWith('<li') || trimmed.startsWith('<hr') || trimmed.startsWith('<br')) return line;
+                                                return `<p style="margin-bottom: 16px;">${line}</p>`;
+                                            })
+                                            .join('')
+                                    }} />
+                                </Box>
+                            </TypographyStylesProvider>
+                        </Paper>
+
+                        <Group justify="flex-end" mt="md" gap="md">
+                            <CopyButton value={previewMarkdownData.content} timeout={2000}>
+                                {({ copied, copy }) => (
+                                    <Button
+                                        variant="subtle"
+                                        color={copied ? 'teal' : 'gray'}
+                                        onClick={copy}
+                                        leftSection={copied ? <IconCheck size={16} /> : <IconCopy size={16} />}
+                                    >
+                                        {copied ? 'Copied' : 'Copy Content'}
+                                    </Button>
+                                )}
+                            </CopyButton>
+
+                            <Button variant="default" onClick={() => setPreviewMarkdownData(null)}>
+                                Close
+                            </Button>
+
+                            <Button
+                                component="a"
+                                href={`data:text/markdown;base64,${window.btoa(unescape(encodeURIComponent(previewMarkdownData.content)))}`}
+                                download={previewMarkdownData.title}
+                                color="violet"
+                                variant="filled"
+                                fw={600}
+                                size="md"
+                                leftSection={<IconDownload size={18} />}
+                                style={{ boxShadow: '0 4px 12px rgba(124, 58, 237, 0.2)' }}
+                            >
+                                Download .md
+                            </Button>
+                        </Group>
+                    </Stack>
+                ) : (
+                    <Text ta="center" c="dimmed" p="xl">No content available.</Text>
+                )}
+            </Modal>
+        </>
     );
 }
 

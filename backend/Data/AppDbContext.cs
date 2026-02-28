@@ -23,7 +23,9 @@ public class AppDbContext : DbContext
     public DbSet<TaskLabel> TaskLabels { get; set; }
     public DbSet<Notification> Notifications { get; set; }
     public DbSet<TaskActivityReaction> TaskActivityReactions { get; set; }
-
+    public DbSet<BoardInvite> BoardInvites { get; set; }
+    public DbSet<WorkspaceInvite> WorkspaceInvites { get; set; }
+    public DbSet<BoardAutomation> BoardAutomations { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -66,6 +68,8 @@ public class AppDbContext : DbContext
         // TaskActivity -> TaskCard
         modelBuilder.Entity<TaskActivity>(entity =>
         {
+            entity.HasIndex(a => a.TaskCardId); // Optimization
+
             entity.HasOne(a => a.TaskCard)
                   .WithMany() // TaskCard doesn't need explicit list of activities for now, can query by ID
                   .HasForeignKey(a => a.TaskCardId)
@@ -125,6 +129,15 @@ public class AppDbContext : DbContext
                   .WithMany(w => w.Boards)
                   .HasForeignKey(b => b.WorkspaceId)
                   .OnDelete(DeleteBehavior.SetNull); 
+        });
+
+        // BoardAutomation -> Board
+        modelBuilder.Entity<BoardAutomation>(entity =>
+        {
+            entity.HasOne(a => a.Board)
+                  .WithMany(b => b.Automations)
+                  .HasForeignKey(a => a.BoardId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         // TimeLog -> TaskCard and User
@@ -208,6 +221,8 @@ public class AppDbContext : DbContext
         // TaskActivityReaction
         modelBuilder.Entity<TaskActivityReaction>(entity =>
         {
+            entity.HasIndex(r => r.TaskActivityId); // Optimization
+
             entity.HasOne(r => r.TaskActivity)
                   .WithMany(a => a.Reactions)
                   .HasForeignKey(r => r.TaskActivityId)
@@ -217,6 +232,38 @@ public class AppDbContext : DbContext
                   .WithMany()
                   .HasForeignKey(r => r.UserId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // BoardInvite
+        modelBuilder.Entity<BoardInvite>(entity =>
+        {
+            entity.HasIndex(i => i.Token).IsUnique();
+
+            entity.HasOne(i => i.Board)
+                  .WithMany()
+                  .HasForeignKey(i => i.BoardId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(i => i.Creator)
+                  .WithMany()
+                  .HasForeignKey(i => i.CreatorId)
+                  .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // WorkspaceInvite
+        modelBuilder.Entity<WorkspaceInvite>(entity =>
+        {
+            entity.HasIndex(i => i.Token).IsUnique();
+
+            entity.HasOne(i => i.Workspace)
+                  .WithMany()
+                  .HasForeignKey(i => i.WorkspaceId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(i => i.Creator)
+                  .WithMany()
+                  .HasForeignKey(i => i.CreatorId)
+                  .OnDelete(DeleteBehavior.NoAction);
         });
     }
 }

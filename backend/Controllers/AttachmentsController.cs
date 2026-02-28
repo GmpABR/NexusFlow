@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using Backend.DTOs;
 using Backend.Services;
+using Backend.Hubs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 
 namespace Backend.Controllers;
 
@@ -12,10 +14,12 @@ namespace Backend.Controllers;
 public class AttachmentsController : ControllerBase
 {
     private readonly ITaskService _taskService;
+    private readonly IHubContext<BoardHub> _hubContext;
 
-    public AttachmentsController(ITaskService taskService)
+    public AttachmentsController(ITaskService taskService, IHubContext<BoardHub> hubContext)
     {
         _taskService = taskService;
+        _hubContext = hubContext;
     }
 
     [HttpGet]
@@ -29,6 +33,15 @@ public class AttachmentsController : ControllerBase
     public async Task<IActionResult> AddAttachment(int taskId, [FromBody] CreateAttachmentDto dto)
     {
         var attachment = await _taskService.AddAttachmentAsync(taskId, dto, GetUserId());
+
+        // Notify board
+        var task = await _taskService.GetTaskByIdAsync(taskId);
+        if (task != null)
+        {
+            await _hubContext.Clients.Group($"board_{task.BoardId}")
+                .SendAsync("TaskUpdated", task);
+        }
+
         return Created(string.Empty, attachment);
     }
 
@@ -37,6 +50,15 @@ public class AttachmentsController : ControllerBase
     {
         var result = await _taskService.DeleteAttachmentAsync(attachmentId, GetUserId());
         if (!result) return NotFound();
+
+        // Notify board
+        var task = await _taskService.GetTaskByIdAsync(taskId);
+        if (task != null)
+        {
+            await _hubContext.Clients.Group($"board_{task.BoardId}")
+                .SendAsync("TaskUpdated", task);
+        }
+
         return NoContent();
     }
 

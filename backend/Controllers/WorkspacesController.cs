@@ -318,6 +318,129 @@ public class WorkspacesController : ControllerBase
             return Ok(new { message = "Invitation declined." });
         }
     }
+
+    // POST: api/workspaces/{id}/invites
+    [HttpPost("{id}/invites")]
+    public async Task<ActionResult<WorkspaceInviteDto>> CreateWorkspaceInvite(int id, [FromBody] CreateWorkspaceInviteDto dto)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+
+        var workspace = await _context.Workspaces
+            .Include(w => w.Members)
+            .FirstOrDefaultAsync(w => w.Id == id);
+
+        if (workspace == null) return NotFound();
+
+        // Check if requester is Owner or Admin
+        var requesterMember = workspace.Members.FirstOrDefault(m => m.UserId == userId);
+        bool isAdmin = workspace.OwnerId == userId || (requesterMember != null && requesterMember.Role == "Admin");
+
+        if (!isAdmin) return Forbid();
+
+        var invite = new WorkspaceInvite
+        {
+            WorkspaceId = id,
+            CreatorId = userId,
+            Token = Guid.NewGuid().ToString("N"),
+            Role = dto.Role,
+            ExpiresAt = dto.ExpiresInDays.HasValue ? DateTime.UtcNow.AddDays(dto.ExpiresInDays.Value) : null
+        };
+
+        _context.WorkspaceInvites.Add(invite);
+        await _context.SaveChangesAsync();
+
+        return Ok(new WorkspaceInviteDto
+        {
+            Token = invite.Token,
+            Role = invite.Role,
+            WorkspaceId = invite.WorkspaceId,
+            WorkspaceName = workspace.Name,
+            CreatedAt = invite.CreatedAt,
+            ExpiresAt = invite.ExpiresAt
+        });
+    }
+
+    // GET: api/workspaces/invite/{token}
+    [HttpGet("invite/{token}")]
+    [AllowAnonymous]
+    public async Task<ActionResult<WorkspaceInviteDto>> GetWorkspaceInvite(string token)
+    {
+        var invite = await _context.WorkspaceInvites
+            .Include(i => i.Workspace)
+            .FirstOrDefaultAsync(i => i.Token == token && i.IsActive);
+
+        if (invite == null) return NotFound(new { message = "Invite not found or inactive." });
+
+        if (invite.ExpiresAt.HasValue && invite.ExpiresAt < DateTime.UtcNow)
+        {
+            invite.IsActive = false;
+            await _context.SaveChangesAsync();
+            return BadRequest(new { message = "Invite has expired." });
+        }
+
+        return Ok(new WorkspaceInviteDto
+        {
+            Token = invite.Token,
+            Role = invite.Role,
+            WorkspaceId = invite.WorkspaceId,
+            WorkspaceName = invite.Workspace.Name,
+            CreatedAt = invite.CreatedAt,
+            ExpiresAt = invite.ExpiresAt
+        });
+    }
+
+    // POST: api/workspaces/join/{token}
+    [HttpPost("join/{token}")]
+    public async Task<ActionResult> JoinWorkspaceByToken(string token)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+
+        var invite = await _context.WorkspaceInvites
+            .Include(i => i.Workspace)
+            .FirstOrDefaultAsync(i => i.Token == token);
+
+        if (invite == null || !invite.IsActive) return NotFound(new { message = "Invite not found or inactive." });
+
+        if (invite.ExpiresAt.HasValue && invite.ExpiresAt < DateTime.UtcNow)
+        {
+            invite.IsActive = false;
+            await _context.SaveChangesAsync();
+            return BadRequest(new { message = "Invite has expired." });
+        }
+
+        // Check if user is already a member
+        var existingMember = await _context.WorkspaceMembers
+            .FirstOrDefaultAsync(m => m.WorkspaceId == invite.WorkspaceId && m.UserId == userId);
+
+        if (existingMember != null)
+        {
+            if (existingMember.Status == "Accepted")
+            {
+                return BadRequest(new { message = "You are already a member of this workspace." });
+            }
+            else
+            {
+                existingMember.Status = "Accepted";
+                existingMember.Role = invite.Role;
+                existingMember.JoinedAt = DateTime.UtcNow;
+            }
+        }
+        else
+        {
+            var newMember = new WorkspaceMember
+            {
+                WorkspaceId = invite.WorkspaceId,
+                UserId = userId,
+                Role = invite.Role,
+                Status = "Accepted",
+                JoinedAt = DateTime.UtcNow
+            };
+            _context.WorkspaceMembers.Add(newMember);
+        }
+
+        await _context.SaveChangesAsync();
+        return Ok(new { message = "Successfully joined workspace.", workspaceId = invite.WorkspaceId });
+    }
 }
 
 

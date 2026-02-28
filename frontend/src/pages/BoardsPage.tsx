@@ -17,20 +17,28 @@ import {
     Stack,
     NavLink,
     Divider,
-    useComputedColorScheme
+    useComputedColorScheme,
+    Menu
 } from '@mantine/core';
 import {
     IconPlus,
     IconCheck,
     IconLayoutDashboard,
     IconUser,
-    IconChartBar
+    IconChartBar,
+    IconSettings,
+    IconLock,
+    IconTrash,
+    IconWand
 } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { notifications } from '@mantine/notifications';
-import { getBoards, createBoard, type BoardSummary } from '../api/boards';
+import { getBoards, createBoard, closeBoard, deleteBoard, reopenBoard, createColumn, type BoardSummary } from '../api/boards';
 import { getMyWorkspaces, createWorkspace, type Workspace } from '../api/workspaces';
+import { createTask } from '../api/tasks';
+import { generateBoardStructure, getApiKey } from '../api/ai';
 import { BOARD_THEMES, type ThemeColor } from '../constants/themes';
+import { BOARD_TEMPLATES, type TemplateType } from '../constants/templates';
 
 export default function BoardsPage() {
     const navigate = useNavigate();
@@ -44,6 +52,7 @@ export default function BoardsPage() {
     // Board Creation State
     const [newBoardName, setNewBoardName] = useState('');
     const [selectedTheme, setSelectedTheme] = useState<ThemeColor>('blue');
+    const [selectedTemplate, setSelectedTemplate] = useState<TemplateType>('kanban');
     const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
 
@@ -51,6 +60,17 @@ export default function BoardsPage() {
     const [workspaceName, setWorkspaceName] = useState('');
     const [workspaceDesc, setWorkspaceDesc] = useState('');
     const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+
+    // Board Action State
+    const [closeBoardTarget, setCloseBoardTarget] = useState<number | null>(null);
+    const [deleteBoardTarget, setDeleteBoardTarget] = useState<number | null>(null);
+    const [closedBoardsModalOpen, setClosedBoardsModalOpen] = useState(false);
+
+    // AI Architect State
+    const [aiModalOpen, setAiModalOpen] = useState(false);
+    const [projectIdea, setProjectIdea] = useState('');
+    const [projectType, setProjectType] = useState<string | null>("Kanban");
+    const [isGeneratingBoard, setIsGeneratingBoard] = useState(false);
 
     // Sidebar State
     const [user, setUser] = useState<{ username: string, email: string } | null>(null);
@@ -82,17 +102,36 @@ export default function BoardsPage() {
         if (!newBoardName.trim()) return;
         setCreating(true);
         try {
-            await createBoard(
+            const template = BOARD_TEMPLATES[selectedTemplate];
+
+            if (!selectedWorkspaceId) {
+                notifications.show({ title: 'Error', message: 'Please select a workspace.', color: 'red' });
+                return;
+            }
+
+            const board = await createBoard(
                 newBoardName,
-                selectedWorkspaceId ? parseInt(selectedWorkspaceId) : undefined,
-                selectedTheme
+                parseInt(selectedWorkspaceId),
+                selectedTheme,
+                true // Always skip default columns to use template structure
             );
+
+            if (template && template.columns.length > 0) {
+                notifications.show({ title: 'Template', message: `Initializing ${template.name} structure...`, color: 'blue', loading: true });
+                for (const colName of template.columns) {
+                    await createColumn(board.id, colName);
+                }
+            }
+
             setNewBoardName('');
             setSelectedWorkspaceId(null);
             setSelectedTheme('blue');
+            setSelectedTemplate('kanban');
             setModalOpen(false);
             fetchData();
+            notifications.clean();
             notifications.show({ title: 'Board created!', message: `"${newBoardName}" is ready.`, color: 'green' });
+            navigate(`/boards/${board.id}`);
         } catch {
             notifications.show({ title: 'Error', message: 'Failed to create board.', color: 'red' });
         } finally {
@@ -114,6 +153,120 @@ export default function BoardsPage() {
             notifications.show({ title: 'Error', message: 'Failed to create workspace.', color: 'red' });
         } finally {
             setCreatingWorkspace(false);
+        }
+    };
+
+    const handleCloseBoard = async () => {
+        if (!closeBoardTarget) return;
+        try {
+            await closeBoard(closeBoardTarget);
+            notifications.show({ title: 'Success', message: 'Board closed successfully.', color: 'green' });
+            setCloseBoardTarget(null);
+            fetchData();
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to close board.', color: 'red' });
+        }
+    };
+
+    const handleDeleteBoard = async () => {
+        if (!deleteBoardTarget) return;
+        try {
+            await deleteBoard(deleteBoardTarget);
+            notifications.show({ title: 'Success', message: 'Board deleted permanently.', color: 'green' });
+            setDeleteBoardTarget(null);
+            fetchData();
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to delete board.', color: 'red' });
+        }
+    };
+
+    const handleReopenBoard = async (boardId: number) => {
+        try {
+            await reopenBoard(boardId);
+            notifications.show({ title: 'Success', message: 'Board reopened successfully.', color: 'green' });
+            fetchData();
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to reopen board.', color: 'red' });
+        }
+    };
+
+    const handleGenerateBoard = async () => {
+        if (!projectIdea.trim()) return;
+
+        if (!getApiKey()) {
+            notifications.show({
+                title: 'AI Key Required',
+                message: (
+                    <Stack gap={8}>
+                        <Text size="sm">Please add your OpenRouter API key in your profile settings to use AI features.</Text>
+                        <Button
+                            size="xs"
+                            variant="light"
+                            color="cyan"
+                            onClick={() => {
+                                navigate('/profile#ai-configuration');
+                                notifications.clean();
+                            }}
+                        >
+                            Configure AI Settings
+                        </Button>
+                    </Stack>
+                ),
+                color: 'orange',
+                autoClose: 10000
+            });
+            return;
+        }
+
+        setIsGeneratingBoard(true);
+        try {
+            notifications.show({ title: 'AI Architect', message: `Designing your ${projectType} board structure...`, color: 'blue' });
+            const structure = await generateBoardStructure(projectIdea, projectType || 'Kanban');
+
+            notifications.show({ title: 'AI Architect', message: 'Creating board and columns...', color: 'blue' });
+            // Truncate idea for board name or use default
+            const ideaWords = projectIdea.split(' ');
+            const boardName = ideaWords.length > 3 ? ideaWords.slice(0, 3).join(' ') + '...' : projectIdea;
+            const themeMap: Record<string, string> = {
+                'Kanban': 'blue',
+                'Scrum': 'purple',
+                'Sales/CRM': 'orange',
+                'Content/Creative': 'pink',
+                'Marketing': 'green',
+                'Product Roadmap': 'blue',
+                'Bug Tracking': 'red'
+            };
+            const theme = themeMap[projectType || ''] || 'purple';
+            if (!selectedWorkspaceId) {
+                notifications.show({ title: 'Error', message: 'Please select a workspace for the AI generated board.', color: 'red' });
+                return;
+            }
+            const newBoard = await createBoard(boardName, parseInt(selectedWorkspaceId), theme, true);
+
+            const columnMap: Record<string, number> = {};
+            for (let i = 0; i < structure.columns.length; i++) {
+                const colName = structure.columns[i];
+                const newCol = await createColumn(newBoard.id, colName); // no order argument
+                columnMap[colName] = newCol.id;
+            }
+
+            notifications.show({ title: 'AI Architect', message: 'Populating initial tasks...', color: 'blue' });
+            const firstColId = Object.values(columnMap)[0];
+            for (const task of structure.tasks) {
+                if (firstColId) {
+                    await createTask(task.title, firstColId, task.description, task.priority);
+                }
+            }
+
+            notifications.show({ title: 'Success', message: 'AI Board generated successfully!', color: 'green' });
+            setAiModalOpen(false);
+            setProjectIdea('');
+            fetchData();
+            navigate(`/boards/${newBoard.id}`);
+        } catch (error) {
+            notifications.show({ title: 'Generation Failed', message: 'Failed to generate board via AI.', color: 'red' });
+        } finally {
+            setIsGeneratingBoard(false);
         }
     };
 
@@ -204,6 +357,13 @@ export default function BoardsPage() {
                         ))}
                     </Stack>
 
+                    <NavLink
+                        label={`Closed Boards (${boards.filter(b => b.isClosed).length})`}
+                        leftSection={<IconLock size={16} />}
+                        style={{ borderRadius: 8, fontSize: '15px', fontWeight: 500, marginBottom: 12 }}
+                        onClick={() => setClosedBoardsModalOpen(true)}
+                    />
+
                     <Button
                         variant="subtle"
                         leftSection={<IconPlus size={16} />}
@@ -263,7 +423,7 @@ export default function BoardsPage() {
                                     boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
                                 }}>
                                     <Text size="sm" c="violet.3" fw={700} tt="uppercase" lts={1}>Active Boards</Text>
-                                    <Text fz={38} fw={800} c={computedColorScheme === 'dark' ? 'white' : 'dark'} style={{ lineHeight: 1 }}>{boards.length}</Text>
+                                    <Text fz={38} fw={800} c={computedColorScheme === 'dark' ? 'white' : 'dark'} style={{ lineHeight: 1 }}>{boards.filter(b => !b.isClosed).length}</Text>
                                 </Paper>
                                 <Paper p="lg" radius="xl" style={{
                                     background: 'rgba(255, 255, 255, 0.03)',
@@ -273,7 +433,7 @@ export default function BoardsPage() {
                                     boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
                                 }}>
                                     <Text size="sm" c="blue.3" fw={700} tt="uppercase" lts={1}>Pending Tasks</Text>
-                                    <Text fz={38} fw={800} c={computedColorScheme === 'dark' ? 'white' : 'dark'} style={{ lineHeight: 1 }}>12</Text> {/* Mock data for now */}
+                                    <Text fz={38} fw={800} c={computedColorScheme === 'dark' ? 'white' : 'dark'} style={{ lineHeight: 1 }}>{boards.filter(b => !b.isClosed).reduce((acc, b) => acc + (b.openTasksCount || 0), 0)}</Text>
                                 </Paper>
                             </Group>
                         </Box>
@@ -318,7 +478,7 @@ export default function BoardsPage() {
                                     </Group>
                                     <Text fw={600} c={computedColorScheme === 'dark' ? 'white' : 'dark'} size="lg" mb={4}>{board.name}</Text>
                                     <Text size="xs" c="dimmed">
-                                        {workspaces.find(w => w.id === board.workspaceId)?.name || 'Personal'}
+                                        {workspaces.find(w => w.id === board.workspaceId)?.name}
                                     </Text>
                                 </Paper>
                             ))}
@@ -329,15 +489,26 @@ export default function BoardsPage() {
 
                     <Group mb="xl" justify="space-between" align="center">
                         <Title order={3} size="h4" c={computedColorScheme === 'dark' ? 'white' : 'dark'} fw={700}>Your Workspaces</Title>
-                        <Button
-                            variant="light"
-                            color="violet"
-                            size="xs"
-                            onClick={() => setOpenedWorkspaceModal(true)}
-                            leftSection={<IconPlus size={14} />}
-                        >
-                            New Workspace
-                        </Button>
+                        <Group>
+                            <Button
+                                variant="light"
+                                color="grape"
+                                size="xs"
+                                onClick={() => setAiModalOpen(true)}
+                                leftSection={<IconWand size={14} />}
+                            >
+                                AI Architect
+                            </Button>
+                            <Button
+                                variant="light"
+                                color="violet"
+                                size="xs"
+                                onClick={() => setOpenedWorkspaceModal(true)}
+                                leftSection={<IconPlus size={14} />}
+                            >
+                                New Workspace
+                            </Button>
+                        </Group>
                     </Group>
 
                     {loading ? (
@@ -359,7 +530,7 @@ export default function BoardsPage() {
                                 <>
                                     {/* Workspaces Section - ISLAND LIST LAYOUT */}
                                     {workspaces.map(workspace => {
-                                        const workspaceBoards = boards.filter(b => b.workspaceId === workspace.id);
+                                        const workspaceBoards = boards.filter(b => b.workspaceId === workspace.id && !b.isClosed);
                                         return (
                                             <Paper
                                                 key={workspace.id}
@@ -449,7 +620,24 @@ export default function BoardsPage() {
                                                                             background: BOARD_THEMES[board.themeColor as ThemeColor]?.background || 'gray'
                                                                         }}
                                                                     />
-                                                                    <Box />
+                                                                    <Menu withinPortal zIndex={1000}>
+                                                                        <Menu.Target>
+                                                                            <ActionIcon variant="subtle" color="gray" onClick={(e) => e.stopPropagation()}>
+                                                                                <IconSettings size={16} />
+                                                                            </ActionIcon>
+                                                                        </Menu.Target>
+                                                                        <Menu.Dropdown>
+                                                                            {!board.isClosed ? (
+                                                                                <Menu.Item leftSection={<IconLock size={14} />} onClick={(e) => { e.stopPropagation(); setCloseBoardTarget(board.id); }}>
+                                                                                    Close Board
+                                                                                </Menu.Item>
+                                                                            ) : (
+                                                                                <Menu.Item color="red" leftSection={<IconTrash size={14} />} onClick={(e) => { e.stopPropagation(); setDeleteBoardTarget(board.id); }}>
+                                                                                    Delete Board
+                                                                                </Menu.Item>
+                                                                            )}
+                                                                        </Menu.Dropdown>
+                                                                    </Menu>
                                                                 </Group>
 
                                                                 <Text fw={700} size="lg" c={computedColorScheme === 'dark' ? 'white' : 'dark'} mb={4}>{board.name}</Text>
@@ -461,7 +649,7 @@ export default function BoardsPage() {
                                                                         <Box style={{ width: 28, height: 28, borderRadius: '50%', background: '#7950f2', border: `2px solid ${computedColorScheme === 'dark' ? '#1A1B1E' : '#ffffff'}`, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 'bold' }}>A</Box>
                                                                         <Box style={{ width: 28, height: 28, borderRadius: '50%', background: '#228be6', border: `2px solid ${computedColorScheme === 'dark' ? '#1A1B1E' : '#ffffff'}`, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 'bold' }}>B</Box>
                                                                     </Group>
-                                                                    <Text size="xs" fw={600} c="dimmed">Open Tasks: {Math.floor(Math.random() * 10)}</Text>
+                                                                    <Text size="xs" fw={600} c="dimmed">Open Tasks: {board.openTasksCount}</Text>
                                                                 </Group>
                                                             </Card>
                                                         ))}
@@ -471,52 +659,6 @@ export default function BoardsPage() {
                                         );
                                     })}
 
-                                    {/* Personal Boards Section */}
-                                    {boards.filter(b => !b.workspaceId).length > 0 && (
-                                        <Box mb="xl" mt={40}>
-                                            <Title order={4} c="dimmed" mb="md" fw={500}>Personal Boards</Title>
-                                            <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="md">
-                                                {boards.filter(b => !b.workspaceId).map((board) => (
-                                                    <Card
-                                                        key={board.id}
-                                                        padding="md"
-                                                        radius="md"
-                                                        withBorder
-                                                        onClick={() => navigate(`/boards/${board.id}`)}
-                                                        style={{
-                                                            cursor: 'pointer',
-                                                            backgroundColor: computedColorScheme === 'dark' ? '#25262b' : 'white',
-                                                            borderColor: computedColorScheme === 'dark' ? '#373A40' : '#e9ecef',
-                                                            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                                                        }}
-                                                        onMouseEnter={(e) => {
-                                                            e.currentTarget.style.transform = 'translateY(-2px)';
-                                                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
-                                                            e.currentTarget.style.borderColor = 'var(--mantine-color-violet-8)';
-                                                        }}
-                                                        onMouseLeave={(e) => {
-                                                            e.currentTarget.style.transform = 'translateY(0)';
-                                                            e.currentTarget.style.boxShadow = 'none';
-                                                            e.currentTarget.style.borderColor = computedColorScheme === 'dark' ? '#373A40' : '#e9ecef';
-                                                        }}
-                                                    >
-                                                        <Group mb="sm" justify="space-between" align="start">
-                                                            <Text fw={700} size="md" c={computedColorScheme === 'dark' ? 'white' : 'dark'}>{board.name}</Text>
-                                                            <Box
-                                                                style={{
-                                                                    width: 8,
-                                                                    height: 8,
-                                                                    borderRadius: '50%',
-                                                                    backgroundColor: BOARD_THEMES[board.themeColor as ThemeColor]?.background || 'gray',
-                                                                }}
-                                                            />
-                                                        </Group>
-                                                        <Text size="xs" c="dimmed">Personal</Text>
-                                                    </Card>
-                                                ))}
-                                            </SimpleGrid>
-                                        </Box>
-                                    )}
                                 </>
                             )}
                         </Box>
@@ -537,14 +679,14 @@ export default function BoardsPage() {
                 }}
             >
                 <Select
-                    label="Workspace (Optional)"
+                    label="Workspace"
                     placeholder="Select a workspace"
                     data={workspaces.map(w => ({ value: w.id.toString(), label: w.name }))}
                     value={selectedWorkspaceId}
                     onChange={setSelectedWorkspaceId}
                     mb="md"
                     searchable
-                    clearable
+                    required
                 />
 
                 <Text size="sm" fw={500} mb={4}>Board Theme</Text>
@@ -566,6 +708,18 @@ export default function BoardsPage() {
                         </ThemeIcon>
                     ))}
                 </Group>
+
+                <Select
+                    label="Board Template"
+                    placeholder="Choose a starting structure"
+                    data={Object.entries(BOARD_TEMPLATES).map(([key, t]) => ({ value: key, label: t.name }))}
+                    value={selectedTemplate}
+                    onChange={(val) => setSelectedTemplate(val as TemplateType)}
+                    mb={4}
+                />
+                <Text size="xs" c="dimmed" mb="md">
+                    {BOARD_TEMPLATES[selectedTemplate]?.description}
+                </Text>
 
                 <TextInput
                     label="Board Name"
@@ -631,6 +785,187 @@ export default function BoardsPage() {
                         Create Workspace
                     </Button>
                 </Group>
+            </Modal>
+
+
+
+            {/* Closed Boards Modal */}
+            <Modal
+                opened={closedBoardsModalOpen}
+                onClose={() => setClosedBoardsModalOpen(false)}
+                title="Closed Boards"
+                size="lg"
+                centered
+                styles={{
+                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                }}
+            >
+                <Stack>
+                    {boards.filter(b => b.isClosed).length === 0 ? (
+                        <Text c="dimmed" ta="center" py="xl">No closed boards yet.</Text>
+                    ) : (
+                        boards.filter(b => b.isClosed).map(board => (
+                            <Paper
+                                key={board.id}
+                                p="md"
+                                radius="md"
+                                withBorder
+                                style={{
+                                    background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8f9fa',
+                                    borderColor: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'
+                                }}
+                            >
+                                <Group justify="space-between">
+                                    <Stack gap={2}>
+                                        <Text fw={600}>{board.name}</Text>
+                                        <Text size="xs" c="dimmed">Closed on {new Date(board.createdAt).toLocaleDateString()}</Text>
+                                    </Stack>
+                                    <Group gap="xs">
+                                        <Button
+                                            variant="light"
+                                            color="blue"
+                                            size="xs"
+                                            onClick={() => navigate(`/boards/${board.id}`)}
+                                        >
+                                            View
+                                        </Button>
+                                        <Button
+                                            variant="light"
+                                            color="violet"
+                                            size="xs"
+                                            onClick={() => handleReopenBoard(board.id)}
+                                        >
+                                            Reopen
+                                        </Button>
+                                        <ActionIcon
+                                            variant="subtle"
+                                            color="red"
+                                            size="sm"
+                                            onClick={() => setDeleteBoardTarget(board.id)}
+                                        >
+                                            <IconTrash size={16} />
+                                        </ActionIcon>
+                                    </Group>
+                                </Group>
+                            </Paper>
+                        ))
+                    )}
+                </Stack>
+            </Modal>
+
+            {/* AI Architect Modal */}
+            <Modal
+                opened={aiModalOpen}
+                onClose={() => setAiModalOpen(false)}
+                title="AI Board Architect"
+                centered
+                radius="lg"
+                styles={{
+                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white' },
+                    header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white' },
+                }}
+            >
+                <Text size="sm" c="dimmed" mb="md">
+                    Choose a project type and describe your dream board. Our AI will handle the rest!
+                </Text>
+
+                <Select
+                    label="Workspace (Optional)"
+                    placeholder="Select a workspace for the board"
+                    data={workspaces.map(w => ({ value: w.id.toString(), label: w.name }))}
+                    value={selectedWorkspaceId}
+                    onChange={setSelectedWorkspaceId}
+                    mb="md"
+                    searchable
+                    clearable
+                />
+
+                <Select
+                    label="Project Type"
+                    placeholder="Choose a structure"
+                    mb="md"
+                    data={[
+                        { value: 'Kanban', label: 'Kanban (Standard)' },
+                        { value: 'Scrum', label: 'Scrum (Dev Sprints)' },
+                        { value: 'Sales/CRM', label: 'Sales (Pipeline)' },
+                        { value: 'Content/Creative', label: 'Content (Production)' },
+                        { value: 'Marketing', label: 'Marketing (Campaign)' },
+                        { value: 'Product Roadmap', label: 'Roadmap (High-level)' },
+                        { value: 'Bug Tracking', label: 'QA (Bug Tracker)' }
+                    ]}
+                    value={projectType}
+                    onChange={setProjectType}
+                    required
+                />
+
+                <TextInput
+                    label="Project Description"
+                    placeholder="e.g. A mobile app for tracking daily water intake"
+                    value={projectIdea}
+                    onChange={(e) => setProjectIdea(e.currentTarget.value)}
+                    mb="lg"
+                    styles={{ input: { background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.4)' : '#f1f3f5' } }}
+                    onKeyDown={(e) => e.key === 'Enter' && handleGenerateBoard()}
+                />
+                <Group justify="flex-end">
+                    <Button variant="subtle" color="gray" onClick={() => setAiModalOpen(false)} disabled={isGeneratingBoard}>
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="filled"
+                        color="grape"
+                        loading={isGeneratingBoard}
+                        onClick={handleGenerateBoard}
+                        leftSection={!isGeneratingBoard && <IconWand size={16} />}
+                    >
+                        Generate Board
+                    </Button>
+                </Group>
+            </Modal>
+
+            {/* Board Close Confirmation Modal */}
+            <Modal
+                opened={closeBoardTarget !== null}
+                onClose={() => setCloseBoardTarget(null)}
+                title="Close Board"
+                centered
+                styles={{
+                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                }}
+            >
+                <Stack>
+                    <Text size="sm">
+                        Are you sure you want to close this board? You can still access it from the workspace later.
+                    </Text>
+                    <Group justify="flex-end">
+                        <Button variant="subtle" color="gray" onClick={() => setCloseBoardTarget(null)}>Cancel</Button>
+                        <Button color="red" onClick={handleCloseBoard}>Close Board</Button>
+                    </Group>
+                </Stack>
+            </Modal>
+
+            {/* Board Delete Confirmation Modal */}
+            <Modal
+                opened={deleteBoardTarget !== null}
+                onClose={() => setDeleteBoardTarget(null)}
+                title="Delete Board"
+                centered
+                styles={{
+                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                }}
+            >
+                <Stack>
+                    <Text size="sm">
+                        Are you sure you want to permanently delete this board? <b>This action cannot be undone.</b>
+                    </Text>
+                    <Group justify="flex-end">
+                        <Button variant="subtle" color="gray" onClick={() => setDeleteBoardTarget(null)}>Cancel</Button>
+                        <Button color="red" onClick={handleDeleteBoard}>Delete Permanently</Button>
+                    </Group>
+                </Stack>
             </Modal>
         </Box>
     );

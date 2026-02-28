@@ -18,6 +18,15 @@ export interface WorkspaceMember {
     joinedAt: string;
 }
 
+export interface WorkspaceInvite {
+    token: string;
+    role: string;
+    workspaceId: number;
+    workspaceName: string;
+    createdAt: string;
+    expiresAt: string | null;
+}
+
 export interface CreateWorkspaceDto {
     name: string;
     description: string;
@@ -59,4 +68,19 @@ export const getWorkspaceInvitations = async () => {
 
 export const respondToWorkspaceInvitation = async (workspaceId: number, accept: boolean) => {
     await api.post(`/workspaces/${workspaceId}/respond`, { accept });
+};
+
+export const createWorkspaceInvite = async (workspaceId: number, role: string, expiresInDays?: number) => {
+    const response = await api.post<WorkspaceInvite>(`/workspaces/${workspaceId}/invites`, { role, expiresInDays });
+    return response.data;
+};
+
+export const getWorkspaceInvite = async (token: string) => {
+    const response = await api.get<WorkspaceInvite>(`/workspaces/invite/${token}`);
+    return response.data;
+};
+
+export const joinWorkspaceByToken = async (token: string) => {
+    const response = await api.post<{ message: string, workspaceId: number }>(`/workspaces/join/${token}`);
+    return response.data;
 };

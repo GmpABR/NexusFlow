@@ -15,6 +15,7 @@ public class CreateTaskDto
     public List<int>? AssigneeIds { get; set; } // multi-assignee
     public List<int>? LabelIds { get; set; } // labels
     public string? Tags { get; set; }
+    public string? ErDiagramPuml { get; set; }
 
     [Required]
     public int ColumnId { get; set; }
@@ -32,6 +33,7 @@ public class UpdateTaskDto
     public List<int>? AssigneeIds { get; set; } // multi-assignee (authoritative)
     public List<int>? LabelIds { get; set; } // labels
     public string? Tags { get; set; }
+    public string? ErDiagramPuml { get; set; }
 }
 
 public class TaskCardDto
@@ -51,6 +53,7 @@ public class TaskCardDto
     public string? AssigneeName { get; set; }
     public string? AssigneeAvatar { get; set; }
     public string? Tags { get; set; }
+    public string? ErDiagramPuml { get; set; }
 
     // Time Tracking
     public int TotalTimeSpentMinutes { get; set; } = 0;

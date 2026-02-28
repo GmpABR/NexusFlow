@@ -81,6 +81,9 @@ namespace Backend.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("IsClosed")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsPrivate")
                         .HasColumnType("boolean");
 
@@ -95,7 +98,7 @@ namespace Backend.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int?>("WorkspaceId")
+                    b.Property<int>("WorkspaceId")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
@@ -105,6 +108,86 @@ namespace Backend.Migrations
                     b.HasIndex("WorkspaceId");
 
                     b.ToTable("Boards");
+                });
+
+            modelBuilder.Entity("Backend.Models.BoardAutomation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ActionValue")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("BoardId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TriggerCondition")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TriggerType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BoardId");
+
+                    b.ToTable("BoardAutomations");
+                });
+
+            modelBuilder.Entity("Backend.Models.BoardInvite", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BoardId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CreatorId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BoardId");
+
+                    b.HasIndex("CreatorId");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.ToTable("BoardInvites");
                 });
 
             modelBuilder.Entity("Backend.Models.BoardMember", b =>
@@ -352,6 +435,9 @@ namespace Backend.Migrations
                     b.Property<DateTime?>("DueDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ErDiagramPuml")
+                        .HasColumnType("text");
+
                     b.Property<int>("Order")
                         .HasColumnType("integer");
 
@@ -445,6 +531,9 @@ namespace Backend.Migrations
                     b.Property<string>("Department")
                         .HasColumnType("text");
 
+                    b.Property<bool>("DisplayOfflineAlways")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasColumnType("text");
@@ -456,6 +545,9 @@ namespace Backend.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("Location")
+                        .HasColumnType("text");
+
+                    b.Property<string>("OpenRouterApiKey")
                         .HasColumnType("text");
 
                     b.Property<string>("Organization")
@@ -516,6 +608,49 @@ namespace Backend.Migrations
                     b.HasIndex("OwnerId");
 
                     b.ToTable("Workspaces");
+                });
+
+            modelBuilder.Entity("Backend.Models.WorkspaceInvite", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CreatorId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("WorkspaceId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatorId");
+
+                    b.HasIndex("Token")
+                        .IsUnique();
+
+                    b.HasIndex("WorkspaceId");
+
+                    b.ToTable("WorkspaceInvites");
                 });
 
             modelBuilder.Entity("Backend.Models.WorkspaceMember", b =>
@@ -583,11 +718,42 @@ namespace Backend.Migrations
                     b.HasOne("Backend.Models.Workspace", "Workspace")
                         .WithMany("Boards")
                         .HasForeignKey("WorkspaceId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .IsRequired();
 
                     b.Navigation("Owner");
 
                     b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Backend.Models.BoardAutomation", b =>
+                {
+                    b.HasOne("Backend.Models.Board", "Board")
+                        .WithMany("Automations")
+                        .HasForeignKey("BoardId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Board");
+                });
+
+            modelBuilder.Entity("Backend.Models.BoardInvite", b =>
+                {
+                    b.HasOne("Backend.Models.Board", "Board")
+                        .WithMany()
+                        .HasForeignKey("BoardId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Backend.Models.User", "Creator")
+                        .WithMany()
+                        .HasForeignKey("CreatorId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Board");
+
+                    b.Navigation("Creator");
                 });
 
             modelBuilder.Entity("Backend.Models.BoardMember", b =>
@@ -776,6 +942,25 @@ namespace Backend.Migrations
                     b.Navigation("Owner");
                 });
 
+            modelBuilder.Entity("Backend.Models.WorkspaceInvite", b =>
+                {
+                    b.HasOne("Backend.Models.User", "Creator")
+                        .WithMany()
+                        .HasForeignKey("CreatorId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Backend.Models.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Creator");
+
+                    b.Navigation("Workspace");
+                });
+
             modelBuilder.Entity("Backend.Models.WorkspaceMember", b =>
                 {
                     b.HasOne("Backend.Models.User", "User")
@@ -797,6 +982,8 @@ namespace Backend.Migrations
 
             modelBuilder.Entity("Backend.Models.Board", b =>
                 {
+                    b.Navigation("Automations");
+
                     b.Navigation("Columns");
 
                     b.Navigation("Labels");

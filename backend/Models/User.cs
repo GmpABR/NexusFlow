@@ -14,6 +14,8 @@ public class User
     public string? Location { get; set; }
     public string? Bio { get; set; }
     public string ThemePreference { get; set; } = "dark";
+    public string? OpenRouterApiKey { get; set; }
+    public bool DisplayOfflineAlways { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation

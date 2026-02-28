@@ -17,6 +17,8 @@ public class TaskCard
     public int? AssigneeId { get; set; }
     public User? Assignee { get; set; }
 
+    public string? ErDiagramPuml { get; set; }
+
     // Foreign Key
     public int ColumnId { get; set; }
     public Column Column { get; set; } = null!;

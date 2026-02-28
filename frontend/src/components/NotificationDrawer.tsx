@@ -88,6 +88,7 @@ export default function NotificationDrawer({ opened, onClose, onNotificationClic
             position="right"
             size="md"
             padding="md"
+            zIndex={2000}
             styles={{
                 header: {
                     borderBottom: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
@@ -166,7 +167,17 @@ export default function NotificationDrawer({ opened, onClose, onNotificationClic
                                                     {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: ptBR })}
                                                 </Text>
                                                 {n.relatedId && (
-                                                    <Badge variant="dot" size="xs" color="gray" leftSection={<IconExternalLink size={10} />}>
+                                                    <Badge
+                                                        variant="filled"
+                                                        size="xs"
+                                                        color="gray"
+                                                        leftSection={<IconExternalLink size={10} />}
+                                                        style={{
+                                                            textTransform: 'none',
+                                                            height: 18,
+                                                            paddingInline: 6
+                                                        }}
+                                                    >
                                                         Tarefa #{n.relatedId}
                                                     </Badge>
                                                 )}

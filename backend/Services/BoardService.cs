@@ -20,7 +20,7 @@ public class BoardService : IBoardService
             .AsNoTracking()
             .Where(b => b.OwnerId == userId 
                      || b.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
-                     || (b.Workspace != null && b.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted")))
+                     || (b.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted")))
             .Select(b => new BoardSummaryDto
             {
                 Id = b.Id,
@@ -28,7 +28,10 @@ public class BoardService : IBoardService
                 CreatedAt = b.CreatedAt,
                 Role = b.OwnerId == userId ? "Owner" : "Member",
                 ThemeColor = b.ThemeColor,
-                WorkspaceId = b.WorkspaceId
+                WorkspaceId = b.WorkspaceId,
+                IsClosed = b.IsClosed,
+                OpenTasksCount = b.Columns.SelectMany(c => c.TaskCards)
+                    .Count(t => !t.Column.Name.ToLower().Contains("done") && !t.Column.Name.ToLower().Contains("complete"))
             })
             .ToListAsync();
     }
@@ -45,7 +48,10 @@ public class BoardService : IBoardService
                 CreatedAt = b.CreatedAt,
                 Role = "Invited",
                 ThemeColor = b.ThemeColor,
-                WorkspaceId = b.WorkspaceId
+                WorkspaceId = b.WorkspaceId,
+                IsClosed = b.IsClosed,
+                OpenTasksCount = b.Columns.SelectMany(c => c.TaskCards)
+                    .Count(t => !t.Column.Name.ToLower().Contains("done") && !t.Column.Name.ToLower().Contains("complete"))
             })
             .ToListAsync();
     }
@@ -56,10 +62,11 @@ public class BoardService : IBoardService
         // Returns null if board doesn't exist OR user has no access.
         var boardDto = await _db.Boards
             .AsNoTracking()
+            .AsSplitQuery()
             .Where(b => b.Id == boardId && (
                 b.OwnerId == userId 
                 || b.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
-                || (b.Workspace != null && b.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted"))
+                || (b.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted"))
             ))
             .Select(b => new BoardDetailDto
             {
@@ -69,6 +76,7 @@ public class BoardService : IBoardService
                 OwnerId = b.OwnerId,
                 ThemeColor = b.ThemeColor,
                 WorkspaceId = b.WorkspaceId,
+                IsClosed = b.IsClosed,
                 Columns = b.Columns.OrderBy(c => c.Order).Select(c => new ColumnDto
                 {
                     Id = c.Id,
@@ -144,7 +152,8 @@ public class BoardService : IBoardService
                     Email = m.User.Email,
                     Role = m.Role,
                     JoinedAt = m.JoinedAt,
-                    AvatarUrl = m.User.AvatarUrl
+                    AvatarUrl = m.User.AvatarUrl,
+                    IsWorkspaceMember = false
                 }).ToList(),
                 UserRole = b.OwnerId == userId ? "Owner" : (b.Members.Where(m => m.UserId == userId).Select(m => m.Role).FirstOrDefault() ?? "Member") 
                 // Handle null coalescing properly.
@@ -165,33 +174,32 @@ public class BoardService : IBoardService
                     Email = owner.Email,
                     Role = "Owner",
                     JoinedAt = boardDto.CreatedAt,
-                    AvatarUrl = owner.AvatarUrl
+                    AvatarUrl = owner.AvatarUrl,
+                    IsWorkspaceMember = false
                 });
             }
 
             // Workspace members are implicitly members of the board
-            if (boardDto.WorkspaceId.HasValue)
-            {
-                var wsMembers = await _db.WorkspaceMembers
-                    .Include(wm => wm.User)
-                    .Where(wm => wm.WorkspaceId == boardDto.WorkspaceId.Value && wm.Status == "Accepted")
-                    .ToListAsync();
+            var wsMembers = await _db.WorkspaceMembers
+                .Include(wm => wm.User)
+                .Where(wm => wm.WorkspaceId == boardDto.WorkspaceId && wm.Status == "Accepted")
+                .ToListAsync();
                 
-                foreach (var wm in wsMembers)
+            foreach (var wm in wsMembers)
+            {
+                if (!boardDto.Members.Any(m => m.UserId == wm.UserId))
                 {
-                    if (!boardDto.Members.Any(m => m.UserId == wm.UserId))
+                    boardDto.Members.Add(new BoardMemberDto
                     {
-                        boardDto.Members.Add(new BoardMemberDto
-                        {
-                            Id = wm.Id,
-                            UserId = wm.UserId,
-                            Username = wm.User.Username,
-                            Email = wm.User.Email,
-                            Role = wm.Role,
-                            JoinedAt = wm.JoinedAt,
-                            AvatarUrl = wm.User.AvatarUrl
-                        });
-                    }
+                        Id = wm.Id,
+                        UserId = wm.UserId,
+                        Username = wm.User.Username,
+                        Email = wm.User.Email,
+                        Role = wm.Role,
+                        JoinedAt = wm.JoinedAt,
+                        AvatarUrl = wm.User.AvatarUrl,
+                        IsWorkspaceMember = true
+                    });
                 }
             }
         }
@@ -212,16 +220,19 @@ public class BoardService : IBoardService
         _db.Boards.Add(board);
         await _db.SaveChangesAsync();
 
-        // Create 3 default columns
-        var defaultColumns = new List<Column>
+        if (!dto.SkipDefaultColumns)
         {
-            new() { Name = "To Do", Order = 0, BoardId = board.Id },
-            new() { Name = "In Progress", Order = 1, BoardId = board.Id },
-            new() { Name = "Done", Order = 2, BoardId = board.Id }
-        };
+            // Create 3 default columns
+            var defaultColumns = new List<Column>
+            {
+                new() { Name = "To Do", Order = 0, BoardId = board.Id },
+                new() { Name = "In Progress", Order = 1, BoardId = board.Id },
+                new() { Name = "Done", Order = 2, BoardId = board.Id }
+            };
 
-        _db.Columns.AddRange(defaultColumns);
-        await _db.SaveChangesAsync();
+            _db.Columns.AddRange(defaultColumns);
+            await _db.SaveChangesAsync();
+        }
 
         return new BoardSummaryDto
         {
@@ -246,7 +257,8 @@ public class BoardService : IBoardService
                 Email = m.User.Email,
                 Role = m.Role,
                 JoinedAt = m.JoinedAt,
-                AvatarUrl = m.User.AvatarUrl
+                AvatarUrl = m.User.AvatarUrl,
+                IsWorkspaceMember = false
             })
             .ToListAsync();
     }
@@ -368,6 +380,45 @@ public class BoardService : IBoardService
         }
 
         await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> CloseBoardAsync(int boardId, int requesterId)
+    {
+        var board = await _db.Boards.FirstOrDefaultAsync(b => b.Id == boardId);
+        
+        if (board == null || board.OwnerId != requesterId)
+            return false;
+
+        board.IsClosed = true;
+        await _db.SaveChangesAsync();
+
+        return true;
+    }
+
+    public async Task<bool> ReopenBoardAsync(int boardId, int requesterId)
+    {
+        var board = await _db.Boards.FirstOrDefaultAsync(b => b.Id == boardId);
+        
+        if (board == null || board.OwnerId != requesterId)
+            return false;
+
+        board.IsClosed = false;
+        await _db.SaveChangesAsync();
+
+        return true;
+    }
+
+    public async Task<bool> DeleteBoardAsync(int boardId, int requesterId)
+    {
+        var board = await _db.Boards.FirstOrDefaultAsync(b => b.Id == boardId);
+        
+        if (board == null || board.OwnerId != requesterId || !board.IsClosed)
+            return false;
+
+        _db.Boards.Remove(board);
+        await _db.SaveChangesAsync();
+
         return true;
     }
 
@@ -512,5 +563,89 @@ public class BoardService : IBoardService
             Order = column.Order,
             TaskCards = new List<TaskCardDto>() // Not returning tasks here for simplicity
         };
+    }
+
+    public async Task<BoardInviteDto> CreateBoardInviteAsync(int boardId, string role, int requesterId)
+    {
+        var board = await _db.Boards.FindAsync(boardId);
+        if (board == null || board.OwnerId != requesterId)
+            throw new UnauthorizedAccessException("Only the board owner can create invite links.");
+
+        var invite = new BoardInvite
+        {
+            Token = Guid.NewGuid().ToString("N"),
+            BoardId = boardId,
+            Role = role,
+            CreatorId = requesterId,
+            CreatedAt = DateTime.UtcNow,
+            IsActive = true
+        };
+
+        _db.BoardInvites.Add(invite);
+        await _db.SaveChangesAsync();
+
+        return new BoardInviteDto
+        {
+            Token = invite.Token,
+            Role = invite.Role,
+            BoardId = invite.BoardId,
+            BoardName = board.Name,
+            CreatedAt = invite.CreatedAt
+        };
+    }
+
+    public async Task<BoardInviteDto?> GetBoardInviteByTokenAsync(string token)
+    {
+        var invite = await _db.BoardInvites
+            .Include(i => i.Board)
+            .FirstOrDefaultAsync(i => i.Token == token && i.IsActive);
+
+        if (invite == null) return null;
+
+        return new BoardInviteDto
+        {
+            Token = invite.Token,
+            Role = invite.Role,
+            BoardId = invite.BoardId,
+            BoardName = invite.Board.Name,
+            CreatedAt = invite.CreatedAt
+        };
+    }
+
+    public async Task<bool> AcceptBoardInviteAsync(string token, int userId)
+    {
+        var invite = await _db.BoardInvites
+            .Include(i => i.Board)
+            .FirstOrDefaultAsync(i => i.Token == token && i.IsActive);
+
+        if (invite == null) return false;
+
+        // Check if already a member
+        var existing = await _db.BoardMembers
+            .FirstOrDefaultAsync(m => m.BoardId == invite.BoardId && m.UserId == userId);
+
+        if (existing != null)
+        {
+            if (existing.Status == "Accepted") return true; // Already joined
+            
+            // Update role if joining via a different link? 
+            // For now, just accept the existing one and update status.
+            existing.Status = "Accepted";
+            existing.Role = invite.Role;
+        }
+        else
+        {
+            var member = new BoardMember
+            {
+                BoardId = invite.BoardId,
+                UserId = userId,
+                Role = invite.Role,
+                Status = "Accepted"
+            };
+            _db.BoardMembers.Add(member);
+        }
+
+        await _db.SaveChangesAsync();
+        return true;
     }
 }

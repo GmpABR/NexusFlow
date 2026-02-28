@@ -73,6 +73,8 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IBoardService, BoardService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IAutomationService, BoardAutomationService>();
+builder.Services.AddSingleton<PresenceTracker>();
 
 // ── Controllers & Swagger ──────────────────────────────────────────────────
 builder.Services.AddControllers();

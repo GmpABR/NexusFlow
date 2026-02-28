@@ -1,8 +1,8 @@
-import { Avatar, Text, Timeline, ScrollArea, useComputedColorScheme, ActionIcon, Group, Badge, Popover, Tooltip, Skeleton, Stack, TextInput, Button } from '@mantine/core';
+import { Avatar, Text, Timeline, ScrollArea, useComputedColorScheme, ActionIcon, Group, Badge, Popover, Tooltip, Skeleton, Stack, TextInput, Button, Menu, Box } from '@mantine/core';
 import type { TaskActivity, Reaction } from '../api/tasks';
 import { deleteComment, toggleReaction, updateComment } from '../api/tasks';
 import { formatDistanceToNow } from 'date-fns';
-import { IconTrash, IconPlus, IconPencil, IconCheck, IconX } from '@tabler/icons-react';
+import { IconTrash, IconPlus, IconPencil, IconCheck, IconX, IconDots } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { useEffect, useRef, useState } from 'react';
@@ -32,7 +32,7 @@ export default function ActivityLog({ activities, currentUserId, boardRole, onRe
     };
 
     const canEdit = (activity: TaskActivity) => {
-        return activity.action === 'Commented' && activity.userId == currentUserId;
+        return activity.action === 'Commented' && activity.userId == currentUserId && boardRole !== 'Viewer';
     };
 
     const handleDelete = async (id: number) => {
@@ -165,7 +165,7 @@ export default function ActivityLog({ activities, currentUserId, boardRole, onRe
             {!activities || activities.length === 0 ? (
                 <Text c="dimmed" fs="italic" size="sm" p="md">No activity yet.</Text>
             ) : (
-                <Timeline active={localActivities.length} bulletSize={24} lineWidth={2}>
+                <Timeline active={localActivities.length} bulletSize={24} lineWidth={1}>
                     {localActivities.map((activity: any) => {
                         const groupedReactions = getGroupedReactions(activity.reactions);
                         const isComment = activity.action === 'Commented';
@@ -188,28 +188,49 @@ export default function ActivityLog({ activities, currentUserId, boardRole, onRe
                                     </Avatar>
                                 }
                                 title={
-                                    <Group justify="space-between" align="center" wrap="nowrap">
-                                        <Text size="sm" fw={500} c={computedColorScheme === 'dark' ? 'white' : 'black'}>
-                                            {uName} <Text span c="dimmed" size="xs">({formatDistanceToNow(new Date(activity.timestamp))} ago)</Text>
-                                        </Text>
-                                        <Group gap={4}>
-                                            {canEdit(activity) && editingId !== activity.id && (
-                                                <ActionIcon variant="subtle" size="sm" onClick={() => handleStartEdit(activity)} title="Edit comment">
-                                                    <IconPencil size={14} />
-                                                </ActionIcon>
-                                            )}
-                                            {canDelete(activity) && (
-                                                <ActionIcon
-                                                    variant="subtle"
-                                                    color="red"
-                                                    size="sm"
-                                                    onClick={() => handleDelete(activity.id)}
-                                                    title="Delete comment"
-                                                >
-                                                    <IconTrash size={14} />
-                                                </ActionIcon>
-                                            )}
-                                        </Group>
+                                    <Group justify="space-between" align="flex-start" wrap="nowrap">
+                                        <Box style={{ flex: 1, minWidth: 0 }}>
+                                            <Group gap={8} align="center">
+                                                <Text size="sm" fw={700} c={computedColorScheme === 'dark' ? 'white' : 'gray.9'}>
+                                                    {uName}
+                                                </Text>
+                                                <Text size="xs" c="dimmed">
+                                                    {formatDistanceToNow(new Date(activity.timestamp))} ago
+                                                </Text>
+                                            </Group>
+                                        </Box>
+
+                                        {(canEdit(activity) || canDelete(activity)) && editingId !== activity.id && (
+                                            <Menu shadow="md" width={160} position="bottom-end" withinPortal zIndex={3000}>
+                                                <Menu.Target>
+                                                    <ActionIcon variant="subtle" size="sm" color="gray">
+                                                        <IconDots size={16} />
+                                                    </ActionIcon>
+                                                </Menu.Target>
+                                                <Menu.Dropdown>
+                                                    {canEdit(activity) && (
+                                                        <Menu.Item
+                                                            leftSection={<IconPencil size={14} />}
+                                                            onClick={() => handleStartEdit(activity)}
+                                                        >
+                                                            Edit comment
+                                                        </Menu.Item>
+                                                    )}
+                                                    {canDelete(activity) && (
+                                                        <>
+                                                            {canEdit(activity) && <Menu.Divider />}
+                                                            <Menu.Item
+                                                                color="red"
+                                                                leftSection={<IconTrash size={14} />}
+                                                                onClick={() => handleDelete(activity.id)}
+                                                            >
+                                                                Delete comment
+                                                            </Menu.Item>
+                                                        </>
+                                                    )}
+                                                </Menu.Dropdown>
+                                            </Menu>
+                                        )}
                                     </Group>
                                 }
                             >
@@ -230,9 +251,26 @@ export default function ActivityLog({ activities, currentUserId, boardRole, onRe
                                         </Group>
                                     </Stack>
                                 ) : (
-                                    <Text c="dimmed" size="sm" className="activity-details" mb={isComment ? 4 : 0}>
-                                        <Text span fw={700} c={computedColorScheme === 'dark' ? 'blue.4' : 'blue.7'}>{activity.action}</Text>: {activity.details}
-                                    </Text>
+                                    <Box
+                                        mt={4}
+                                        p={isComment ? '8px 12px' : 0}
+                                        style={isComment ? {
+                                            background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8f9fa',
+                                            borderRadius: '8px',
+                                            border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : '#dee2e6'}`,
+                                            width: 'fit-content',
+                                            maxWidth: '100%'
+                                        } : {}}
+                                    >
+                                        <Text size="sm" c={isComment ? (computedColorScheme === 'dark' ? 'gray.2' : 'gray.8') : 'dimmed'} className="activity-details">
+                                            {!isComment && (
+                                                <Text span fw={600} size="xs" c="blue.5" style={{ textTransform: 'uppercase', marginRight: 6 }}>
+                                                    {activity.action}
+                                                </Text>
+                                            )}
+                                            {activity.details}
+                                        </Text>
+                                    </Box>
                                 )}
 
                                 {isComment && (
@@ -247,9 +285,12 @@ export default function ActivityLog({ activities, currentUserId, boardRole, onRe
                                                 <Badge
                                                     variant={group.hasReacted ? "filled" : "light"}
                                                     color={group.hasReacted ? "violet" : "gray"}
-                                                    size="sm"
-                                                    style={{ cursor: 'pointer', textTransform: 'none', padding: '0 6px' }}
-                                                    onClick={() => handleReaction(activity.id, group.emoji)}
+                                                    onClick={() => {
+                                                        if (boardRole !== 'Viewer') {
+                                                            handleReaction(activity.id, group.emoji);
+                                                        }
+                                                    }}
+                                                    style={{ cursor: boardRole === 'Viewer' ? 'default' : 'pointer', textTransform: 'none', padding: '0 6px' }}
                                                 >
                                                     {group.emoji} {group.count}
                                                 </Badge>
@@ -272,6 +313,7 @@ export default function ActivityLog({ activities, currentUserId, boardRole, onRe
                                                     color="gray"
                                                     radius="xl"
                                                     title="Add reaction"
+                                                    disabled={boardRole === 'Viewer'}
                                                     onClick={() => setOpenedPickerId(openedPickerId === activity.id ? null : activity.id)}
                                                 >
                                                     <IconPlus size={12} />

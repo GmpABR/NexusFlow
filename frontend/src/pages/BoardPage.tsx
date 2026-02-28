@@ -17,6 +17,9 @@ import {
     ThemeIcon,
     Menu,
     Autocomplete,
+    Select,
+    Divider,
+    CopyButton,
     useComputedColorScheme
 } from '@mantine/core';
 import {
@@ -33,7 +36,14 @@ import {
     IconList,
     IconPlus,
     IconX,
-    IconChartBar
+    IconChartBar,
+    IconSettings,
+    IconLock,
+    IconCopy,
+    IconCheck,
+    IconLink,
+    IconEye,
+    IconRobot
 } from '@tabler/icons-react';
 import {
     DragDropContext,
@@ -53,6 +63,10 @@ import {
     moveColumn,
     deleteColumn,
     updateColumn,
+    closeBoard,
+    deleteBoard,
+    reopenBoard,
+    createBoardInvite,
     type BoardDetail,
     type BoardSummary,
     type TaskCard as TaskCardType,
@@ -60,12 +74,13 @@ import {
 } from '../api/boards';
 import { searchUsers, type UserSummary } from '../api/users';
 import { createTask, moveTask, deleteTask } from '../api/tasks';
+
 import { type Label } from '../api/labels';
 import { useSignalR } from '../hooks/useSignalR';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import BoardColumn from '../components/BoardColumn';
-
-
+import { usePresence } from '../contexts/PresenceContext';
+import { OnlineIndicator } from '../components/OnlineIndicator';
 
 import TaskDetailModal from '../components/TaskDetailModal';
 import BoardTableView from '../components/BoardTableView';
@@ -73,6 +88,7 @@ import BoardCalendarView from '../components/BoardCalendarView';
 import BoardDashboardView from '../components/BoardDashboardView';
 import BoardTimelineView from '../components/BoardTimelineView';
 import BoardAnalyticsModal from '../components/BoardAnalyticsModal';
+import BoardAutomationsModal from '../components/BoardAutomationsModal';
 import { BOARD_THEMES, type ThemeColor } from '../constants/themes';
 
 type ViewMode = 'board' | 'table' | 'calendar' | 'dashboard' | 'timeline' | 'map';
@@ -83,12 +99,18 @@ export default function BoardPage() {
     const computedColorScheme = useComputedColorScheme('dark');
 
     const boardId = id ? parseInt(id) : null;
+    const { onlineUserIds } = usePresence();
 
     const [board, setBoard] = useState<BoardDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [membersModalOpen, setMembersModalOpen] = useState(false);
     const [inviting, setInviting] = useState(false);
+    const [inviteLink, setInviteLink] = useState<string | null>(null);
+    const [inviteRole, setInviteRole] = useState<string>('Member');
     const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
+    const [automationsModalOpen, setAutomationsModalOpen] = useState(false);
+    const [closeModalOpen, setCloseModalOpen] = useState(false);
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
     // Task Detail Modal State
     const [selectedTask, setSelectedTask] = useState<TaskCardType | null>(null);
@@ -144,7 +166,7 @@ export default function BoardPage() {
 
     // ── Delete Column ──
     const handleDeleteColumn = useCallback(async (columnId: number) => {
-        if (!boardId) return;
+        if (!boardId || board?.isClosed) return;
         const previousColumns = board?.columns;
 
         // Optimistic
@@ -168,7 +190,7 @@ export default function BoardPage() {
 
     // ── Update Column (Rename) ──
     const handleUpdateColumn = useCallback(async (columnId: number, name: string) => {
-        if (!boardId) return;
+        if (!boardId || board?.isClosed) return;
         const previousColumns = board?.columns;
 
         // Optimistic
@@ -189,62 +211,47 @@ export default function BoardPage() {
         }
     }, [boardId, board]);
 
+
     const handleTaskMoveInternal = (task: TaskCardType) => {
         setBoard((prev) => {
             if (!prev) return prev;
 
-            // Find current location of the task
-            let sourceColIndex = -1;
-            let sourceTaskIndex = -1;
-
+            // Find current location
+            let sourceColIdx = -1;
+            let sourceTIdx = -1;
             prev.columns.forEach((col, cIdx) => {
                 const tIdx = col.taskCards.findIndex(t => t.id === task.id);
                 if (tIdx !== -1) {
-                    sourceColIndex = cIdx;
-                    sourceTaskIndex = tIdx;
+                    sourceColIdx = cIdx;
+                    sourceTIdx = tIdx;
                 }
             });
 
-            // If not found, check if it's a new task to be inserted (e.g. from another user)
-            // But usually move implies existing. If checks fail, return prev.
-            if (sourceColIndex === -1 && !task.columnId) return prev;
-
-            const targetColIndex = prev.columns.findIndex(c => c.id === task.columnId);
-            if (targetColIndex === -1) return prev;
-
-            // Clone to ensure we have a new object reference in state
-            const updatedTask = { ...task };
+            const targetColIdx = prev.columns.findIndex(c => c.id === task.columnId);
+            if (targetColIdx === -1) return prev;
 
             const newColumns = [...prev.columns];
 
-            // If dragging within same column
-            if (sourceColIndex === targetColIndex) {
-                const newCards = [...newColumns[sourceColIndex].taskCards];
-                if (sourceColIndex !== -1) newCards.splice(sourceTaskIndex, 1);
-
-                const insertIndex = Math.min(task.order, newCards.length);
-                newCards.splice(insertIndex, 0, updatedTask);
-
-                newColumns[sourceColIndex] = { ...newColumns[sourceColIndex], taskCards: newCards };
-            }
-            // If dragging between different columns
-            else {
-                if (sourceColIndex !== -1) {
-                    const sourceCards = [...newColumns[sourceColIndex].taskCards];
-                    sourceCards.splice(sourceTaskIndex, 1);
-                    newColumns[sourceColIndex] = { ...newColumns[sourceColIndex], taskCards: sourceCards };
-                }
-
-                const targetCards = [...newColumns[targetColIndex].taskCards];
-                const insertIndex = Math.min(task.order, targetCards.length);
-                targetCards.splice(insertIndex, 0, updatedTask);
-                newColumns[targetColIndex] = { ...newColumns[targetColIndex], taskCards: targetCards };
+            // 1. Remove from source and re-sync orders
+            if (sourceColIdx !== -1) {
+                const sourceCards = [...newColumns[sourceColIdx].taskCards];
+                sourceCards.splice(sourceTIdx, 1);
+                newColumns[sourceColIdx] = {
+                    ...newColumns[sourceColIdx],
+                    taskCards: sourceCards.map((t, i) => ({ ...t, order: i }))
+                };
             }
 
-            return {
-                ...prev,
-                columns: newColumns
+            // 2. Insert into target (ensure we don't have duplicates) and re-sync orders
+            const targetCards = [...newColumns[targetColIdx].taskCards.filter(t => t.id !== task.id)];
+            const insertIndex = Math.min(task.order, targetCards.length);
+            targetCards.splice(insertIndex, 0, task);
+            newColumns[targetColIdx] = {
+                ...newColumns[targetColIdx],
+                taskCards: targetCards.map((t, i) => ({ ...t, order: i }))
             };
+
+            return { ...prev, columns: newColumns };
         });
     };
 
@@ -277,17 +284,16 @@ export default function BoardPage() {
         onTaskCreated: (task: TaskCardType) => {
             setBoard((prev) => {
                 if (!prev) return prev;
-                // Check if task already exists to avoid duplication from optimistic/API updates
-                const exists = prev.columns.some(col => col.taskCards.some(t => t.id === task.id));
-                if (exists) return prev;
-
                 return {
                     ...prev,
-                    columns: prev.columns.map((col) =>
-                        col.id === task.columnId
-                            ? { ...col, taskCards: [...col.taskCards, task] }
-                            : col
-                    ),
+                    columns: prev.columns.map((col) => {
+                        if (String(col.id) !== String(task.columnId)) return col;
+                        const filteredTasks = col.taskCards.filter(t => String(t.id) !== String(task.id));
+                        return {
+                            ...col,
+                            taskCards: [...filteredTasks, task].sort((a, b) => a.order - b.order)
+                        };
+                    }),
                 };
             });
         },
@@ -357,6 +363,73 @@ export default function BoardPage() {
                 };
             });
         },
+        onBoardUpdated: (updatedBoard) => {
+            setBoard((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    name: updatedBoard.name,
+                    themeColor: updatedBoard.themeColor
+                };
+            });
+        },
+        onBoardClosed: () => {
+            setBoard((prev) => prev ? { ...prev, isClosed: true } : prev);
+        },
+        onBoardReopened: () => {
+            setBoard((prev) => prev ? { ...prev, isClosed: false } : prev);
+        },
+        onBoardDeleted: () => {
+            notifications.show({ title: 'Board Deleted', message: 'This board was deleted by an admin.', color: 'red' });
+            navigate('/boards');
+        },
+        onColumnCreated: (column) => {
+            setBoard((prev) => {
+                if (!prev) return prev;
+                const filteredColumns = prev.columns.filter(c => String(c.id) !== String(column.id));
+                return {
+                    ...prev,
+                    columns: [...filteredColumns, column].sort((a, b) => a.order - b.order)
+                };
+            });
+        },
+        onColumnMoved: ({ columnId, newOrder }) => {
+            setBoard((prev) => {
+                if (!prev) return prev;
+                const columns = [...prev.columns];
+                const colIndex = columns.findIndex(c => c.id === columnId);
+                if (colIndex === -1) return prev;
+
+                const [movedCol] = columns.splice(colIndex, 1);
+                // Safe insertion based on newOrder index
+                const cleanOrder = Math.max(0, Math.min(newOrder, columns.length));
+                columns.splice(cleanOrder, 0, movedCol);
+
+                // Map the new array to update the 'order' property of each column
+                return {
+                    ...prev,
+                    columns: columns.map((c, i) => ({ ...c, order: i }))
+                };
+            });
+        },
+        onColumnUpdated: (updatedColumn) => {
+            setBoard((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    columns: prev.columns.map(c => c.id === updatedColumn.id ? { ...c, name: updatedColumn.name } : c)
+                };
+            });
+        },
+        onColumnDeleted: (columnId: number) => {
+            setBoard((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    columns: prev.columns.filter(c => c.id !== columnId)
+                };
+            });
+        }
     });
 
     // ── Add this for SignalR update (hacky without updating hook right now, but standard flow)
@@ -365,12 +438,33 @@ export default function BoardPage() {
     const handleTaskUpdated = (updatedTask: TaskCardType) => {
         setBoard((prev) => {
             if (!prev) return prev;
+
+            // Remove task from wherever it currently is ensuring clean slate
+            const newColumns = prev.columns.map(col => ({
+                ...col,
+                taskCards: col.taskCards.filter(t => t.id !== updatedTask.id)
+            }));
+
+            // Find the target column
+            const targetColIdx = newColumns.findIndex(col => col.id === updatedTask.columnId);
+            if (targetColIdx !== -1) {
+                // Insert the updated task
+                newColumns[targetColIdx].taskCards.push(updatedTask);
+
+                // Sort by the order provided (server-side truth)
+                newColumns[targetColIdx].taskCards.sort((a, b) => a.order - b.order);
+
+                // CRITICAL: Re-map orders to be strictly sequential (0, 1, 2...)
+                // this ensures that the NEXT move against these neighbors will have the correct order data.
+                newColumns[targetColIdx].taskCards = newColumns[targetColIdx].taskCards.map((t, i) => ({
+                    ...t,
+                    order: i
+                }));
+            }
+
             return {
                 ...prev,
-                columns: prev.columns.map((col) => ({
-                    ...col,
-                    taskCards: col.taskCards.map((t) => t.id === updatedTask.id ? updatedTask : t)
-                }))
+                columns: newColumns
             };
         });
         // Also update selected task if open
@@ -380,10 +474,17 @@ export default function BoardPage() {
     };
 
     const handleAddList = async () => {
-        if (!newListTitle.trim() || !boardId) return;
+        if (!newListTitle.trim() || !boardId || board?.isClosed) return;
         try {
             const newCol = await createColumn(boardId, newListTitle.trim());
-            setBoard(prev => prev ? { ...prev, columns: [...prev.columns, newCol] } : prev);
+            setBoard(prev => {
+                if (!prev) return prev;
+                const filteredColumns = prev.columns.filter(c => String(c.id) !== String(newCol.id));
+                return {
+                    ...prev,
+                    columns: [...filteredColumns, newCol].sort((a, b) => a.order - b.order)
+                };
+            });
             setNewListTitle('');
             setIsAddingList(false);
             notifications.show({ title: 'Success', message: 'List added', color: 'green' });
@@ -404,6 +505,7 @@ export default function BoardPage() {
 
 
     const handleDragStart = () => {
+        if (board?.isClosed || board?.userRole === 'Viewer') return;
         setIsDragging(true);
         isDraggingRef.current = true;
         // Fix issues where focus might be stealing drag
@@ -417,6 +519,7 @@ export default function BoardPage() {
     };
 
     const handleDragEnd = async (result: DropResult) => {
+        if (board?.isClosed || board?.userRole === 'Viewer') return;
         setIsDragging(false);
         isDraggingRef.current = false;
 
@@ -495,8 +598,14 @@ export default function BoardPage() {
 
                 destCards.splice(destination.index, 0, updatedMovedTask);
 
-                newColumns[sourceColIndex] = { ...sourceCol, taskCards: sourceCards };
-                newColumns[targetColIndex] = { ...destCol, taskCards: destCards };
+                newColumns[sourceColIndex] = {
+                    ...sourceCol,
+                    taskCards: sourceCards.map((t, i) => ({ ...t, order: i }))
+                };
+                newColumns[targetColIndex] = {
+                    ...destCol,
+                    taskCards: destCards.map((t, i) => ({ ...t, order: i }))
+                };
             }
 
             return { ...prev, columns: newColumns };
@@ -504,7 +613,9 @@ export default function BoardPage() {
 
         // 3. API Call
         try {
-            await moveTask(taskId, targetColumnId, destination.index);
+            const result = await moveTask(taskId, targetColumnId, destination.index);
+            // Instantly apply the result from the server (which includes automation changes like Priority)
+            handleTaskUpdated(result);
         } catch (error) {
             console.error("Move failed:", error);
             notifications.show({ title: 'Error', message: 'Failed to save move.', color: 'red' });
@@ -514,23 +625,24 @@ export default function BoardPage() {
     };
 
     // ── Add Task ──
-    // ── Add Task ──
-    const handleAddTask = useCallback(async (columnId: number, title: string) => {
+    const handleAddTask = useCallback(async (columnId: number, title: string, description?: string, priority?: string) => {
+        if (board?.isClosed) return;
         try {
-            const newTask = await createTask(title, columnId);
+            console.log(`[BoardPage] handleAddTask called for Column: ${columnId}`, { title, descLength: description?.length });
+            const newTask = await createTask(title, columnId, description, priority);
+            console.log(`[BoardPage] Received from Backend:`, { id: newTask.id, title: newTask.title, descHash: newTask.description?.substring(0, 20) + "..." });
             setBoard((prev) => {
                 if (!prev) return prev;
-                // Check duplication strictly
-                const exists = prev.columns.some(col => col.taskCards.some(t => t.id === newTask.id));
-                if (exists) return prev;
-
                 return {
                     ...prev,
-                    columns: prev.columns.map((col) =>
-                        col.id === columnId
-                            ? { ...col, taskCards: [...col.taskCards, newTask] }
-                            : col
-                    ),
+                    columns: prev.columns.map((col) => {
+                        if (String(col.id) !== String(columnId)) return col;
+                        const filteredTasks = col.taskCards.filter(t => String(t.id) !== String(newTask.id));
+                        return {
+                            ...col,
+                            taskCards: [...filteredTasks, newTask].sort((a, b) => a.order - b.order)
+                        };
+                    }),
                 };
             });
         } catch {
@@ -539,8 +651,8 @@ export default function BoardPage() {
     }, []);
 
     // ── Delete Task ──
-    // ── Delete Task ──
     const handleDeleteTask = useCallback(async (taskId: number) => {
+        if (board?.isClosed) return;
         try {
             // Optimistic update first
             setBoard((prev) => {
@@ -577,7 +689,7 @@ export default function BoardPage() {
 
     // ── Invite Member ──
     const handleInvite = async () => {
-        if (!searchValue.trim() || !boardId) return;
+        if (!searchValue.trim() || !boardId || board?.isClosed) return;
         setInviting(true);
         try {
             await inviteMember(boardId, searchValue.trim());
@@ -587,6 +699,21 @@ export default function BoardPage() {
             fetchBoard();
         } catch {
             notifications.show({ title: 'Error', message: 'Could not invite user. Check the username or permissions.', color: 'red' });
+        } finally {
+            setInviting(false);
+        }
+    };
+
+    const handleCreateInviteLink = async () => {
+        if (!boardId) return;
+        setInviting(true);
+        try {
+            const invite = await createBoardInvite(boardId, inviteRole);
+            const fullLink = `${window.location.origin}/join/${invite.token}`;
+            setInviteLink(fullLink);
+            notifications.show({ title: 'Link Generated', message: 'Invite link is ready to copy', color: 'green' });
+        } catch (error) {
+            notifications.show({ title: 'Error', message: 'Failed to generate link', color: 'red' });
         } finally {
             setInviting(false);
         }
@@ -641,6 +768,41 @@ export default function BoardPage() {
         }
     };
 
+    const handleCloseBoard = async () => {
+        if (!boardId) return;
+        try {
+            await closeBoard(boardId);
+            notifications.show({ title: 'Success', message: 'Board closed successfully.', color: 'green' });
+            setCloseModalOpen(false);
+            fetchBoard(); // Refresh to show banner and read-only mode
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to close board.', color: 'red' });
+        }
+    };
+
+    const handleReopenBoard = async () => {
+        if (!boardId) return;
+        try {
+            await reopenBoard(boardId);
+            notifications.show({ title: 'Success', message: 'Board reopened successfully.', color: 'green' });
+            fetchBoard();
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to reopen board.', color: 'red' });
+        }
+    };
+
+    const handleDeleteBoard = async () => {
+        if (!boardId) return;
+        try {
+            await deleteBoard(boardId);
+            notifications.show({ title: 'Success', message: 'Board deleted permanently.', color: 'green' });
+            setDeleteModalOpen(false);
+            navigate('/boards');
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to delete board.', color: 'red' });
+        }
+    };
+
     if (loading) {
         return (
             <Center style={{ minHeight: '100%', background: computedColorScheme === 'dark' ? '#0a0a0b' : '#f8f9fa' }}>
@@ -658,7 +820,8 @@ export default function BoardPage() {
     }
 
     const members = board.members || [];
-    const activeTheme = (board as any).themeColor ? BOARD_THEMES[(board as any).themeColor as ThemeColor] : BOARD_THEMES.blue;
+    const themeColor = (board as any).themeColor as ThemeColor;
+    const activeTheme = BOARD_THEMES[themeColor] || BOARD_THEMES.blue;
 
     return (
         <Box
@@ -671,6 +834,38 @@ export default function BoardPage() {
                 flexDirection: 'column',
             }}
         >
+            {/* Viewer Mode Banner */}
+            {(board.userRole === 'Viewer' && !board.isClosed) && (
+                <Box py="xs" style={{ background: 'rgba(251, 191, 36, 0.9)', textAlign: 'center', backdropFilter: 'blur(8px)' }}>
+                    <Group justify="center" gap="xs">
+                        <IconEye size={16} color="black" />
+                        <Text fw={700} size="sm" c="black">Você está no modo VISUALIZAÇÃO. Algumas ações estão restritas.</Text>
+                    </Group>
+                </Box>
+            )}
+
+            {/* Closed Board Banner */}
+            {board.isClosed && (
+                <Box py="xs" style={{ background: 'var(--mantine-color-orange-9)', textAlign: 'center' }}>
+                    <Group justify="center" gap="xs">
+                        <IconLock size={16} color="white" />
+                        <Text fw={700} size="sm" c="white">Este quadro está fechado. Você está no modo somente leitura.</Text>
+                        {(board.userRole === 'Owner' || board.userRole === 'Admin') && (
+                            <Button
+                                variant="white"
+                                color="orange"
+                                size="compact-xs"
+                                radius="xl"
+                                onClick={handleReopenBoard}
+                                leftSection={<IconRotate size={14} />}
+                            >
+                                Reopen Board
+                            </Button>
+                        )}
+                    </Group>
+                </Box>
+            )}
+
             {/* Header Area */}
             <Box px="xl" py="lg" style={{ background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.1)', backdropFilter: 'blur(12px)', borderBottom: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}` }}>
                 <Group justify="space-between">
@@ -732,32 +927,53 @@ export default function BoardPage() {
                                     size="2rem"
                                     style={{
                                         letterSpacing: '-1px',
-                                        cursor: 'pointer',
+                                        cursor: board.isClosed ? 'default' : 'pointer',
                                         lineHeight: 1.1,
                                         textShadow: computedColorScheme === 'light' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
                                     }}
                                     onDoubleClick={() => {
+                                        if (board.isClosed || board.userRole === 'Viewer') return;
                                         setEditedTitle(board.name);
                                         setIsEditingTitle(true);
                                     }}
-                                    title="Double click to rename"
+                                    title={(board.isClosed || board.userRole === 'Viewer') ? undefined : "Double click to rename"}
                                 >
                                     {board.name}
                                 </Text>
                             )}
+                            {board.userRole === 'Viewer' && (
+                                <Badge
+                                    leftSection={<IconEye size={12} />}
+                                    variant="filled"
+                                    color="yellow"
+                                    size="sm"
+                                    radius="xl"
+                                    mt={4}
+                                >
+                                    MODO LEITURA
+                                </Badge>
+                            )}
                         </Box>
 
                         <Group gap="md">
-                            <Avatar.Group spacing="md">
-                                {members.slice(0, 4).map(m => (
-                                    <Avatar key={m.userId} src={m.avatarUrl} radius="xl" size="md" title={m.username || 'User'} color="indigo">
-                                        {(m.username || '?').slice(0, 2).toUpperCase()}
-                                    </Avatar>
-                                ))}
-                                {members.length > 4 && (
-                                    <Avatar radius="xl" size="md">+{members.length - 4}</Avatar>
-                                )}
-                            </Avatar.Group>
+                            <Box
+                                onClick={() => setMembersModalOpen(true)}
+                                style={{ cursor: 'pointer', transition: 'transform 0.2s' }}
+                                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                title="View all members"
+                            >
+                                <Avatar.Group spacing="md">
+                                    {members.slice(0, 4).map(m => (
+                                        <Avatar key={m.userId} src={m.avatarUrl} radius="xl" size="md" color="indigo" styles={{ root: { border: `2px solid ${computedColorScheme === 'dark' ? '#1a1b1e' : 'white'}` } }}>
+                                            {(m.username || '?').slice(0, 2).toUpperCase()}
+                                        </Avatar>
+                                    ))}
+                                    {members.length > 4 && (
+                                        <Avatar radius="xl" size="md" styles={{ root: { border: `2px solid ${computedColorScheme === 'dark' ? '#1a1b1e' : 'white'}` } }}>+{members.length - 4}</Avatar>
+                                    )}
+                                </Avatar.Group>
+                            </Box>
                         </Group>
                     </Group>
 
@@ -784,7 +1000,36 @@ export default function BoardPage() {
                         >
                             Compartilhar
                         </Button>
-                        <ActionIcon variant="subtle" c={computedColorScheme === 'dark' ? 'white' : 'dark'} size="xl" onClick={() => navigate('/boards')}>
+                        <Button
+                            variant={computedColorScheme === 'dark' ? 'default' : 'white'}
+                            color={computedColorScheme === 'dark' ? 'gray' : 'dark'}
+                            size="md"
+                            radius="md"
+                            leftSection={<IconRobot size={20} color="#845ef7" />}
+                            onClick={() => setAutomationsModalOpen(true)}
+                            fw={700}
+                        >
+                            Automations
+                        </Button>
+                        <Menu shadow="md" width={200}>
+                            <Menu.Target>
+                                <ActionIcon variant="subtle" c={computedColorScheme === 'dark' ? 'white' : 'dark'} size="xl" title="Board Settings">
+                                    <IconSettings size={22} />
+                                </ActionIcon>
+                            </Menu.Target>
+                            <Menu.Dropdown>
+                                {!board.isClosed ? (
+                                    <Menu.Item leftSection={<IconLock size={14} />} onClick={() => setCloseModalOpen(true)}>
+                                        Close Board
+                                    </Menu.Item>
+                                ) : (
+                                    <Menu.Item color="red" leftSection={<IconTrash size={14} />} onClick={() => setDeleteModalOpen(true)}>
+                                        Delete Board
+                                    </Menu.Item>
+                                )}
+                            </Menu.Dropdown>
+                        </Menu>
+                        <ActionIcon variant="subtle" c={computedColorScheme === 'dark' ? 'white' : 'dark'} size="xl" onClick={() => navigate('/boards')} title="Exit Board">
                             <IconLogout size={24} />
                         </ActionIcon>
                     </Group>
@@ -832,6 +1077,10 @@ export default function BoardPage() {
                                                     innerRef={provided.innerRef}
                                                     draggableProps={provided.draggableProps}
                                                     dragHandleProps={provided.dragHandleProps}
+                                                    isClosed={board.isClosed}
+                                                    showAI={idx === 0}
+                                                    isViewer={board.userRole === 'Viewer'}
+                                                    boardName={board.name}
                                                 />
                                             )}
                                         </Draggable>
@@ -839,61 +1088,68 @@ export default function BoardPage() {
                                     {provided.placeholder}
 
                                     {/* Add List Button */}
-                                    <Box style={{ minWidth: 320, maxWidth: 360 }}>
-                                        {isAddingList ? (
-                                            <Paper p="sm" style={{
-                                                background: computedColorScheme === 'dark' ? 'rgba(20, 21, 23, 0.85)' : 'rgba(255, 255, 255, 0.95)',
-                                                backdropFilter: 'blur(12px)',
-                                                border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}`,
-                                                borderRadius: 12,
-                                                boxShadow: computedColorScheme === 'light' ? '0 8px 24px rgba(0,0,0,0.08)' : 'none'
-                                            }}>
-                                                <TextInput
-                                                    placeholder="Enter list title..."
-                                                    value={newListTitle}
-                                                    onChange={(e) => setNewListTitle(e.currentTarget.value)}
-                                                    autoFocus
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') handleAddList();
-                                                        if (e.key === 'Escape') setIsAddingList(false);
+                                    {(!board.isClosed && board.userRole !== 'Viewer') && (
+                                        <Box style={{ minWidth: 320, maxWidth: 360 }}>
+                                            {isAddingList ? (
+                                                <Paper p="sm" style={{
+                                                    background: computedColorScheme === 'dark' ? 'rgba(20, 21, 23, 0.85)' : 'rgba(255, 255, 255, 0.95)',
+                                                    backdropFilter: 'blur(12px)',
+                                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'}`,
+                                                    borderRadius: 12,
+                                                    boxShadow: computedColorScheme === 'light' ? '0 8px 24px rgba(0,0,0,0.08)' : 'none'
+                                                }}>
+                                                    <TextInput
+                                                        placeholder="Enter list title..."
+                                                        value={newListTitle}
+                                                        onChange={(e) => setNewListTitle(e.currentTarget.value)}
+                                                        autoFocus
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') handleAddList();
+                                                            if (e.key === 'Escape') setIsAddingList(false);
+                                                        }}
+                                                        onBlur={() => {
+                                                            if (!newListTitle.trim()) {
+                                                                setIsAddingList(false);
+                                                            }
+                                                        }}
+                                                        mb="sm"
+                                                        styles={{
+                                                            input: {
+                                                                background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.5)' : 'white',
+                                                                color: computedColorScheme === 'dark' ? 'white' : 'black',
+                                                                border: computedColorScheme === 'light' ? '1px solid #dee2e6' : 'none'
+                                                            }
+                                                        }}
+                                                    />
+                                                    <Group gap="xs">
+                                                        <Button size="xs" color="violet" onClick={handleAddList}>Add List</Button>
+                                                        <ActionIcon variant="subtle" color="gray" onClick={() => setIsAddingList(false)}>
+                                                            <IconX size={18} />
+                                                        </ActionIcon>
+                                                    </Group>
+                                                </Paper>
+                                            ) : (
+                                                <Button
+                                                    fullWidth
+                                                    variant="subtle"
+                                                    color="gray"
+                                                    leftSection={<IconPlus size={18} />}
+                                                    style={{
+                                                        height: 56,
+                                                        background: computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.3)',
+                                                        backdropFilter: 'blur(4px)',
+                                                        justifyContent: 'flex-start',
+                                                        color: 'white',
+                                                        border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.4)'}`,
+                                                        textShadow: computedColorScheme === 'light' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
                                                     }}
-                                                    mb="sm"
-                                                    styles={{
-                                                        input: {
-                                                            background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.5)' : 'white',
-                                                            color: computedColorScheme === 'dark' ? 'white' : 'black',
-                                                            border: computedColorScheme === 'light' ? '1px solid #dee2e6' : 'none'
-                                                        }
-                                                    }}
-                                                />
-                                                <Group gap="xs">
-                                                    <Button size="xs" color="violet" onClick={handleAddList}>Add List</Button>
-                                                    <ActionIcon variant="subtle" color="gray" onClick={() => setIsAddingList(false)}>
-                                                        <IconX size={18} />
-                                                    </ActionIcon>
-                                                </Group>
-                                            </Paper>
-                                        ) : (
-                                            <Button
-                                                fullWidth
-                                                variant="subtle"
-                                                color="gray"
-                                                leftSection={<IconPlus size={18} />}
-                                                style={{
-                                                    height: 56,
-                                                    background: computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.3)',
-                                                    backdropFilter: 'blur(4px)',
-                                                    justifyContent: 'flex-start',
-                                                    color: 'white',
-                                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.4)'}`,
-                                                    textShadow: computedColorScheme === 'light' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
-                                                }}
-                                                onClick={() => setIsAddingList(true)}
-                                            >
-                                                Add another list
-                                            </Button>
-                                        )}
-                                    </Box>
+                                                    onClick={() => setIsAddingList(true)}
+                                                >
+                                                    Add another list
+                                                </Button>
+                                            )}
+                                        </Box>
+                                    )}
                                 </Group>
                             )}
                         </Droppable>
@@ -1015,8 +1271,19 @@ export default function BoardPage() {
                 centered
                 radius="lg"
                 size="md"
+                zIndex={3000}
                 styles={{
-                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    content: {
+                        background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white',
+                        color: computedColorScheme === 'dark' ? 'white' : 'black',
+                        maxHeight: '80vh',
+                        display: 'flex',
+                        flexDirection: 'column'
+                    },
+                    body: {
+                        overflowY: 'auto',
+                        flex: 1
+                    },
                     header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
                 }}
             >
@@ -1080,7 +1347,7 @@ export default function BoardPage() {
                                 <Text size="xs" fw={700} c="dimmed" mb="xs" style={{ textTransform: 'uppercase' }}>
                                     Outros Quadros
                                 </Text>
-                                <Stack gap="xs" style={{ maxHeight: 300, overflowY: 'auto' }}>
+                                <Stack gap="xs">
                                     {allBoards
                                         .filter(b => b.workspaceId !== board?.workspaceId || (board?.workspaceId === null && b.workspaceId === null && b.id !== board.id))
                                         .map(b => (
@@ -1159,10 +1426,7 @@ export default function BoardPage() {
                                     value={searchValue}
                                     onChange={setSearchValue}
                                     data={searchResults.map(u => u.username)}
-                                    onOptionSubmit={(val) => {
-                                        setSearchValue(val);
-                                        // Optional: Auto-invite on selection? Better to let user click Invite to confirm.
-                                    }}
+                                    // ...
                                     rightSection={searchLoading ? <Loader size="xs" /> : null}
                                     style={{ flex: 1 }}
                                     styles={{
@@ -1175,14 +1439,79 @@ export default function BoardPage() {
                                 />
                                 <Button
                                     leftSection={<IconUserPlus size={16} />}
-                                    variant="gradient"
-                                    gradient={{ from: 'violet', to: 'indigo' }}
+                                    variant="outline"
+                                    color="violet"
                                     loading={inviting}
                                     onClick={handleInvite}
                                 >
                                     Invite
                                 </Button>
                             </Group>
+
+                            <Divider label="or" labelPosition="center" my="lg" />
+
+                            <Box>
+                                <Text size="sm" fw={500} mb="xs" c="dimmed">Invite via link</Text>
+                                <Stack gap="xs">
+                                    <Group grow gap="xs">
+                                        <Select
+                                            data={[
+                                                { value: 'Member', label: 'Member (can edit)' },
+                                                { value: 'Viewer', label: 'Viewer (read-only)' }
+                                            ]}
+                                            value={inviteRole}
+                                            onChange={(val) => setInviteRole(val || 'Member')}
+                                            styles={{
+                                                input: {
+                                                    background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.4)' : 'white',
+                                                    color: computedColorScheme === 'dark' ? 'white' : 'black'
+                                                }
+                                            }}
+                                        />
+                                        <Button
+                                            variant="gradient"
+                                            gradient={{ from: 'violet', to: 'indigo' }}
+                                            onClick={handleCreateInviteLink}
+                                            loading={inviting}
+                                            leftSection={<IconLink size={16} />}
+                                        >
+                                            Generate Link
+                                        </Button>
+                                    </Group>
+
+                                    {inviteLink && (
+                                        <Paper
+                                            p="xs"
+                                            radius="md"
+                                            style={{
+                                                background: computedColorScheme === 'dark' ? 'rgba(139, 92, 246, 0.1)' : 'rgba(139, 92, 246, 0.05)',
+                                                border: '1px dashed rgba(139, 92, 246, 0.5)',
+                                                position: 'relative',
+                                                overflow: 'hidden'
+                                            }}
+                                        >
+                                            <Group justify="space-between" gap="xs">
+                                                <Text size="xs" truncate style={{ flex: 1, fontFamily: 'monospace' }}>
+                                                    {inviteLink}
+                                                </Text>
+                                                <CopyButton value={inviteLink} timeout={2000}>
+                                                    {({ copied, copy }) => (
+                                                        <Button
+                                                            color={copied ? 'teal' : 'violet'}
+                                                            variant="subtle"
+                                                            size="compact-xs"
+                                                            onClick={copy}
+                                                            leftSection={copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+                                                        >
+                                                            {copied ? 'Copied' : 'Copy'}
+                                                        </Button>
+                                                    )}
+                                                </CopyButton>
+                                            </Group>
+                                        </Paper>
+                                    )}
+                                </Stack>
+                            </Box>
                         </Box>
                     )}
 
@@ -1199,17 +1528,25 @@ export default function BoardPage() {
                                 }}
                             >
                                 <Group justify="space-between">
-                                    <Group gap="sm">
-                                        <Avatar
-                                            src={m.avatarUrl}
-                                            size="md"
-                                            radius="xl"
-                                            color={m.role === 'Owner' ? 'violet' : 'teal'}
-                                        >
-                                            {(m.username || '?').slice(0, 2).toUpperCase()}
-                                        </Avatar>
+                                    <Group gap="sm" align="center">
+                                        <Box style={{ position: 'relative', display: 'flex' }}>
+                                            <Avatar
+                                                src={m.avatarUrl}
+                                                size="md"
+                                                radius="xl"
+                                                color={m.role === 'Owner' ? 'violet' : 'teal'}
+                                            >
+                                                {(m.username || '?').slice(0, 2).toUpperCase()}
+                                            </Avatar>
+                                            <OnlineIndicator isOnline={onlineUserIds.has(m.userId)} size={12} offset={0} />
+                                        </Box>
                                         <div>
-                                            <Text size="sm" fw={500} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{m.username}</Text>
+                                            <Group gap={6} align="center">
+                                                <Text size="sm" fw={500} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{m.username}</Text>
+                                                {onlineUserIds.has(m.userId) && (
+                                                    <Badge size="xs" variant="dot" color="green">Online</Badge>
+                                                )}
+                                            </Group>
                                             <Text size="xs" c="dimmed">{m.email}</Text>
                                         </div>
                                     </Group>
@@ -1221,7 +1558,7 @@ export default function BoardPage() {
                                         >
                                             {m.role}
                                         </Badge>
-                                        {isOwner && m.role !== 'Owner' && (
+                                        {isOwner && m.role !== 'Owner' && !m.isWorkspaceMember && (
                                             <ActionIcon
                                                 variant="subtle"
                                                 color="red"
@@ -1248,6 +1585,7 @@ export default function BoardPage() {
 
             {/* Task Detail Modal */}
             < TaskDetailModal
+                key={selectedTask?.id ?? 'none'}
                 opened={taskModalOpen}
                 onClose={() => setTaskModalOpen(false)}
                 task={selectedTask}
@@ -1264,6 +1602,56 @@ export default function BoardPage() {
                     boardId={boardId}
                 />
             )}
+
+            {board && (
+                <BoardAutomationsModal
+                    opened={automationsModalOpen}
+                    onClose={() => setAutomationsModalOpen(false)}
+                    board={board}
+                />
+            )}
+
+            <Modal
+                opened={closeModalOpen}
+                onClose={() => setCloseModalOpen(false)}
+                title="Close Board"
+                centered
+                styles={{
+                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                }}
+            >
+                <Stack>
+                    <Text size="sm">
+                        Are you sure you want to close this board? You can still access it from the workspace later.
+                    </Text>
+                    <Group justify="flex-end">
+                        <Button variant="subtle" color="gray" onClick={() => setCloseModalOpen(false)}>Cancel</Button>
+                        <Button color="red" onClick={handleCloseBoard}>Close Board</Button>
+                    </Group>
+                </Stack>
+            </Modal>
+
+            <Modal
+                opened={deleteModalOpen}
+                onClose={() => setDeleteModalOpen(false)}
+                title="Delete Board"
+                centered
+                styles={{
+                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                }}
+            >
+                <Stack>
+                    <Text size="sm">
+                        Are you sure you want to permanently delete this board? <b>This action cannot be undone.</b>
+                    </Text>
+                    <Group justify="flex-end">
+                        <Button variant="subtle" color="gray" onClick={() => setDeleteModalOpen(false)}>Cancel</Button>
+                        <Button color="red" onClick={handleDeleteBoard}>Delete Permanently</Button>
+                    </Group>
+                </Stack>
+            </Modal>
         </Box >
     );
 }

@@ -8,7 +8,9 @@ export interface BoardSummary {
     createdAt: string;
     role: string;
     themeColor: string;
-    workspaceId: number | null;
+    workspaceId: number;
+    isClosed: boolean;
+    openTasksCount: number;
 }
 
 export interface Attachment {
@@ -39,6 +41,7 @@ export interface TaskCard {
     assigneeName: string | null;
     assignees?: { userId: number; username: string; avatarUrl?: string | null }[];
     tags: string | null;
+    erDiagramPuml?: string | null;
     totalTimeSpentMinutes: number;
     isTimerRunning: boolean;
     subtasks?: Subtask[];
@@ -62,6 +65,7 @@ export interface BoardMember {
     status: 'Pending' | 'Accepted' | 'Rejected';
     joinedAt: string;
     avatarUrl?: string | null;
+    isWorkspaceMember: boolean;
 }
 
 export interface BoardDetail {
@@ -70,11 +74,21 @@ export interface BoardDetail {
     createdAt: string;
     ownerId: number;
     themeColor: string;
-    workspaceId: number | null;
+    workspaceId: number;
     columns: Column[];
     members: BoardMember[];
     labels: Label[];
     userRole: string;
+    isClosed: boolean;
+}
+
+export interface BoardInvite {
+    token: string;
+    role: string;
+    boardId: number;
+    boardName: string;
+    createdAt: string;
+    expiresAt: string | null;
 }
 
 export const getBoards = async (): Promise<BoardSummary[]> => {
@@ -87,8 +101,8 @@ export const getPendingInvitations = async (): Promise<BoardSummary[]> => {
     return data;
 };
 
-export const createBoard = async (name: string, workspaceId?: number, themeColor?: string): Promise<BoardSummary> => {
-    const { data } = await api.post<BoardSummary>('/boards', { name, workspaceId, themeColor });
+export const createBoard = async (name: string, workspaceId: number, themeColor?: string, skipDefaultColumns: boolean = false): Promise<BoardSummary> => {
+    const { data } = await api.post<BoardSummary>('/boards', { name, workspaceId, themeColor, skipDefaultColumns });
     return data;
 };
 
@@ -115,6 +129,22 @@ export const removeMember = async (boardId: number, userId: number): Promise<voi
     await api.delete(`/boards/${boardId}/members/${userId}`);
 };
 
+export const createBoardInvite = async (boardId: number, role: string): Promise<BoardInvite> => {
+    const { data } = await api.post<BoardInvite>(`/boards/${boardId}/invites`, role, {
+        headers: { 'Content-Type': 'application/json' }
+    });
+    return data;
+};
+
+export const getBoardInvite = async (token: string): Promise<BoardInvite> => {
+    const { data } = await api.get<BoardInvite>(`/boards/invites/${token}`);
+    return data;
+};
+
+export const joinBoard = async (token: string): Promise<void> => {
+    await api.post(`/boards/invites/${token}/join`);
+};
+
 export const updateBoard = async (boardId: number, data: { name?: string; themeColor?: string; backgroundImageUrl?: string }): Promise<BoardDetail> => {
     const { data: updatedBoard } = await api.put<BoardDetail>(`/boards/${boardId}`, data);
     return updatedBoard;
@@ -136,4 +166,16 @@ export const deleteColumn = async (boardId: number, columnId: number): Promise<v
 export const updateColumn = async (boardId: number, columnId: number, name: string): Promise<Column> => {
     const { data } = await api.put<Column>(`/boards/${boardId}/columns/${columnId}`, { name });
     return data;
+};
+
+export const closeBoard = async (boardId: number): Promise<void> => {
+    await api.put(`/boards/${boardId}/close`);
+};
+
+export const reopenBoard = async (boardId: number): Promise<void> => {
+    await api.put(`/boards/${boardId}/reopen`);
+};
+
+export const deleteBoard = async (boardId: number): Promise<void> => {
+    await api.delete(`/boards/${boardId}`);
 };
