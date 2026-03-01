@@ -165,7 +165,7 @@ export default function ActivityLog({ activities, currentUserId, boardRole, onRe
             {!activities || activities.length === 0 ? (
                 <Text c="dimmed" fs="italic" size="sm" p="md">No activity yet.</Text>
             ) : (
-                <Timeline active={localActivities.length} bulletSize={24} lineWidth={1}>
+                <Timeline active={localActivities.length} bulletSize={24} lineWidth={1} pt="sm" px="md">
                     {localActivities.map((activity: any) => {
                         const groupedReactions = getGroupedReactions(activity.reactions);
                         const isComment = activity.action === 'Commented';

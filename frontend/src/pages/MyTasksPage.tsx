@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Box, Center, Loader, Text, Group, Badge, Stack, Paper,
-    Title, Grid, ThemeIcon, Button, Anchor,
+    Title, Grid, ThemeIcon, Button, Anchor, useComputedColorScheme,
 } from '@mantine/core';
 import {
     IconCalendar, IconStar, IconTag,
@@ -26,6 +26,7 @@ function isOverdue(dueDate: string | null) {
 
 export default function MyTasksPage() {
     const navigate = useNavigate();
+    const computedColorScheme = useComputedColorScheme('dark');
     const [tasks, setTasks] = useState<MyTask[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -48,7 +49,7 @@ export default function MyTasksPage() {
 
     if (loading) {
         return (
-            <Center style={{ minHeight: '100%', background: 'linear-gradient(135deg, #0d0e11 0%, #121318 100%)' }}>
+            <Center style={{ minHeight: '100%', background: computedColorScheme === 'dark' ? 'linear-gradient(135deg, #0d0e11 0%, #121318 100%)' : '#f8f9fa' }}>
                 <Loader color="violet" size="lg" />
             </Center>
         );
@@ -58,8 +59,8 @@ export default function MyTasksPage() {
         <Box
             style={{
                 minHeight: '100%',
-                background: 'linear-gradient(135deg, #0d0e11 0%, #121318 100%)',
-                color: 'white',
+                background: computedColorScheme === 'dark' ? 'linear-gradient(135deg, #0d0e11 0%, #121318 100%)' : '#f8f9fa',
+                color: computedColorScheme === 'dark' ? 'white' : 'black',
             }}
         >
             {/* Header */}
@@ -67,9 +68,9 @@ export default function MyTasksPage() {
                 px="xl"
                 py="lg"
                 style={{
-                    background: 'rgba(0,0,0,0.3)',
+                    background: computedColorScheme === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.8)',
                     backdropFilter: 'blur(12px)',
-                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                    borderBottom: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
                     position: 'sticky',
                     top: 0,
                     zIndex: 10,
@@ -77,7 +78,7 @@ export default function MyTasksPage() {
             >
                 <Group justify="space-between">
                     <Box>
-                        <Title order={3} style={{ color: 'white', fontWeight: 800, letterSpacing: '-0.5px' }}>
+                        <Title order={3} style={{ color: computedColorScheme === 'dark' ? 'white' : 'black', fontWeight: 800, letterSpacing: '-0.5px' }}>
                             My Tasks
                         </Title>
                         <Text size="xs" c="dimmed">
@@ -107,7 +108,7 @@ export default function MyTasksPage() {
                             <ThemeIcon size={72} radius="xl" variant="light" color="violet">
                                 <IconCircleCheck size={40} />
                             </ThemeIcon>
-                            <Text fw={700} size="xl" c="white">All clear!</Text>
+                            <Text fw={700} size="xl" c={computedColorScheme === 'dark' ? 'white' : 'black'}>All clear!</Text>
                             <Text c="dimmed" ta="center" maw={400}>
                                 No tasks are currently assigned to you. Open a board and assign yourself a task to get started.
                             </Text>
@@ -129,8 +130,8 @@ export default function MyTasksPage() {
                                 <Text fw={700} size="sm" c="dimmed" style={{ textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                                     {boardName}
                                 </Text>
-                                <Badge size="xs" variant="filled" color="dark" radius="sm"
-                                    styles={{ root: { background: 'rgba(255,255,255,0.08)' } }}>
+                                <Badge size="xs" variant="filled" color={computedColorScheme === 'dark' ? 'dark' : 'gray'} radius="sm"
+                                    styles={{ root: { background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' } }}>
                                     {boardTasks.length}
                                 </Badge>
                                 <Anchor
@@ -150,24 +151,25 @@ export default function MyTasksPage() {
                                             p="md"
                                             radius="lg"
                                             style={{
-                                                background: 'rgba(255,255,255,0.04)',
-                                                border: `1px solid ${isOverdue(task.dueDate) ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                                                background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.04)' : 'white',
+                                                border: `1px solid ${isOverdue(task.dueDate) ? 'rgba(239,68,68,0.3)' : (computedColorScheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')}`,
                                                 transition: 'all 0.15s ease',
                                                 cursor: 'pointer',
+                                                boxShadow: computedColorScheme === 'light' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
                                             }}
                                             onClick={() => navigate(`/boards/${task.boardId}`)}
                                             onMouseEnter={e => {
-                                                (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.07)';
+                                                (e.currentTarget as HTMLElement).style.background = computedColorScheme === 'dark' ? 'rgba(255,255,255,0.07)' : '#f8f9fa';
                                                 (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)';
                                             }}
                                             onMouseLeave={e => {
-                                                (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)';
+                                                (e.currentTarget as HTMLElement).style.background = computedColorScheme === 'dark' ? 'rgba(255,255,255,0.04)' : 'white';
                                                 (e.currentTarget as HTMLElement).style.transform = 'none';
                                             }}
                                         >
                                             <Stack gap={10}>
                                                 <Group justify="space-between" align="flex-start">
-                                                    <Text fw={700} size="sm" c="white" lineClamp={2} style={{ flex: 1 }}>
+                                                    <Text fw={700} size="sm" c={computedColorScheme === 'dark' ? 'white' : 'black'} lineClamp={2} style={{ flex: 1 }}>
                                                         {task.title}
                                                     </Text>
                                                     <Badge
@@ -184,7 +186,7 @@ export default function MyTasksPage() {
                                                         size="xs"
                                                         variant="outline"
                                                         color="gray"
-                                                        styles={{ root: { borderColor: 'rgba(255,255,255,0.15)' } }}
+                                                        styles={{ root: { borderColor: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' } }}
                                                     >
                                                         {task.columnName}
                                                     </Badge>
@@ -222,7 +224,7 @@ export default function MyTasksPage() {
                                                                 size="xs"
                                                                 variant="filled"
                                                                 radius="sm"
-                                                                styles={{ root: { background: 'rgba(139,92,246,0.2)', color: '#a78bfa' } }}
+                                                                styles={{ root: { background: 'rgba(139,92,246,0.2)', color: computedColorScheme === 'dark' ? '#a78bfa' : '#7c3aed' } }}
                                                             >
                                                                 {tag.trim()}
                                                             </Badge>

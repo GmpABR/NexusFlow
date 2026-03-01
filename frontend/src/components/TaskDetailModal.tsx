@@ -9,7 +9,7 @@ import { updateTask, createSubtask, updateSubtask, deleteSubtask, type Subtask, 
 import { generateSubtasks, getApiKey, generateErDiagram } from '../api/ai';
 import { startTimer, stopTimer } from '../api/timelogs';
 import { notifications } from '@mantine/notifications';
-import { IconCalendar, IconUser, IconTag, IconTrash, IconMessageCircle, IconClock, IconPlayerPlay, IconPlayerStop, IconAlertCircle, IconPaperclip, IconDownload, IconUpload, IconX, IconPlus, IconWand, IconDatabase, IconFileDescription, IconFileText, IconCopy, IconCheck, IconSparkles } from '@tabler/icons-react';
+import { IconCalendar, IconUser, IconTag, IconTrash, IconMessageCircle, IconClock, IconPlayerPlay, IconPlayerStop, IconAlertCircle, IconPaperclip, IconDownload, IconUpload, IconX, IconPlus, IconWand, IconDatabase, IconFileDescription, IconFileText, IconCopy, IconCheck, IconSparkles, IconChevronLeft } from '@tabler/icons-react';
 import plantumlEncoder from 'plantuml-encoder';
 import '@mantine/dates/styles.css';
 import dayjs from 'dayjs';
@@ -38,6 +38,7 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
     // Robust: check both properties
     const currentUserId = currentUser?.userId || currentUser?.id || 0;
     const [labelSearch, setLabelSearch] = useState('');
+    const [isCreatingLabel, setIsCreatingLabel] = useState(false);
 
     const form = useForm({
         initialValues: {
@@ -865,66 +866,96 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                                     })}
 
                                     {boardRole !== 'Viewer' && (
-                                        <Menu position="bottom-start" shadow="md" withinPortal closeOnItemClick={false}>
+                                        <Menu shadow="md" width={240} position="bottom-start" withinPortal closeOnItemClick={false} onOpen={() => setIsCreatingLabel(false)}>
                                             <Menu.Target>
-                                                <ActionIcon variant="light" color="gray" radius="xl" size="sm">
+                                                <ActionIcon variant="light" size="sm" radius="xl" color="gray" disabled={boardRole === 'Viewer'}>
                                                     <IconPlus size={14} />
                                                 </ActionIcon>
                                             </Menu.Target>
-                                            <Menu.Dropdown styles={{ dropdown: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', border: `1px solid ${computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'}`, width: 220, zIndex: 3000 } }}>
-                                                <Box p="xs">
-                                                    <Text size="xs" fw={700} c="dimmed" mb={8} style={{ textTransform: 'uppercase' }}>Select Label</Text>
-                                                    <TextInput
-                                                        placeholder="Search labels..."
-                                                        size="xs"
-                                                        value={labelSearch}
-                                                        onChange={(e) => setLabelSearch(e.currentTarget.value)}
-                                                        mb={4}
-                                                        autoFocus
-                                                        styles={{ input: { background: computedColorScheme === 'dark' ? '#1a1b1e' : '#f8f9fa', color: computedColorScheme === 'dark' ? 'white' : 'black' } }}
-                                                    />
-                                                </Box>
-                                                <ScrollArea.Autosize mah={200} offsetScrollbars>
-                                                    <Stack gap={4} p="xs">
-                                                        {boardLabels
-                                                            .filter(l => l.name.toLowerCase().includes(labelSearch.toLowerCase()))
-                                                            .map(label => (
-                                                                <Group
-                                                                    key={label.id}
-                                                                    gap="xs"
-                                                                    style={{
-                                                                        padding: '4px 8px',
-                                                                        borderRadius: 4,
-                                                                        cursor: 'pointer',
-                                                                        background: form.values.labelIds.includes(label.id.toString()) ? (computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)') : 'transparent'
-                                                                    }}
-                                                                    onClick={() => {
-                                                                        const idStr = label.id.toString();
-                                                                        const current = form.values.labelIds;
-                                                                        if (current.includes(idStr)) {
-                                                                            form.setFieldValue('labelIds', current.filter(cid => cid !== idStr));
-                                                                        } else {
-                                                                            form.setFieldValue('labelIds', [...current, idStr]);
-                                                                        }
-                                                                    }}
-                                                                >
-                                                                    <Box style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: label.color }} />
-                                                                    <Text size="sm" style={{ flex: 1 }} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{label.name}</Text>
-                                                                    {form.values.labelIds.includes(label.id.toString()) && <Badge size="xs" variant="dot" color="blue">Selected</Badge>}
-                                                                </Group>
-                                                            ))}
-                                                    </Stack>
-                                                </ScrollArea.Autosize>
-
-                                                <Menu.Divider />
-                                                <div style={{ padding: 8 }}>
-                                                    <CreateNewLabelPopover boardId={task.boardId} onCreated={(newLabel) => {
-                                                        const currentIds = form.values.labelIds;
-                                                        if (!currentIds.includes(newLabel.id.toString())) {
-                                                            form.setFieldValue('labelIds', [...currentIds, newLabel.id.toString()]);
-                                                        }
-                                                    }} />
-                                                </div>
+                                            <Menu.Dropdown style={{ zIndex: 3100 }}>
+                                                {isCreatingLabel ? (
+                                                    <div style={{ padding: 8 }}>
+                                                        <Group mb="xs" gap="xs">
+                                                            <ActionIcon size="sm" variant="subtle" onClick={() => setIsCreatingLabel(false)}>
+                                                                <IconChevronLeft size={16} />
+                                                            </ActionIcon>
+                                                            <Text size="xs" fw={700} c="dimmed" style={{ textTransform: 'uppercase' }}>Create Label</Text>
+                                                        </Group>
+                                                        <CreateNewLabelPopover
+                                                            boardId={task.boardId}
+                                                            inline={true}
+                                                            onCreated={(newLabel) => {
+                                                                const currentIds = form.values.labelIds;
+                                                                if (!currentIds.includes(newLabel.id.toString())) {
+                                                                    form.setFieldValue('labelIds', [...currentIds, newLabel.id.toString()]);
+                                                                }
+                                                                setIsCreatingLabel(false);
+                                                            }}
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <div style={{ padding: 8 }}>
+                                                            <Text size="xs" fw={700} c="dimmed" mb={8} style={{ textTransform: 'uppercase' }}>Select Label</Text>
+                                                            <TextInput
+                                                                placeholder="Search labels..."
+                                                                size="xs"
+                                                                value={labelSearch}
+                                                                onChange={(e) => setLabelSearch(e.currentTarget.value)}
+                                                                mb="sm"
+                                                            />
+                                                        </div>
+                                                        <ScrollArea.Autosize mah={200}>
+                                                            <Stack gap={4} px={8} pb={8}>
+                                                                {boardLabels
+                                                                    .filter(l => l.name.toLowerCase().includes(labelSearch.toLowerCase()))
+                                                                    .map(label => (
+                                                                        <Group
+                                                                            key={label.id}
+                                                                            gap="sm"
+                                                                            p="4px 6px"
+                                                                            style={{
+                                                                                cursor: 'pointer',
+                                                                                borderRadius: 4,
+                                                                                background: form.values.labelIds.includes(label.id.toString())
+                                                                                    ? (computedColorScheme === 'dark' ? 'rgba(34,139,230,0.15)' : '#e7f5ff')
+                                                                                    : 'transparent'
+                                                                            }}
+                                                                            onMouseEnter={(e) => {
+                                                                                if (!form.values.labelIds.includes(label.id.toString())) {
+                                                                                    e.currentTarget.style.background = computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+                                                                                }
+                                                                            }}
+                                                                            onMouseLeave={(e) => {
+                                                                                if (!form.values.labelIds.includes(label.id.toString())) {
+                                                                                    e.currentTarget.style.background = 'transparent';
+                                                                                }
+                                                                            }}
+                                                                            onClick={() => {
+                                                                                const idStr = label.id.toString();
+                                                                                const current = form.values.labelIds;
+                                                                                if (current.includes(idStr)) {
+                                                                                    form.setFieldValue('labelIds', current.filter(cid => cid !== idStr));
+                                                                                } else {
+                                                                                    form.setFieldValue('labelIds', [...current, idStr]);
+                                                                                }
+                                                                            }}
+                                                                        >
+                                                                            <Box style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: label.color }} />
+                                                                            <Text size="sm" style={{ flex: 1 }} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{label.name}</Text>
+                                                                            {form.values.labelIds.includes(label.id.toString()) && <Badge size="xs" variant="dot" color="blue">Selected</Badge>}
+                                                                        </Group>
+                                                                    ))}
+                                                            </Stack>
+                                                        </ScrollArea.Autosize>
+                                                        <Menu.Divider />
+                                                        <div style={{ padding: 8 }}>
+                                                            <Button size="xs" variant="subtle" fullWidth color="violet" leftSection={<IconPlus size={14} />} onClick={() => setIsCreatingLabel(true)}>
+                                                                Create New Label
+                                                            </Button>
+                                                        </div>
+                                                    </>
+                                                )}
                                             </Menu.Dropdown>
                                         </Menu>
                                     )}
@@ -935,7 +966,6 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                             <Stack gap={6} mb="md">
                                 <Group justify="space-between">
                                     <Group gap={6}>
-                                        <IconPaperclip size={14} color="rgba(255,255,255,0.5)" />
                                         <Text size="sm" fw={500}>Attachments</Text>
                                         {attachments.length > 0 && (
                                             <Badge size="xs" variant="filled" color="dark">{attachments.length}</Badge>
@@ -1066,7 +1096,6 @@ export default function TaskDetailModal({ opened, onClose, task, members, boardL
                             {/* System Tools / ER Diagram Section */}
                             <Stack gap={6} mb="md">
                                 <Group gap={6}>
-                                    <IconWand size={14} color="rgba(255,255,255,0.5)" />
                                     <Text size="sm" fw={500}>System Tools</Text>
                                 </Group>
                                 <Box style={{
@@ -1497,7 +1526,7 @@ function getPriorityColor(priority: string | undefined) {
     }
 }
 
-function CreateNewLabelPopover({ boardId, onCreated }: { boardId: number, onCreated: (label: Label) => void }) {
+function CreateNewLabelPopover({ boardId, onCreated, inline }: { boardId: number, onCreated: (label: Label) => void, inline?: boolean }) {
     const computedColorScheme = useComputedColorScheme('dark');
     const [opened, setOpened] = useState(false);
     const [name, setName] = useState('');
@@ -1519,6 +1548,32 @@ function CreateNewLabelPopover({ boardId, onCreated }: { boardId: number, onCrea
             setLoading(false);
         }
     };
+
+    if (inline) {
+        return (
+            <Stack gap="xs">
+                <TextInput
+                    label="Label Name"
+                    placeholder="e.g. Bug"
+                    value={name}
+                    onChange={(e) => setName(e.currentTarget.value)}
+                    size="xs"
+                    styles={{ input: { background: computedColorScheme === 'dark' ? '#1a1b1e' : '#f8f9fa', color: computedColorScheme === 'dark' ? 'white' : 'black' } }}
+                />
+                <ColorInput
+                    label="Color"
+                    value={color}
+                    onChange={setColor}
+                    size="xs"
+                    popoverProps={{ zIndex: 3001, withinPortal: false }}
+                    styles={{ input: { background: computedColorScheme === 'dark' ? '#1a1b1e' : '#f8f9fa', color: computedColorScheme === 'dark' ? 'white' : 'black' } }}
+                />
+                <Button size="xs" color="violet" onClick={handleCreate} loading={loading} disabled={!name.trim()}>
+                    Create Label
+                </Button>
+            </Stack>
+        );
+    }
 
     return (
         <Popover opened={opened} onChange={setOpened} position="bottom" withArrow shadow="md" zIndex={3000} withinPortal={false}>

@@ -222,8 +222,21 @@ const BoardColumn = memo(function BoardColumn({
                                             setIsRenaming(false);
                                         }
                                     }}
-                                    size="xs"
-                                    styles={{ input: { fontWeight: 700, height: 24, padding: '0 8px' } }}
+                                    styles={{
+                                        input: {
+                                            fontWeight: 700,
+                                            fontSize: 'var(--mantine-font-size-md)',
+                                            letterSpacing: '0.2px',
+                                            color: computedColorScheme === 'dark' ? 'white' : 'black',
+                                            background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                                            border: 'none',
+                                            padding: '0 4px',
+                                            margin: '0 -4px',
+                                            height: 'auto',
+                                            minHeight: 'auto',
+                                            lineHeight: 1.5,
+                                        }
+                                    }}
                                 />
                             ) : (
                                 <Text
@@ -260,14 +273,12 @@ const BoardColumn = memo(function BoardColumn({
                                 </Group>
                             </ActionIcon>
                             <Text
-                                fw={800}
-                                size="sm"
+                                fw={700}
+                                size="md"
                                 c={computedColorScheme === 'dark' ? 'white' : 'dark'}
                                 style={{
                                     writingMode: 'vertical-rl',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '1px',
-                                    opacity: 0.8,
+                                    letterSpacing: '0.2px',
                                     marginTop: 8
                                 }}
                             >
@@ -309,9 +320,6 @@ const BoardColumn = memo(function BoardColumn({
                                         </ActionIcon>
                                     </Menu.Target>
                                     <Menu.Dropdown>
-                                        <Menu.Item leftSection={<IconPencil size={14} />} onClick={() => setIsRenaming(true)}>
-                                            Rename
-                                        </Menu.Item>
                                         <Menu.Item
                                             leftSection={<IconTrash size={14} />}
                                             color="red"

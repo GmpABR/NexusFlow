@@ -29,6 +29,7 @@ function EditableField({
     placeholder,
     onSave,
     textarea,
+    suppressNotification,
 }: {
     label: string;
     icon: React.ReactNode;
@@ -36,6 +37,7 @@ function EditableField({
     placeholder: string;
     onSave: (v: string) => Promise<void>;
     textarea?: boolean;
+    suppressNotification?: boolean;
 }) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(value ?? '');
@@ -46,6 +48,13 @@ function EditableField({
         try {
             await onSave(draft.trim());
             setEditing(false);
+            if (!suppressNotification) {
+                notifications.show({
+                    title: 'Saved',
+                    message: `${label} updated successfully.`,
+                    color: 'green'
+                });
+            }
         } catch (e: any) {
             console.error("Save failure:", e);
             notifications.show({
@@ -781,6 +790,7 @@ export default function ProfilePage() {
                                     <EditableField
                                         label="OpenRouter API Key"
                                         icon={<IconLink size={15} />}
+                                        suppressNotification
                                         value={profile?.openRouterApiKey ? '••••••••••••••••' : undefined}
                                         placeholder="Paste your sk-or-v1-... key"
                                         onSave={async v => {

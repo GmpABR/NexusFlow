@@ -271,7 +271,14 @@ export default function BoardPage() {
         setSearchLoading(true);
         try {
             const results = await searchUsers(query);
-            setSearchResults(results);
+            const currentUserStr = localStorage.getItem('user');
+            const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
+
+            const filteredResults = results.filter(u =>
+                u.id !== currentUser?.id &&
+                !board?.members?.some(m => m.userId === u.id)
+            );
+            setSearchResults(filteredResults);
         } catch (error) {
             console.error("Search failed", error);
         } finally {
@@ -911,16 +918,20 @@ export default function BoardPage() {
                                     onChange={(e) => setEditedTitle(e.currentTarget.value)}
                                     onBlur={handleTitleUpdate}
                                     onKeyDown={(e) => e.key === 'Enter' && handleTitleUpdate()}
-                                    size="md"
                                     styles={{
                                         input: {
                                             fontWeight: 800,
-                                            fontSize: 'var(--mantine-font-size-2xl)',
+                                            fontSize: '2rem',
+                                            letterSpacing: '-1px',
                                             background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
                                             color: 'white',
                                             border: 'none',
-                                            paddingLeft: 8,
+                                            padding: '0 8px',
+                                            margin: '0 -8px',
                                             height: 'auto',
+                                            minHeight: 'auto',
+                                            lineHeight: 1.1,
+                                            textShadow: computedColorScheme === 'light' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
                                         }
                                     }}
                                 />

@@ -78,7 +78,15 @@ export default function WorkspaceDetailsPage() {
         setSearchLoading(true);
         try {
             const results = await searchUsers(query);
-            setSearchResults(results);
+            const currentUserStr = localStorage.getItem('user');
+            const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
+
+            const filteredResults = results.filter(u =>
+                u.id !== currentUser?.id &&
+                u.id !== workspace?.ownerId &&
+                !workspace?.members.some(m => m.userId === u.id)
+            );
+            setSearchResults(filteredResults);
         } catch (error) {
             console.error("Search failed", error);
         } finally {
@@ -447,7 +455,15 @@ export default function WorkspaceDetailsPage() {
                             </Stack>
                         </Paper>
                         <Stack>
-                            {workspace.members.map((member) => (
+                            {[
+                                {
+                                    userId: workspace.ownerId,
+                                    username: workspace.ownerName,
+                                    role: 'Owner',
+                                    status: 'Active'
+                                },
+                                ...workspace.members
+                            ].map((member) => (
                                 <Paper
                                     key={member.userId}
                                     p="md"
@@ -471,9 +487,9 @@ export default function WorkspaceDetailsPage() {
                                             {member.status === 'Pending' ? (
                                                 <Badge color="yellow" variant="light">Pending</Badge>
                                             ) : (
-                                                <Badge color={member.role === 'Admin' ? 'violet' : 'gray'}>{member.role}</Badge>
+                                                <Badge color={member.role === 'Admin' || member.role === 'Owner' ? 'violet' : 'gray'}>{member.role}</Badge>
                                             )}
-                                            {member.role !== 'Admin' && (
+                                            {member.role !== 'Admin' && member.role !== 'Owner' && (
                                                 <Button
                                                     variant="subtle"
                                                     color="red"
@@ -495,6 +511,8 @@ export default function WorkspaceDetailsPage() {
                     opened={inviteModalOpen}
                     onClose={() => setInviteModalOpen(false)}
                     title="Add Member to Workspace"
+                    centered
+                    zIndex={10000}
                     styles={{
                         content: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
                         header: { background: computedColorScheme === 'dark' ? '#25262b' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
@@ -509,6 +527,7 @@ export default function WorkspaceDetailsPage() {
                             onChange={setSearchValue}
                             rightSection={searchLoading ? <Loader size="xs" /> : null}
                             mb="md"
+                            comboboxProps={{ zIndex: 10005 }}
                         />
                         <Select
                             label="Role"
@@ -520,6 +539,7 @@ export default function WorkspaceDetailsPage() {
                             value={inviteRole}
                             onChange={(val: string | null) => setInviteRole(val || 'Member')}
                             mb="md"
+                            comboboxProps={{ zIndex: 10005 }}
                         />
                         <Group justify="flex-end">
                             <Button variant="default" onClick={() => setInviteModalOpen(false)}>Cancel</Button>
