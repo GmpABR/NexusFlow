@@ -41,7 +41,7 @@ public class WorkspacesController : ControllerBase
                 {
                     UserId = m.UserId,
                     Username = m.User.Username,
-                    Role = m.Role,
+                    Role = m.UserId == w.OwnerId ? "Owner" : m.Role,
                     Status = m.Status,
                     JoinedAt = m.JoinedAt
                 }).ToList()
@@ -91,7 +91,7 @@ public class WorkspacesController : ControllerBase
             {
                 UserId = m.UserId,
                 Username = m.Username,
-                Role = m.Role,
+                Role = m.UserId == workspace.OwnerId ? "Owner" : m.Role,
                 Status = m.Status,
                 JoinedAt = m.JoinedAt
             }).ToList()
@@ -163,6 +163,15 @@ public class WorkspacesController : ControllerBase
             return Forbid();
         }
 
+        var workspace = await _context.Workspaces
+            .Include(w => w.Members)
+            .FirstOrDefaultAsync(w => w.Id == id);
+
+        if (workspace == null) return NotFound();
+
+        var isWsAdmin = workspace.OwnerId == userId || 
+                        workspace.Members.Any(m => m.UserId == userId && m.Role == "Admin" && m.Status == "Accepted");
+
         var boards = await _context.Boards
             .Where(b => b.WorkspaceId == id)
             .Select(b => new BoardSummaryDto
@@ -170,9 +179,16 @@ public class WorkspacesController : ControllerBase
                 Id = b.Id,
                 Name = b.Name,
                 CreatedAt = b.CreatedAt,
-                Role = b.OwnerId == userId ? "Owner" : "Member", // Simplified logic for now
+                Role = isWsAdmin ? "Owner" : (b.OwnerId == userId ? "Member" : "Member"), // If WsAdmin -> Owner, else if board owner -> Member (demoted), else Member
                 ThemeColor = b.ThemeColor,
-                WorkspaceId = b.WorkspaceId
+                WorkspaceId = b.WorkspaceId,
+                IsClosed = b.IsClosed,
+                Members = b.Members.Where(m => m.Status == "Accepted").Select(m => new BoardMemberDto {
+                    UserId = m.UserId,
+                    Username = m.User.Username,
+                    AvatarUrl = m.User.AvatarUrl,
+                    Role = m.Role
+                }).ToList()
             })
             .ToListAsync();
 
@@ -281,6 +297,52 @@ public class WorkspacesController : ControllerBase
         await _context.SaveChangesAsync();
 
         return NoContent();
+    }
+
+    // PUT: api/workspaces/{id}/members/{userId}/role
+    [HttpPut("{id}/members/{userId}/role")]
+    public async Task<IActionResult> UpdateMemberRole(int id, int userId, [FromBody] UpdateWorkspaceMemberRoleDto dto)
+    {
+        var requesterId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+
+        var workspace = await _context.Workspaces
+            .Include(w => w.Members)
+            .FirstOrDefaultAsync(w => w.Id == id);
+
+        if (workspace == null) return NotFound();
+
+        // Check permissions
+        var isOwner = workspace.OwnerId == requesterId;
+        var requesterMember = workspace.Members.FirstOrDefault(m => m.UserId == requesterId && m.Status == "Accepted");
+        var isAdmin = isOwner || (requesterMember != null && requesterMember.Role == "Admin");
+
+        if (!isAdmin) return Forbid();
+
+        var targetMember = workspace.Members.FirstOrDefault(m => m.UserId == userId);
+        if (targetMember == null) return NotFound("Member not found in this workspace.");
+
+        // Rule: Owner can change any member's role
+        if (isOwner)
+        {
+            if (userId == requesterId) 
+                return BadRequest(new { message = "Owner cannot change their own role here. Transfer ownership instead." });
+            
+            targetMember.Role = dto.Role;
+        }
+        // Rule: Admin can only change roles to Viewer or Member, and cannot target the Owner
+        else
+        {
+            if (userId == workspace.OwnerId)
+                return Forbid();
+
+            if (dto.Role == "Admin")
+                return BadRequest(new { message = "Admins cannot promote members to Admin." });
+
+            targetMember.Role = dto.Role;
+        }
+
+        await _context.SaveChangesAsync();
+        return Ok();
     }
 
     // GET: api/workspaces/invitations

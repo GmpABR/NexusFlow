@@ -42,6 +42,12 @@ public class WorkspaceMemberDto
     public DateTime JoinedAt { get; set; }
 }
 
+public class UpdateWorkspaceMemberRoleDto
+{
+    [Required]
+    public string Role { get; set; } = string.Empty; // Admin, Member, Viewer
+}
+
 public class InvitationResponseDto
 {
     public bool Accept { get; set; }

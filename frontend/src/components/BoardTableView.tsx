@@ -33,11 +33,11 @@ export default function BoardTableView({ board }: BoardTableViewProps) {
                 <Table variant="simple" verticalSpacing="sm">
                     <Table.Thead>
                         <Table.Tr>
-                            <Table.Th style={{ color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>Título</Table.Th>
+                            <Table.Th style={{ color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>Title</Table.Th>
                             <Table.Th style={{ color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>Status</Table.Th>
-                            <Table.Th style={{ color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>Prioridade</Table.Th>
-                            <Table.Th style={{ color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>Responsável</Table.Th>
-                            <Table.Th style={{ color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>Pontos</Table.Th>
+                            <Table.Th style={{ color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>Priority</Table.Th>
+                            <Table.Th style={{ color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>Assignee</Table.Th>
+                            <Table.Th style={{ color: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)' }}>Points</Table.Th>
                         </Table.Tr>
                     </Table.Thead>
                     <Table.Tbody>

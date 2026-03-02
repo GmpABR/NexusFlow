@@ -9,8 +9,10 @@ export interface BoardSummary {
     role: string;
     themeColor: string;
     workspaceId: number;
+    workspaceName: string;
     isClosed: boolean;
     openTasksCount: number;
+    members: BoardMember[];
 }
 
 export interface Attachment {

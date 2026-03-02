@@ -25,10 +25,10 @@ export default function BoardTimelineView({ board, onTaskClick }: BoardTimelineV
     });
 
     const groupedTasks = [
-        { title: 'Atrasadas', color: 'red', tasks: sortedTasks.filter(t => t.dueDate && dayjs(t.dueDate).isBefore(dayjs(), 'day')) },
-        { title: 'Hoje', color: 'blue', tasks: sortedTasks.filter(t => t.dueDate && dayjs(t.dueDate).isSame(dayjs(), 'day')) },
-        { title: 'Próximas', color: 'teal', tasks: sortedTasks.filter(t => t.dueDate && dayjs(t.dueDate).isAfter(dayjs(), 'day')) },
-        { title: 'Sem Data', color: 'gray', tasks: sortedTasks.filter(t => !t.dueDate) },
+        { title: 'Overdue', color: 'red', tasks: sortedTasks.filter(t => t.dueDate && dayjs(t.dueDate).isBefore(dayjs(), 'day')) },
+        { title: 'Today', color: 'blue', tasks: sortedTasks.filter(t => t.dueDate && dayjs(t.dueDate).isSame(dayjs(), 'day')) },
+        { title: 'Upcoming', color: 'teal', tasks: sortedTasks.filter(t => t.dueDate && dayjs(t.dueDate).isAfter(dayjs(), 'day')) },
+        { title: 'No Date', color: 'gray', tasks: sortedTasks.filter(t => !t.dueDate) },
     ].filter(group => group.tasks.length > 0);
 
     return (
@@ -49,7 +49,7 @@ export default function BoardTimelineView({ board, onTaskClick }: BoardTimelineV
                 <ThemeIcon variant="light" color="violet" size="lg">
                     <IconClock size={20} />
                 </ThemeIcon>
-                <Title order={4} c={computedColorScheme === 'dark' ? 'white' : 'black'}>Cronograma do Projeto</Title>
+                <Title order={4} c={computedColorScheme === 'dark' ? 'white' : 'black'}>Project Timeline</Title>
             </Group>
 
             <ScrollArea style={{ flex: 1 }} p="md">
@@ -91,7 +91,7 @@ export default function BoardTimelineView({ board, onTaskClick }: BoardTimelineV
                                                     {task.dueDate && (
                                                         <Group gap={4} opacity={0.6}>
                                                             <IconCalendarCheck size={12} />
-                                                            <Text size="xs">{dayjs(task.dueDate).format('DD MMM')}</Text>
+                                                            <Text size="xs">{dayjs(task.dueDate).format('MMM DD')}</Text>
                                                         </Group>
                                                     )}
                                                 </Group>

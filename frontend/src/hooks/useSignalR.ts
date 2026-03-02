@@ -19,6 +19,7 @@ export function useSignalR(boardId: number | null, callbacks: {
     onNotificationReceived?: (notification: Notification) => void;
     onUserOnline?: (userId: number) => void;
     onUserOffline?: (userId: number) => void;
+    onBoardCreated?: (board: import('../api/boards').BoardSummary) => void;
     onBoardUpdated?: (board: import('../api/boards').BoardDetail) => void;
     onBoardClosed?: (boardId: number) => void;
     onBoardReopened?: (boardId: number) => void;
@@ -96,6 +97,10 @@ export function useSignalR(boardId: number | null, callbacks: {
 
         connection.on('UserOffline', (userId: number) => {
             callbacksRef.current.onUserOffline?.(userId);
+        });
+
+        connection.on('BoardCreated', (board: import('../api/boards').BoardSummary) => {
+            callbacksRef.current.onBoardCreated?.(board);
         });
 
         connection.on('BoardUpdated', (board: import('../api/boards').BoardDetail) => {

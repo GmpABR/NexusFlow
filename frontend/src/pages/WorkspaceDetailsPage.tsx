@@ -25,12 +25,11 @@ import {
     Select,
     useComputedColorScheme,
 } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { IconLayoutBoard, IconUsers, IconPlus, IconArrowLeft, IconCheck, IconPalette, IconChartBar, IconSettings, IconLock, IconTrash, IconLink, IconCopy } from '@tabler/icons-react';
 import WorkspaceOverview from '../components/WorkspaceOverview';
-import { useDebouncedValue } from '@mantine/hooks';
-import { notifications } from '@mantine/notifications';
-import { getWorkspace, getWorkspaceBoards, addWorkspaceMember, removeWorkspaceMember, createWorkspaceInvite, type Workspace } from '../api/workspaces';
-import { useClipboard } from '@mantine/hooks';
+import { useDebouncedValue, useClipboard } from '@mantine/hooks';
+import { getWorkspace, getWorkspaceBoards, addWorkspaceMember, removeWorkspaceMember, createWorkspaceInvite, updateWorkspaceMemberRole, type Workspace } from '../api/workspaces';
 import { updateBoard, closeBoard, deleteBoard, type BoardSummary } from '../api/boards';
 import { searchUsers, type UserSummary } from '../api/users';
 import { BOARD_THEMES, type ThemeColor } from '../constants/themes';
@@ -65,6 +64,12 @@ export default function WorkspaceDetailsPage() {
     const [inviteLink, setInviteLink] = useState<string | null>(null);
     const [generatingLink, setGeneratingLink] = useState(false);
     const clipboard = useClipboard({ timeout: 2000 });
+    const currentUserStr = localStorage.getItem('user');
+    const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
+
+    const isWorkspaceOwner = workspace?.ownerId === currentUser?.id;
+    const isWorkspaceAdmin = isWorkspaceOwner ||
+        workspace?.members.some(m => m.userId === currentUser?.id && m.role === 'Admin');
 
     useEffect(() => {
         if (debouncedSearch) {
@@ -88,9 +93,32 @@ export default function WorkspaceDetailsPage() {
             );
             setSearchResults(filteredResults);
         } catch (error) {
-            console.error("Search failed", error);
+            console.error("Remove failed", error);
         } finally {
-            setSearchLoading(false);
+            setRemoving(false);
+        }
+    };
+
+    const handleRoleChange = async (userId: number, newRole: string) => {
+        if (!workspace) return;
+        try {
+            await updateWorkspaceMemberRole(workspace.id, userId, newRole);
+            setWorkspace({
+                ...workspace,
+                members: workspace.members.map(m => m.userId === userId ? { ...m, role: newRole as any } : m)
+            });
+            notifications.show({
+                title: 'Success',
+                message: 'Member role updated',
+                color: 'green'
+            });
+        } catch (error) {
+            console.error("Role update failed", error);
+            notifications.show({
+                title: 'Error',
+                message: 'Failed to update member role',
+                color: 'red'
+            });
         }
     };
 
@@ -300,7 +328,7 @@ export default function WorkspaceDetailsPage() {
                                             <Text fw={600} size="lg" c={computedColorScheme === 'dark' ? 'white' : 'black'} style={{ flex: 1 }}>{board.name}</Text>
 
                                             {/* Settings Menu - stopPropagation to prevent navigation */}
-                                            {(board.role === 'Owner') && (
+                                            {isWorkspaceAdmin && (
                                                 <Group gap={8}>
                                                     <Menu shadow="md" width={200} position="bottom-end">
                                                         <Menu.Target>
@@ -381,13 +409,15 @@ export default function WorkspaceDetailsPage() {
                     <Tabs.Panel value="members">
                         <Group justify="space-between" mb="md">
                             <Title order={4} c={computedColorScheme === 'dark' ? 'white' : 'black'}>Workspace Members</Title>
-                            <Button
-                                leftSection={<IconPlus size={16} />}
-                                color="violet"
-                                onClick={() => setInviteModalOpen(true)}
-                            >
-                                Add Member
-                            </Button>
+                            {isWorkspaceAdmin && (
+                                <Button
+                                    leftSection={<IconPlus size={16} />}
+                                    color="violet"
+                                    onClick={() => setInviteModalOpen(true)}
+                                >
+                                    Add Member
+                                </Button>
+                            )}
                         </Group>
 
                         <Paper
@@ -412,15 +442,17 @@ export default function WorkspaceDetailsPage() {
                                         </div>
                                     </Group>
                                     {!inviteLink ? (
-                                        <Button
-                                            variant="light"
-                                            color="violet"
-                                            size="xs"
-                                            onClick={handleGenerateInviteLink}
-                                            loading={generatingLink}
-                                        >
-                                            Create Link
-                                        </Button>
+                                        isWorkspaceAdmin && (
+                                            <Button
+                                                variant="light"
+                                                color="violet"
+                                                size="xs"
+                                                onClick={handleGenerateInviteLink}
+                                                loading={generatingLink}
+                                            >
+                                                Create Link
+                                            </Button>
+                                        )
                                     ) : (
                                         <Button
                                             variant="light"
@@ -433,7 +465,7 @@ export default function WorkspaceDetailsPage() {
                                     )}
                                 </Group>
 
-                                {inviteLink && (
+                                {inviteLink && isWorkspaceAdmin && (
                                     <Group gap="xs">
                                         <TextInput
                                             variant="filled"
@@ -462,7 +494,7 @@ export default function WorkspaceDetailsPage() {
                                     role: 'Owner',
                                     status: 'Active'
                                 },
-                                ...workspace.members
+                                ...workspace.members.filter(m => m.userId !== workspace.ownerId)
                             ].map((member) => (
                                 <Paper
                                     key={member.userId}
@@ -487,9 +519,41 @@ export default function WorkspaceDetailsPage() {
                                             {member.status === 'Pending' ? (
                                                 <Badge color="yellow" variant="light">Pending</Badge>
                                             ) : (
-                                                <Badge color={member.role === 'Admin' || member.role === 'Owner' ? 'violet' : 'gray'}>{member.role}</Badge>
+                                                <>
+                                                    {(isWorkspaceOwner && member.role !== 'Owner') || (isWorkspaceAdmin && !isWorkspaceOwner && member.role !== 'Owner' && member.role !== 'Admin') ? (
+                                                        <Select
+                                                            size="xs"
+                                                            w={100}
+                                                            data={isWorkspaceOwner ? [
+                                                                { value: 'Admin', label: 'Admin' },
+                                                                { value: 'Member', label: 'Member' },
+                                                                { value: 'Viewer', label: 'Viewer' }
+                                                            ] : [
+                                                                { value: 'Member', label: 'Member' },
+                                                                { value: 'Viewer', label: 'Viewer' }
+                                                            ]}
+                                                            value={member.role}
+                                                            onChange={(val) => val && handleRoleChange(member.userId, val)}
+                                                        />
+                                                    ) : (isWorkspaceAdmin && !isWorkspaceOwner && member.role === 'Admin' && member.userId !== currentUser?.id) ? (
+                                                        // Admin can demote other admins to Member/Viewer
+                                                        <Select
+                                                            size="xs"
+                                                            w={100}
+                                                            data={[
+                                                                { value: 'Admin', label: 'Admin' },
+                                                                { value: 'Member', label: 'Member' },
+                                                                { value: 'Viewer', label: 'Viewer' }
+                                                            ]}
+                                                            value={member.role}
+                                                            onChange={(val) => val && handleRoleChange(member.userId, val)}
+                                                        />
+                                                    ) : (
+                                                        <Badge color={member.role === 'Admin' || member.role === 'Owner' ? 'violet' : 'gray'}>{member.role}</Badge>
+                                                    )}
+                                                </>
                                             )}
-                                            {member.role !== 'Admin' && member.role !== 'Owner' && (
+                                            {isWorkspaceAdmin && member.role !== 'Owner' && member.userId !== currentUser?.id && (
                                                 <Button
                                                     variant="subtle"
                                                     color="red"

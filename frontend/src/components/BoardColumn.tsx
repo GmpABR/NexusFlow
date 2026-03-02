@@ -1,6 +1,6 @@
 import { useState, memo, useRef, useEffect } from 'react';
 import { Text, Group, Badge, TextInput, ActionIcon, Box, Menu, useComputedColorScheme, Modal, Button, Stack } from '@mantine/core';
-import { IconPlus, IconDots, IconTrash, IconPencil, IconSparkles, IconWand, IconArrowRight, IconArrowLeft } from '@tabler/icons-react';
+import { IconPlus, IconDots, IconTrash, IconSparkles, IconWand, IconArrowRight, IconArrowLeft } from '@tabler/icons-react';
 import { Droppable } from '@hello-pangea/dnd';
 import TaskCard from './TaskCard';
 import type { Column, TaskCard as TaskCardType } from '../api/boards';

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     Title,
     Text,
@@ -12,19 +12,23 @@ import {
     ActionIcon,
     Select,
     ThemeIcon,
+    Tooltip,
+    Badge,
     Paper,
     Flex,
     Stack,
     NavLink,
     Divider,
     useComputedColorScheme,
-    Menu
+    Menu,
+    Avatar
 } from '@mantine/core';
 import {
     IconPlus,
     IconCheck,
     IconLayoutDashboard,
     IconUser,
+    IconUsers,
     IconChartBar,
     IconSettings,
     IconLock,
@@ -33,17 +37,123 @@ import {
 } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { notifications } from '@mantine/notifications';
-import { getBoards, createBoard, closeBoard, deleteBoard, reopenBoard, createColumn, type BoardSummary } from '../api/boards';
-import { getMyWorkspaces, createWorkspace, type Workspace } from '../api/workspaces';
+import { getBoards, getPendingInvitations, respondToInvitation, createBoard, closeBoard, deleteBoard, reopenBoard, createColumn, type BoardSummary } from '../api/boards';
+import { getMyWorkspaces, createWorkspace, getWorkspaceInvitations, respondToWorkspaceInvitation, type Workspace } from '../api/workspaces';
 import { createTask } from '../api/tasks';
 import { generateBoardStructure, getApiKey } from '../api/ai';
 import { BOARD_THEMES, type ThemeColor } from '../constants/themes';
 import { BOARD_TEMPLATES, type TemplateType } from '../constants/templates';
+import { useSignalR } from '../hooks/useSignalR';
+
+interface BoardCardProps {
+    board: BoardSummary;
+    onClose: (id: number) => void;
+    onDelete: (id: number) => void;
+}
+
+const BoardCard = ({ board, onClose, onDelete }: BoardCardProps) => {
+    const navigate = useNavigate();
+    const computedColorScheme = useComputedColorScheme('dark');
+
+    return (
+        <Card
+            padding="lg"
+            radius="md"
+            onClick={() => navigate(`/boards/${board.id}`)}
+            style={{
+                cursor: 'pointer',
+                backgroundColor: computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8f9fa',
+                border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)'}`,
+                transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e: React.MouseEvent<HTMLDivElement>) => {
+                e.currentTarget.style.transform = 'translateY(-4px)';
+                e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)';
+            }}
+            onMouseLeave={(e: React.MouseEvent<HTMLDivElement>) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.backgroundColor = computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8f9fa';
+                e.currentTarget.style.borderColor = computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)';
+                e.currentTarget.style.boxShadow = 'none';
+            }}
+        >
+            <Group mb="md" justify="space-between" align="center">
+                <Box
+                    style={{
+                        width: 48,
+                        height: 6,
+                        borderRadius: 4,
+                        background: BOARD_THEMES[board.themeColor as ThemeColor]?.background || 'gray'
+                    }}
+                />
+                {(board.role === 'Owner' || board.role === 'Admin') && (
+                    <Menu withinPortal zIndex={1000}>
+                        <Menu.Target>
+                            <ActionIcon variant="subtle" color="gray" onClick={(e) => e.stopPropagation()}>
+                                <IconSettings size={16} />
+                            </ActionIcon>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                            {!board.isClosed ? (
+                                <Menu.Item leftSection={<IconLock size={14} />} onClick={(e) => { e.stopPropagation(); onClose(board.id); }}>
+                                    Close Board
+                                </Menu.Item>
+                            ) : (
+                                <Menu.Item color="red" leftSection={<IconTrash size={14} />} onClick={(e) => { e.stopPropagation(); onDelete(board.id); }}>
+                                    Delete Board
+                                </Menu.Item>
+                            )}
+                        </Menu.Dropdown>
+                    </Menu>
+                )}
+            </Group>
+
+            <Text fw={700} size="lg" c={computedColorScheme === 'dark' ? 'white' : 'dark'} mb={4}>{board.name}</Text>
+            <Text size="sm" c="dimmed" mb="lg">Updated recently</Text>
+
+            <Group justify="space-between" align="center">
+                <Avatar.Group>
+                    {(board.members || []).slice(0, 3).map(m => (
+                        <Tooltip key={m.userId} label={m.username} withArrow>
+                            <Avatar
+                                src={m.avatarUrl}
+                                size={28}
+                                radius="xl"
+                                styles={{
+                                    root: { border: `2px solid ${computedColorScheme === 'dark' ? '#1A1B1E' : '#ffffff'}` }
+                                }}
+                            >
+                                {m.username.slice(0, 2).toUpperCase()}
+                            </Avatar>
+                        </Tooltip>
+                    ))}
+                    {(board.members?.length || 0) > 3 && (
+                        <Avatar size={28} radius="xl" styles={{ root: { border: `2px solid ${computedColorScheme === 'dark' ? '#1A1B1E' : '#ffffff'}` } }}>
+                            +{board.members.length - 3}
+                        </Avatar>
+                    )}
+                </Avatar.Group>
+                <Text size="xs" fw={600} c="dimmed">Open Tasks: {board.openTasksCount}</Text>
+            </Group>
+        </Card>
+    );
+};
+
+const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+};
 
 export default function BoardsPage() {
     const navigate = useNavigate();
     const computedColorScheme = useComputedColorScheme('dark');
     const [boards, setBoards] = useState<BoardSummary[]>([]);
+    const [invitations, setInvitations] = useState<BoardSummary[]>([]);
+    const [workspaceInvitations, setWorkspaceInvitations] = useState<Workspace[]>([]);
     const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
     const [loading, setLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
@@ -83,14 +193,34 @@ export default function BoardsPage() {
         }
     }, []);
 
+    useSignalR(null, {
+        onBoardCreated: () => {
+            fetchData();
+        }
+    });
+
+    const isWorkspaceAdmin = (workspaceId: number) => {
+        const ws = workspaces.find(w => w.id === workspaceId);
+        if (!ws) return false;
+        // Check if user is owner
+        if (user && ws.ownerId === (user as any).id) return true;
+        // Check if user is admin member
+        const member = (ws as any).members?.find((m: any) => m.userId === (user as any).id);
+        return member?.role === 'Admin';
+    };
+
     const fetchData = async () => {
         try {
-            const [boardsData, workspacesData] = await Promise.all([
+            const [boardsData, invitationsData, workspacesData, workspaceInvData] = await Promise.all([
                 getBoards(),
-                getMyWorkspaces()
+                getPendingInvitations(),
+                getMyWorkspaces(),
+                getWorkspaceInvitations()
             ]);
             setBoards(boardsData);
+            setInvitations(invitationsData);
             setWorkspaces(workspacesData);
+            setWorkspaceInvitations(workspaceInvData);
         } catch {
             notifications.show({ title: 'Error', message: 'Failed to load data.', color: 'red' });
         } finally {
@@ -187,6 +317,34 @@ export default function BoardsPage() {
             fetchData();
         } catch {
             notifications.show({ title: 'Error', message: 'Failed to reopen board.', color: 'red' });
+        }
+    };
+
+    const handleRespondToWorkspaceInvitation = async (workspaceId: number, accept: boolean) => {
+        try {
+            await respondToWorkspaceInvitation(workspaceId, accept);
+            notifications.show({
+                title: accept ? 'Invitation Accepted' : 'Invitation Declined',
+                message: accept ? 'You have joined the workspace.' : 'The invitation has been removed.',
+                color: accept ? 'green' : 'gray'
+            });
+            fetchData();
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to respond to invitation.', color: 'red' });
+        }
+    };
+
+    const handleRespondToInvitation = async (boardId: number, accept: boolean) => {
+        try {
+            await respondToInvitation(boardId, accept);
+            notifications.show({
+                title: accept ? 'Invitation Accepted' : 'Invitation Declined',
+                message: accept ? 'You have joined the board.' : 'The invitation has been removed.',
+                color: accept ? 'green' : 'gray'
+            });
+            fetchData();
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to respond to invitation.', color: 'red' });
         }
     };
 
@@ -409,7 +567,7 @@ export default function BoardsPage() {
                                 mb="xs"
                                 style={{ letterSpacing: -1.5 }}
                             >
-                                Good evening, <Text span variant="gradient" gradient={{ from: 'violet', to: 'cyan' }} inherit>{user?.username || 'User'}</Text>
+                                {getGreeting()}, <Text span variant="gradient" gradient={{ from: 'violet', to: 'cyan' }} inherit>{user?.username || 'User'}</Text>
                             </Title>
                             <Text c={computedColorScheme === 'dark' ? 'gray.4' : 'gray.7'} size="lg" mb="xl" fw={500}>
                                 Here's what's happening with your projects today.
@@ -497,6 +655,7 @@ export default function BoardsPage() {
                                 size="xs"
                                 onClick={() => setAiModalOpen(true)}
                                 leftSection={<IconWand size={14} />}
+                                disabled={workspaces.length === 0 || !workspaces.some(ws => isWorkspaceAdmin(ws.id))}
                             >
                                 AI Architect
                             </Button>
@@ -516,152 +675,224 @@ export default function BoardsPage() {
                         <Text c="dimmed" ta="center" mt={60}>Loading...</Text>
                     ) : (
                         <Box>
-                            {workspaces.length === 0 ? (
-                                <Box ta="center" mt={40}>
-                                    <Title order={3} c={computedColorScheme === 'dark' ? 'white' : 'dark'}>No workspaces yet</Title>
-                                    <Button
-                                        mt="md"
-                                        color="violet"
-                                        onClick={() => setOpenedWorkspaceModal(true)}
-                                    >
-                                        Create Workspace
-                                    </Button>
-                                </Box>
-                            ) : (
-                                <>
-                                    {/* Workspaces Section - ISLAND LIST LAYOUT */}
-                                    {workspaces.map(workspace => {
-                                        const workspaceBoards = boards.filter(b => b.workspaceId === workspace.id && !b.isClosed);
-                                        return (
+                            {/* Pending Invitations Section */}
+                            {(invitations.length > 0 || workspaceInvitations.length > 0) && (
+                                <Box mb={60}>
+                                    <Title order={3} size="h4" c={computedColorScheme === 'dark' ? 'white' : 'dark'} fw={700} mb="lg">Pending Invitations</Title>
+                                    <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
+                                        {/* Workspace Invites First */}
+                                        {workspaceInvitations.map(invite => (
                                             <Paper
-                                                key={workspace.id}
-                                                mb={40}
+                                                key={`ws-${invite.id}`}
                                                 p="xl"
                                                 radius="lg"
                                                 style={{
-                                                    background: computedColorScheme === 'dark' ? '#1A1B1E' : 'white',
-                                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}`,
-                                                    boxShadow: '0 8px 32px rgba(0,0,0,0.03)'
+                                                    background: computedColorScheme === 'dark' ? 'rgba(124, 58, 237, 0.08)' : '#f3f0ff',
+                                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(124, 58, 237, 0.3)' : 'rgba(124, 58, 237, 0.1)'}`,
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: 'md',
+                                                    position: 'relative',
+                                                    overflow: 'hidden'
                                                 }}
                                             >
-                                                <Group mb="lg" justify="space-between">
-                                                    <Group gap="sm">
-                                                        <ThemeIcon variant="light" color="violet" size="lg" radius="md">
-                                                            <Text fw={700} size="sm">{workspace.name[0]}</Text>
-                                                        </ThemeIcon>
-                                                        <Box>
-                                                            <Title order={4} size="h4" c={computedColorScheme === 'dark' ? 'white' : 'dark'}>{workspace.name}</Title>
-                                                            <Text size="xs" c="dimmed">Workspace</Text>
-                                                        </Box>
-                                                    </Group>
-                                                    <Group>
-                                                        <Button
-                                                            variant="subtle"
-                                                            size="xs"
-                                                            color="gray"
-                                                            onClick={() => {
-                                                                setSelectedWorkspaceId(workspace.id.toString());
-                                                                setModalOpen(true);
-                                                            }}
-                                                            leftSection={<IconPlus size={14} />}
-                                                        >
-                                                            Add Board
-                                                        </Button>
-                                                        <Button
-                                                            variant="subtle"
-                                                            size="xs"
-                                                            color="gray"
-                                                            onClick={() => navigate(`/workspaces/${workspace.id}`)}
-                                                        >
-                                                            Settings
-                                                        </Button>
-                                                    </Group>
+                                                <Box style={{ position: 'absolute', top: 0, right: 0, padding: 8 }}>
+                                                    <Badge color="violet" size="xs" variant="filled">Workspace</Badge>
+                                                </Box>
+                                                <Box>
+                                                    <Text fw={700} size="lg" mb={4}>{invite.name}</Text>
+                                                    <Text size="xs" c="dimmed">Invited to join this workspace</Text>
+                                                </Box>
+
+                                                <Group grow>
+                                                    <Button
+                                                        variant="light"
+                                                        color="gray"
+                                                        size="sm"
+                                                        onClick={() => handleRespondToWorkspaceInvitation(invite.id, false)}
+                                                    >
+                                                        Decline
+                                                    </Button>
+                                                    <Button
+                                                        variant="filled"
+                                                        color="violet"
+                                                        size="sm"
+                                                        onClick={() => handleRespondToWorkspaceInvitation(invite.id, true)}
+                                                    >
+                                                        Accept
+                                                    </Button>
                                                 </Group>
-
-                                                {workspaceBoards.length === 0 ? (
-                                                    <Text c="dimmed" ta="center" py="lg" size="sm" style={{ border: `1px dashed ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.15)'}`, borderRadius: 8 }}>
-                                                        No boards. <Text span c="violet" style={{ cursor: 'pointer' }} onClick={() => {
-                                                            setSelectedWorkspaceId(workspace.id.toString());
-                                                            setModalOpen(true);
-                                                        }}>Create one?</Text>
-                                                    </Text>
-                                                ) : (
-                                                    <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
-                                                        {workspaceBoards.map((board) => (
-                                                            <Card
-                                                                key={board.id}
-                                                                padding="lg"
-                                                                radius="md"
-                                                                onClick={() => navigate(`/boards/${board.id}`)}
-                                                                style={{
-                                                                    cursor: 'pointer',
-                                                                    backgroundColor: computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8f9fa',
-                                                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)'}`,
-                                                                    transition: 'all 0.2s ease',
-                                                                }}
-                                                                onMouseEnter={(e) => {
-                                                                    e.currentTarget.style.transform = 'translateY(-4px)';
-                                                                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                                                                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-                                                                    e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)';
-                                                                }}
-                                                                onMouseLeave={(e) => {
-                                                                    e.currentTarget.style.transform = 'translateY(0)';
-                                                                    e.currentTarget.style.backgroundColor = computedColorScheme === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8f9fa';
-                                                                    e.currentTarget.style.borderColor = computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.1)';
-                                                                    e.currentTarget.style.boxShadow = 'none';
-                                                                }}
-                                                            >
-                                                                <Group mb="md" justify="space-between" align="center">
-                                                                    <Box
-                                                                        style={{
-                                                                            width: 48,
-                                                                            height: 6,
-                                                                            borderRadius: 4,
-                                                                            background: BOARD_THEMES[board.themeColor as ThemeColor]?.background || 'gray'
-                                                                        }}
-                                                                    />
-                                                                    <Menu withinPortal zIndex={1000}>
-                                                                        <Menu.Target>
-                                                                            <ActionIcon variant="subtle" color="gray" onClick={(e) => e.stopPropagation()}>
-                                                                                <IconSettings size={16} />
-                                                                            </ActionIcon>
-                                                                        </Menu.Target>
-                                                                        <Menu.Dropdown>
-                                                                            {!board.isClosed ? (
-                                                                                <Menu.Item leftSection={<IconLock size={14} />} onClick={(e) => { e.stopPropagation(); setCloseBoardTarget(board.id); }}>
-                                                                                    Close Board
-                                                                                </Menu.Item>
-                                                                            ) : (
-                                                                                <Menu.Item color="red" leftSection={<IconTrash size={14} />} onClick={(e) => { e.stopPropagation(); setDeleteBoardTarget(board.id); }}>
-                                                                                    Delete Board
-                                                                                </Menu.Item>
-                                                                            )}
-                                                                        </Menu.Dropdown>
-                                                                    </Menu>
-                                                                </Group>
-
-                                                                <Text fw={700} size="lg" c={computedColorScheme === 'dark' ? 'white' : 'dark'} mb={4}>{board.name}</Text>
-                                                                <Text size="sm" c="dimmed" mb="lg">Updated recently</Text>
-
-                                                                <Group justify="space-between" align="center">
-                                                                    {/* Mock Members Area */}
-                                                                    <Group gap={-8}>
-                                                                        <Box style={{ width: 28, height: 28, borderRadius: '50%', background: '#7950f2', border: `2px solid ${computedColorScheme === 'dark' ? '#1A1B1E' : '#ffffff'}`, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 'bold' }}>A</Box>
-                                                                        <Box style={{ width: 28, height: 28, borderRadius: '50%', background: '#228be6', border: `2px solid ${computedColorScheme === 'dark' ? '#1A1B1E' : '#ffffff'}`, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 'bold' }}>B</Box>
-                                                                    </Group>
-                                                                    <Text size="xs" fw={600} c="dimmed">Open Tasks: {board.openTasksCount}</Text>
-                                                                </Group>
-                                                            </Card>
-                                                        ))}
-                                                    </SimpleGrid>
-                                                )}
                                             </Paper>
-                                        );
-                                    })}
+                                        ))}
 
-                                </>
+                                        {/* Board Invites */}
+                                        {invitations.map(invite => (
+                                            <Paper
+                                                key={`board-${invite.id}`}
+                                                p="xl"
+                                                radius="lg"
+                                                style={{
+                                                    background: computedColorScheme === 'dark' ? 'rgba(76, 110, 245, 0.05)' : '#f3f0ff',
+                                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(76, 110, 245, 0.2)' : 'rgba(76, 110, 245, 0.1)'}`,
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: 'md',
+                                                    position: 'relative'
+                                                }}
+                                            >
+                                                <Box style={{ position: 'absolute', top: 0, right: 0, padding: 8 }}>
+                                                    <Badge color="blue" size="xs" variant="filled">Board</Badge>
+                                                </Box>
+                                                <Box>
+                                                    <Text fw={700} size="lg" mb={4}>{invite.name}</Text>
+                                                    <Text size="xs" c="dimmed">Invited to {invite.workspaceName || 'a board'}</Text>
+                                                </Box>
+
+                                                <Group grow>
+                                                    <Button
+                                                        variant="light"
+                                                        color="gray"
+                                                        size="sm"
+                                                        onClick={() => handleRespondToInvitation(invite.id, false)}
+                                                    >
+                                                        Decline
+                                                    </Button>
+                                                    <Button
+                                                        variant="filled"
+                                                        color="violet"
+                                                        size="sm"
+                                                        onClick={() => handleRespondToInvitation(invite.id, true)}
+                                                    >
+                                                        Accept
+                                                    </Button>
+                                                </Group>
+                                            </Paper>
+                                        ))}
+                                    </SimpleGrid>
+                                    <Divider my={40} color={computedColorScheme === 'dark' ? 'dark.4' : 'gray.2'} />
+                                </Box>
                             )}
+
+                            {/* Grouping Logic */}
+                            {(() => {
+                                const workspaceMap = new Map<number, BoardSummary[]>();
+                                const sharedBoards: BoardSummary[] = [];
+
+                                boards.filter(b => !b.isClosed).forEach(board => {
+                                    if (workspaces.some(w => w.id === board.workspaceId)) {
+                                        if (!workspaceMap.has(board.workspaceId)) {
+                                            workspaceMap.set(board.workspaceId, []);
+                                        }
+                                        workspaceMap.get(board.workspaceId)!.push(board);
+                                    } else {
+                                        sharedBoards.push(board);
+                                    }
+                                });
+
+                                return (
+                                    <>
+                                        {workspaces.length === 0 && sharedBoards.length === 0 ? (
+                                            <Box ta="center" mt={40}>
+                                                <Title order={3} c={computedColorScheme === 'dark' ? 'white' : 'dark'}>No workspaces yet</Title>
+                                                <Button
+                                                    mt="md"
+                                                    color="violet"
+                                                    onClick={() => setOpenedWorkspaceModal(true)}
+                                                >
+                                                    Create your first workspace
+                                                </Button>
+                                            </Box>
+                                        ) : (
+                                            <Stack gap={60}>
+                                                {workspaces.map(ws => (
+                                                    <Box key={ws.id}>
+                                                        <Group mb="lg" justify="space-between">
+                                                            <Group>
+                                                                <ThemeIcon size="lg" radius="md" variant="light" color="violet">
+                                                                    <Text fw={700} size="sm">{ws.name?.[0] || 'W'}</Text>
+                                                                </ThemeIcon>
+                                                                <Box>
+                                                                    <Text fw={700} size="xl">{ws.name}</Text>
+                                                                    <Text size="xs" c="dimmed">{ws.description || 'No description'}</Text>
+                                                                </Box>
+                                                            </Group>
+                                                            <Button
+                                                                variant="subtle"
+                                                                color="gray"
+                                                                size="xs"
+                                                                rightSection={<IconSettings size={14} />}
+                                                                onClick={() => navigate(`/workspaces/${ws.id}`)}
+                                                            >
+                                                                Workspace Settings
+                                                            </Button>
+                                                        </Group>
+
+                                                        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3, xl: 4 }} spacing="lg">
+                                                            {(workspaceMap.get(ws.id) || []).map(board => (
+                                                                <BoardCard
+                                                                    key={board.id}
+                                                                    board={board}
+                                                                    onClose={(id) => setCloseBoardTarget(id)}
+                                                                    onDelete={(id) => setDeleteBoardTarget(id)}
+                                                                />
+                                                            ))}
+                                                            {isWorkspaceAdmin(ws.id) && (
+                                                                <Paper
+                                                                    p="xl"
+                                                                    radius="md"
+                                                                    onClick={() => {
+                                                                        setSelectedWorkspaceId(ws.id.toString());
+                                                                        setModalOpen(true);
+                                                                    }}
+                                                                    style={{
+                                                                        cursor: 'pointer',
+                                                                        background: computedColorScheme === 'dark' ? 'rgba(255,255,255,0.02)' : '#f8f9fa',
+                                                                        border: `2px dashed ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
+                                                                        display: 'flex',
+                                                                        flexDirection: 'column',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
+                                                                        minHeight: 180,
+                                                                        transition: 'all 0.2s ease',
+                                                                    }}
+                                                                >
+                                                                    <IconPlus size={24} color="gray" />
+                                                                    <Text mt="sm" size="sm" fw={600} c="dimmed">Create Board</Text>
+                                                                </Paper>
+                                                            )}
+                                                        </SimpleGrid>
+                                                    </Box>
+                                                ))}
+                                                {/* Shared Boards Section */}
+                                                {sharedBoards.length > 0 && (
+                                                    <Box>
+                                                        <Group mb="lg">
+                                                            <ThemeIcon size="lg" radius="md" variant="light" color="blue">
+                                                                <IconUsers size={18} />
+                                                            </ThemeIcon>
+                                                            <Box>
+                                                                <Text fw={700} size="xl">Shared Boards</Text>
+                                                                <Text size="xs" c="dimmed">Boards shared with you from other workspaces</Text>
+                                                            </Box>
+                                                        </Group>
+
+                                                        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3, xl: 4 }} spacing="lg">
+                                                            {sharedBoards.map(board => (
+                                                                <BoardCard
+                                                                    key={board.id}
+                                                                    board={board}
+                                                                    onClose={(id) => setCloseBoardTarget(id)}
+                                                                    onDelete={(id) => setDeleteBoardTarget(id)}
+                                                                />
+                                                            ))}
+                                                        </SimpleGrid>
+                                                    </Box>
+                                                )}
+                                            </Stack>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </Box>
                     )}
                 </Box>
@@ -750,7 +981,7 @@ export default function BoardsPage() {
             <Modal
                 opened={openedWorkspaceModal}
                 onClose={() => setOpenedWorkspaceModal(false)}
-                title="Create Workspace"
+                title="Create New Workspace"
                 centered
                 radius="lg"
                 styles={{
@@ -760,10 +991,10 @@ export default function BoardsPage() {
             >
                 <TextInput
                     label="Workspace Name"
-                    placeholder="e.g. Engineering, Marketing"
+                    placeholder="e.g. Engineering Team"
                     value={workspaceName}
                     onChange={(e) => setWorkspaceName(e.currentTarget.value)}
-                    mb="sm"
+                    mb="md"
                     required
                 />
                 <TextInput
@@ -787,8 +1018,6 @@ export default function BoardsPage() {
                     </Button>
                 </Group>
             </Modal>
-
-
 
             {/* Closed Boards Modal */}
             <Modal
@@ -969,6 +1198,6 @@ export default function BoardsPage() {
                     </Group>
                 </Stack>
             </Modal>
-        </Box>
+        </Box >
     );
 }

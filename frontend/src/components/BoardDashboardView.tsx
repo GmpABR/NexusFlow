@@ -14,7 +14,7 @@ export default function BoardDashboardView({ board }: BoardDashboardViewProps) {
     const totalTasks = allTasks.length;
 
     const highPriorityCount = allTasks.filter(t => t.priority === 'High').length;
-    const completedTasks = board.columns.find(c => c.name.toLowerCase().includes('done') || c.name.toLowerCase().includes('concluido'))?.taskCards.length || 0;
+    const completedTasks = board.columns.find(c => c.name.toLowerCase().includes('done'))?.taskCards.length || 0;
 
     const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
@@ -29,17 +29,17 @@ export default function BoardDashboardView({ board }: BoardDashboardViewProps) {
             <Stack gap="lg" p="lg">
                 <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="lg">
                     <StatCard
-                        title="Total de Tarefas"
+                        title="Total Tasks"
                         value={totalTasks.toString()}
                         icon={<IconChartBar size={24} color="#7c3aed" />}
                     />
                     <StatCard
-                        title="Alta Prioridade"
+                        title="High Priority"
                         value={highPriorityCount.toString()}
                         icon={<IconAlertCircle size={24} color="#ef4444" />}
                     />
                     <StatCard
-                        title="Concluídas"
+                        title="Completed"
                         value={completedTasks.toString()}
                         icon={<IconCheck size={24} color="#10b981" />}
                     />
@@ -57,7 +57,7 @@ export default function BoardDashboardView({ board }: BoardDashboardViewProps) {
                         }}
                     >
                         <Box>
-                            <Text size="xs" c="dimmed" fw={700} tt="uppercase">Progresso Geral</Text>
+                            <Text size="xs" c="dimmed" fw={700} tt="uppercase">Overall Progress</Text>
                             <Text size="xl" fw={800} c={computedColorScheme === 'dark' ? 'white' : 'black'}>{Math.round(progress)}%</Text>
                         </Box>
                         <RingProgress
@@ -80,7 +80,7 @@ export default function BoardDashboardView({ board }: BoardDashboardViewProps) {
                             boxShadow: computedColorScheme === 'light' ? '0 8px 32px rgba(0,0,0,0.05)' : 'none'
                         }}
                     >
-                        <Title order={4} c={computedColorScheme === 'dark' ? 'white' : 'black'} mb="xl">Distribuição por Status</Title>
+                        <Title order={4} c={computedColorScheme === 'dark' ? 'white' : 'black'} mb="xl">Status Distribution</Title>
                         <Stack gap="md">
                             {columnStats.map(stat => (
                                 <Box key={stat.name}>
@@ -125,9 +125,9 @@ export default function BoardDashboardView({ board }: BoardDashboardViewProps) {
                         }}
                     >
                         <IconTarget size={64} color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'} />
-                        <Title order={3} c={computedColorScheme === 'dark' ? 'white' : 'black'} mt="md" fw={800}>Painel Operacional</Title>
+                        <Title order={3} c={computedColorScheme === 'dark' ? 'white' : 'black'} mt="md" fw={800}>Operational Dashboard</Title>
                         <Text c="dimmed" size="sm" maw={300} mt="xs">
-                            Visualize a saúde do seu projeto em tempo real com métricas detalhadas.
+                            Monitor your project's health in real-time with detailed metrics.
                         </Text>
                     </Paper>
                 </SimpleGrid>

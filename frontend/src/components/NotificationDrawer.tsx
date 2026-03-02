@@ -3,7 +3,7 @@ import { IconBell, IconCheck, IconChecks, IconMessage, IconUser, IconExternalLin
 import { useEffect, useState } from 'react';
 import { getNotifications, markAsRead, markAllAsRead, type Notification } from '../api/notifications';
 import { formatDistanceToNow } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+// import { ptBR } from 'date-fns/locale'; (Removed Portuguese locale)
 
 interface NotificationDrawerProps {
     opened: boolean;
@@ -76,7 +76,7 @@ export default function NotificationDrawer({ opened, onClose, onNotificationClic
             title={
                 <Group justify="space-between" w="100%" pr="md">
                     <Group gap="xs">
-                        <Text fw={700} size="lg">Notificações</Text>
+                        <Text fw={700} size="lg">Notifications</Text>
                         {unreadCount > 0 && (
                             <Badge color="red" variant="filled" size="sm">
                                 {unreadCount}
@@ -110,7 +110,7 @@ export default function NotificationDrawer({ opened, onClose, onNotificationClic
                         onClick={handleMarkAllAsRead}
                         disabled={unreadCount === 0}
                     >
-                        Marcar todas como lidas
+                        Mark all as read
                     </Button>
                 </Group>
 
@@ -124,7 +124,7 @@ export default function NotificationDrawer({ opened, onClose, onNotificationClic
                             <Center py={50}>
                                 <Stack align="center" gap="xs">
                                     <IconBell size={40} style={{ opacity: 0.2 }} />
-                                    <Text c="dimmed" size="sm">Nenhuma notificação por aqui.</Text>
+                                    <Text c="dimmed" size="sm">No notifications here.</Text>
                                 </Stack>
                             </Center>
                         ) : (
@@ -164,7 +164,7 @@ export default function NotificationDrawer({ opened, onClose, onNotificationClic
                                             </Text>
                                             <Group gap="xs" mt={4}>
                                                 <Text size="xs" c="dimmed">
-                                                    {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: ptBR })}
+                                                    {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
                                                 </Text>
                                                 {n.relatedId && (
                                                     <Badge
@@ -178,7 +178,7 @@ export default function NotificationDrawer({ opened, onClose, onNotificationClic
                                                             paddingInline: 6
                                                         }}
                                                     >
-                                                        Tarefa #{n.relatedId}
+                                                        Task #{n.relatedId}
                                                     </Badge>
                                                 )}
                                             </Group>

@@ -61,6 +61,10 @@ export const removeWorkspaceMember = async (workspaceId: number, userId: number)
     await api.delete(`/workspaces/${workspaceId}/members/${userId}`);
 };
 
+export const updateWorkspaceMemberRole = async (workspaceId: number, userId: number, role: string) => {
+    await api.put(`/workspaces/${workspaceId}/members/${userId}/role`, { role });
+};
+
 export const getWorkspaceInvitations = async () => {
     const response = await api.get<Workspace[]>('/workspaces/invitations');
     return response.data;

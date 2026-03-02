@@ -850,7 +850,7 @@ export default function BoardPage() {
                 <Box py="xs" style={{ background: 'rgba(251, 191, 36, 0.9)', textAlign: 'center', backdropFilter: 'blur(8px)' }}>
                     <Group justify="center" gap="xs">
                         <IconEye size={16} color="black" />
-                        <Text fw={700} size="sm" c="black">Você está no modo VISUALIZAÇÃO. Algumas ações estão restritas.</Text>
+                        <Text fw={700} size="sm" c="black">You are in VIEW mode. Some actions are restricted.</Text>
                     </Group>
                 </Box>
             )}
@@ -860,7 +860,7 @@ export default function BoardPage() {
                 <Box py="xs" style={{ background: 'var(--mantine-color-orange-9)', textAlign: 'center' }}>
                     <Group justify="center" gap="xs">
                         <IconLock size={16} color="white" />
-                        <Text fw={700} size="sm" c="white">Este quadro está fechado. Você está no modo somente leitura.</Text>
+                        <Text fw={700} size="sm" c="white">This board is closed. You are in read-only mode.</Text>
                         {(board.userRole === 'Owner' || board.userRole === 'Admin') && (
                             <Button
                                 variant="white"
@@ -903,11 +903,11 @@ export default function BoardPage() {
                                         </Button>
                                     </Menu.Target>
                                     <Menu.Dropdown>
-                                        <Menu.Item leftSection={<IconLayoutDashboard size={18} />} onClick={() => setViewMode('board')}>Quadro</Menu.Item>
-                                        <Menu.Item leftSection={<IconTable size={18} />} onClick={() => setViewMode('table')}>Tabela</Menu.Item>
-                                        <Menu.Item leftSection={<IconCalendar size={18} />} onClick={() => setViewMode('calendar')}>Calendário</Menu.Item>
-                                        <Menu.Item leftSection={<IconRotate size={18} />} onClick={() => setViewMode('dashboard')}>Painel</Menu.Item>
-                                        <Menu.Item leftSection={<IconList size={18} />} onClick={() => setViewMode('timeline')}>Cronograma</Menu.Item>
+                                        <Menu.Item leftSection={<IconLayoutDashboard size={18} />} onClick={() => setViewMode('board')}>Board</Menu.Item>
+                                        <Menu.Item leftSection={<IconTable size={18} />} onClick={() => setViewMode('table')}>Table</Menu.Item>
+                                        <Menu.Item leftSection={<IconCalendar size={18} />} onClick={() => setViewMode('calendar')}>Calendar</Menu.Item>
+                                        <Menu.Item leftSection={<IconRotate size={18} />} onClick={() => setViewMode('dashboard')}>Dashboard</Menu.Item>
+                                        <Menu.Item leftSection={<IconList size={18} />} onClick={() => setViewMode('timeline')}>Timeline</Menu.Item>
                                     </Menu.Dropdown>
                                 </Menu>
                             </Group>
@@ -947,7 +947,7 @@ export default function BoardPage() {
                                         textShadow: computedColorScheme === 'light' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'
                                     }}
                                     onDoubleClick={() => {
-                                        if (board.isClosed || board.userRole === 'Viewer') return;
+                                        if (board.isClosed || !isOwner) return;
                                         setEditedTitle(board.name);
                                         setIsEditingTitle(true);
                                     }}
@@ -965,7 +965,7 @@ export default function BoardPage() {
                                     radius="xl"
                                     mt={4}
                                 >
-                                    MODO LEITURA
+                                    READ-ONLY MODE
                                 </Badge>
                             )}
                         </Box>
@@ -993,57 +993,71 @@ export default function BoardPage() {
                     </Group>
 
                     <Group gap="md">
-                        <Button
-                            variant={computedColorScheme === 'dark' ? 'default' : 'white'}
-                            color={computedColorScheme === 'dark' ? 'gray' : 'dark'}
-                            size="md"
-                            radius="md"
-                            leftSection={<IconChartBar size={20} />}
-                            onClick={() => setAnalyticsModalOpen(true)}
-                            fw={700}
-                        >
-                            Analytics
-                        </Button>
-                        <Button
-                            variant={computedColorScheme === 'dark' ? 'default' : 'white'}
-                            color={computedColorScheme === 'dark' ? 'gray' : 'dark'}
-                            size="md"
-                            radius="md"
-                            leftSection={<IconUserPlus size={20} />}
-                            onClick={() => setMembersModalOpen(true)}
-                            fw={700}
-                        >
-                            Compartilhar
-                        </Button>
-                        <Button
-                            variant={computedColorScheme === 'dark' ? 'default' : 'white'}
-                            color={computedColorScheme === 'dark' ? 'gray' : 'dark'}
-                            size="md"
-                            radius="md"
-                            leftSection={<IconRobot size={20} color="#845ef7" />}
-                            onClick={() => setAutomationsModalOpen(true)}
-                            fw={700}
-                        >
-                            Automations
-                        </Button>
-                        <Menu shadow="md" width={200}>
-                            <Menu.Target>
-                                <ActionIcon variant="subtle" c={computedColorScheme === 'dark' ? 'white' : 'dark'} size="xl" title="Board Settings">
-                                    <IconSettings size={22} />
-                                </ActionIcon>
-                            </Menu.Target>
-                            <Menu.Dropdown>
-                                {!board.isClosed ? (
-                                    <Menu.Item leftSection={<IconLock size={14} />} onClick={() => setCloseModalOpen(true)}>
-                                        Close Board
-                                    </Menu.Item>
-                                ) : (
-                                    <Menu.Item color="red" leftSection={<IconTrash size={14} />} onClick={() => setDeleteModalOpen(true)}>
-                                        Delete Board
-                                    </Menu.Item>
-                                )}
-                            </Menu.Dropdown>
-                        </Menu>
+                        {isOwner && (
+                            <Group gap="md">
+                                <Button
+                                    variant={computedColorScheme === 'dark' ? 'default' : 'white'}
+                                    color={computedColorScheme === 'dark' ? 'gray' : 'dark'}
+                                    size="md"
+                                    radius="md"
+                                    leftSection={<IconChartBar size={20} />}
+                                    onClick={() => setAnalyticsModalOpen(true)}
+                                    fw={700}
+                                >
+                                    Analytics
+                                </Button>
+                                <Button
+                                    variant={computedColorScheme === 'dark' ? 'default' : 'white'}
+                                    color={computedColorScheme === 'dark' ? 'gray' : 'dark'}
+                                    size="md"
+                                    radius="md"
+                                    leftSection={<IconUserPlus size={20} />}
+                                    onClick={() => setMembersModalOpen(true)}
+                                    fw={700}
+                                >
+                                    Share
+                                </Button>
+                                <Button
+                                    variant={computedColorScheme === 'dark' ? 'default' : 'white'}
+                                    color={computedColorScheme === 'dark' ? 'gray' : 'dark'}
+                                    size="md"
+                                    radius="md"
+                                    leftSection={<IconRobot size={20} color="#845ef7" />}
+                                    onClick={() => setAutomationsModalOpen(true)}
+                                    fw={700}
+                                >
+                                    Automations
+                                </Button>
+                                <Menu shadow="md" width={200}>
+                                    <Menu.Target>
+                                        <ActionIcon variant="subtle" c={computedColorScheme === 'dark' ? 'white' : 'dark'} size="xl" title="Board Settings">
+                                            <IconSettings size={22} />
+                                        </ActionIcon>
+                                    </Menu.Target>
+                                    <Menu.Dropdown>
+                                        {!board.isClosed ? (
+                                            <Menu.Item leftSection={<IconLock size={14} />} onClick={() => setCloseModalOpen(true)}>
+                                                Close Board
+                                            </Menu.Item>
+                                        ) : (
+                                            <Menu.Item leftSection={<IconRotate size={14} />} onClick={handleReopenBoard}>
+                                                Reopen Board
+                                            </Menu.Item>
+                                        )}
+                                        <Menu.Divider />
+                                        <Menu.Item
+                                            color="red"
+                                            leftSection={<IconTrash size={14} />}
+                                            onClick={() => setDeleteModalOpen(true)}
+                                            disabled={!board.isClosed}
+                                            title={!board.isClosed ? "Board must be closed before deleting" : ""}
+                                        >
+                                            Delete Board
+                                        </Menu.Item>
+                                    </Menu.Dropdown>
+                                </Menu>
+                            </Group>
+                        )}
                         <ActionIcon variant="subtle" c={computedColorScheme === 'dark' ? 'white' : 'dark'} size="xl" onClick={() => navigate('/boards')} title="Exit Board">
                             <IconLogout size={24} />
                         </ActionIcon>
@@ -1093,7 +1107,7 @@ export default function BoardPage() {
                                                     draggableProps={provided.draggableProps}
                                                     dragHandleProps={provided.dragHandleProps}
                                                     isClosed={board.isClosed}
-                                                    showAI={idx === 0}
+                                                    showAI={idx === 0 && isOwner}
                                                     isViewer={board.userRole === 'Viewer'}
                                                     boardName={board.name}
                                                 />
@@ -1260,7 +1274,7 @@ export default function BoardPage() {
                 }}
             >
                 <Group gap="lg" px="md" py={4}>
-                    <Button variant="light" color="blue" size="sm" leftSection={<IconLayoutDashboard size={18} />}>Quadro</Button>
+                    <Button variant="light" color="blue" size="sm" leftSection={<IconLayoutDashboard size={18} />}>Board</Button>
                     <Button
                         variant="subtle"
                         color="gray"
@@ -1268,7 +1282,7 @@ export default function BoardPage() {
                         leftSection={<IconExchange size={18} />}
                         onClick={handleOpenSwitchModal}
                     >
-                        Mudar de quadros
+                        Switch boards
                     </Button>
                 </Group>
             </Box >
@@ -1280,7 +1294,7 @@ export default function BoardPage() {
                 title={
                     < Group gap="xs" >
                         <IconExchange size={20} />
-                        <Text fw={600}>Mudar de Quadro</Text>
+                        <Text fw={600}>Switch Board</Text>
                     </Group >
                 }
                 centered
@@ -1313,7 +1327,7 @@ export default function BoardPage() {
                             {board?.workspaceId && (
                                 <Box>
                                     <Text size="xs" fw={700} c="dimmed" mb="xs" style={{ textTransform: 'uppercase' }}>
-                                        Quadros deste Workspace
+                                        Boards in this Workspace
                                     </Text>
                                     <Stack gap="xs">
                                         {allBoards
@@ -1351,7 +1365,7 @@ export default function BoardPage() {
                                             ))
                                         }
                                         {allBoards.filter(b => b.workspaceId === board.workspaceId && b.id !== board.id).length === 0 && (
-                                            <Text size="xs" c="dimmed" ta="center">Não há outros quadros neste workspace.</Text>
+                                            <Text size="xs" c="dimmed" ta="center">There are no other boards in this workspace.</Text>
                                         )}
                                     </Stack>
                                 </Box>
@@ -1360,7 +1374,7 @@ export default function BoardPage() {
                             {/* Other Boards */}
                             <Box mt={board?.workspaceId ? 'sm' : 0}>
                                 <Text size="xs" fw={700} c="dimmed" mb="xs" style={{ textTransform: 'uppercase' }}>
-                                    Outros Quadros
+                                    Other Boards
                                 </Text>
                                 <Stack gap="xs">
                                     {allBoards
@@ -1398,7 +1412,7 @@ export default function BoardPage() {
                                         ))
                                     }
                                     {allBoards.length === 0 && (
-                                        <Text size="xs" c="dimmed" ta="center">Você ainda não tem outros quadros.</Text>
+                                        <Text size="xs" c="dimmed" ta="center">You don't have any other boards yet.</Text>
                                     )}
                                 </Stack>
                             </Box>

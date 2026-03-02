@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 
+using Backend.Data;
+using Microsoft.EntityFrameworkCore;
+
 namespace Backend.Controllers;
 
 [ApiController]
@@ -15,11 +18,13 @@ public class BoardsController : ControllerBase
 {
     private readonly IBoardService _boardService;
     private readonly IHubContext<BoardHub> _hubContext;
+    private readonly AppDbContext _context;
 
-    public BoardsController(IBoardService boardService, IHubContext<BoardHub> hubContext)
+    public BoardsController(IBoardService boardService, IHubContext<BoardHub> hubContext, AppDbContext context)
     {
         _boardService = boardService;
         _hubContext = hubContext;
+        _context = context;
     }
 
     [HttpGet]
@@ -35,6 +40,27 @@ public class BoardsController : ControllerBase
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var board = await _boardService.CreateBoardAsync(dto, userId);
+
+        // Notify all workspace members about the new board
+        var workspaceMembers = await _context.WorkspaceMembers
+            .Where(wm => wm.WorkspaceId == dto.WorkspaceId && wm.Status == "Accepted")
+            .Select(wm => wm.UserId)
+            .ToListAsync();
+
+        var workspaceOwnerId = await _context.Workspaces
+            .Where(w => w.Id == dto.WorkspaceId)
+            .Select(w => w.OwnerId)
+            .FirstOrDefaultAsync();
+            
+        var usersToNotify = new HashSet<int>(workspaceMembers);
+        usersToNotify.Add(workspaceOwnerId);
+
+        foreach (var memberId in usersToNotify)
+        {
+            await _hubContext.Clients.Group($"user_{memberId}")
+                .SendAsync("BoardCreated", board);
+        }
+
         return CreatedAtAction(nameof(GetBoardDetail), new { id = board.Id }, board);
     }
 

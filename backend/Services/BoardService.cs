@@ -16,7 +16,7 @@ public class BoardService : IBoardService
 
     public async Task<List<BoardSummaryDto>> GetBoardsAsync(int userId)
     {
-        return await _db.Boards
+        var boards = await _db.Boards
             .AsNoTracking()
             .Where(b => b.OwnerId == userId 
                      || b.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
@@ -29,16 +29,66 @@ public class BoardService : IBoardService
                 Role = b.OwnerId == userId ? "Owner" : "Member",
                 ThemeColor = b.ThemeColor,
                 WorkspaceId = b.WorkspaceId,
+                WorkspaceName = b.Workspace.Name,
                 IsClosed = b.IsClosed,
                 OpenTasksCount = b.Columns.SelectMany(c => c.TaskCards)
-                    .Count(t => !t.Column.Name.ToLower().Contains("done") && !t.Column.Name.ToLower().Contains("complete"))
+                    .Count(t => !t.Column.Name.ToLower().Contains("done") && !t.Column.Name.ToLower().Contains("complete")),
+                Members = b.Members
+                    .Where(m => m.Status == "Accepted")
+                    .Select(m => new BoardMemberDto
+                    {
+                        Id = m.Id,
+                        UserId = m.UserId,
+                        Username = m.User.Username,
+                        AvatarUrl = m.User.AvatarUrl,
+                        Role = m.Role
+                    }).ToList()
             })
             .ToListAsync();
+
+        // Populate members and override roles based on workspace permissions
+        foreach (var board in boards)
+        {
+            var b = await _db.Boards
+                .AsNoTracking()
+                .Include(x => x.Owner)
+                .Include(x => x.Workspace)
+                .ThenInclude(w => w.Members)
+                .FirstOrDefaultAsync(x => x.Id == board.Id);
+            
+            if (b == null) continue;
+
+            // Determine if requester is workspace admin
+            bool isWsAdmin = b.Workspace.OwnerId == userId || 
+                            b.Workspace.Members.Any(wm => wm.UserId == userId && wm.Role == "Admin" && wm.Status == "Accepted");
+
+            if (isWsAdmin)
+            {
+                board.Role = "Owner";
+            }
+            else if (board.Role == "Owner" || board.Role == "Admin")
+            {
+                // Demote if they aren't workspace admin
+                board.Role = "Member";
+            }
+
+            if (b.Owner != null && !board.Members.Any(m => m.UserId == b.OwnerId))
+            {
+                board.Members.Insert(0, new BoardMemberDto
+                {
+                    UserId = b.OwnerId,
+                    Username = b.Owner.Username,
+                    AvatarUrl = b.Owner.AvatarUrl,
+                    Role = "Owner"
+                });
+            }
+        }
+        return boards;
     }
 
     public async Task<List<BoardSummaryDto>> GetPendingInvitationsAsync(int userId)
     {
-        return await _db.Boards
+        var boards = await _db.Boards
             .AsNoTracking()
             .Where(b => b.Members.Any(m => m.UserId == userId && m.Status == "Pending"))
             .Select(b => new BoardSummaryDto
@@ -49,11 +99,42 @@ public class BoardService : IBoardService
                 Role = "Invited",
                 ThemeColor = b.ThemeColor,
                 WorkspaceId = b.WorkspaceId,
+                WorkspaceName = b.Workspace.Name,
                 IsClosed = b.IsClosed,
                 OpenTasksCount = b.Columns.SelectMany(c => c.TaskCards)
-                    .Count(t => !t.Column.Name.ToLower().Contains("done") && !t.Column.Name.ToLower().Contains("complete"))
+                    .Count(t => !t.Column.Name.ToLower().Contains("done") && !t.Column.Name.ToLower().Contains("complete")),
+                Members = b.Members
+                    .Where(m => m.Status == "Accepted")
+                    .Select(m => new BoardMemberDto
+                    {
+                        Id = m.Id,
+                        UserId = m.UserId,
+                        Username = m.User.Username,
+                        AvatarUrl = m.User.AvatarUrl,
+                        Role = m.Role
+                    }).ToList()
             })
             .ToListAsync();
+        
+        foreach (var board in boards)
+        {
+            var b = await _db.Boards
+                .AsNoTracking()
+                .Include(x => x.Owner)
+                .FirstOrDefaultAsync(x => x.Id == board.Id);
+            
+            if (b?.Owner != null && !board.Members.Any(m => m.UserId == b.OwnerId))
+            {
+                board.Members.Insert(0, new BoardMemberDto
+                {
+                    UserId = b.OwnerId,
+                    Username = b.Owner.Username,
+                    AvatarUrl = b.Owner.AvatarUrl,
+                    Role = "Owner"
+                });
+            }
+        }
+        return boards;
     }
 
     public async Task<BoardDetailDto?> GetBoardDetailAsync(int boardId, int userId)
@@ -163,6 +244,34 @@ public class BoardService : IBoardService
 
         if (boardDto != null)
         {
+            // --- Determine UserRole based on Workspace Permissions ---
+            var wsRequester = await _db.WorkspaceMembers
+                .FirstOrDefaultAsync(wm => wm.WorkspaceId == boardDto.WorkspaceId && wm.UserId == userId && wm.Status == "Accepted");
+                
+            var workspace = await _db.Workspaces.FindAsync(boardDto.WorkspaceId);
+            bool isWsAdmin = (workspace != null && workspace.OwnerId == userId) || 
+                            (wsRequester != null && wsRequester.Role == "Admin");
+
+            if (isWsAdmin)
+            {
+                boardDto.UserRole = "Owner"; // Workspace admins are owners of all boards
+            }
+            else
+            {
+                // If they are not workspace admin, they are just a Member/Viewer on the board
+                // even if they are technically the board owner (to satisfy "only admins can do that")
+                var boardMember = await _db.BoardMembers
+                    .FirstOrDefaultAsync(m => m.BoardId == boardId && m.UserId == userId && m.Status == "Accepted");
+                
+                boardDto.UserRole = boardMember?.Role ?? (boardDto.OwnerId == userId ? "Member" : "Viewer");
+                
+                // Ensure they can't be Owner/Admin at board level if they aren't workspace admin
+                if (boardDto.UserRole == "Owner" || boardDto.UserRole == "Admin")
+                {
+                    boardDto.UserRole = "Member";
+                }
+            }
+
             // Owner is implicitly a member
             var owner = await _db.Users.FindAsync(boardDto.OwnerId);
             if (owner != null && !boardDto.Members.Any(m => m.UserId == owner.Id))
@@ -212,6 +321,18 @@ public class BoardService : IBoardService
 
     public async Task<BoardSummaryDto> CreateBoardAsync(CreateBoardDto dto, int userId)
     {
+        // Check if user is workspace owner or admin
+        var workspaceMember = await _db.WorkspaceMembers
+            .FirstOrDefaultAsync(wm => wm.WorkspaceId == dto.WorkspaceId && wm.UserId == userId && wm.Status == "Accepted");
+
+        var workspace = await _db.Workspaces.FindAsync(dto.WorkspaceId);
+        
+        bool isAuthorized = (workspace != null && workspace.OwnerId == userId) || 
+                          (workspaceMember != null && workspaceMember.Role == "Admin");
+
+        if (!isAuthorized)
+            throw new UnauthorizedAccessException("Only workspace owners or admins can create new boards.");
+
         var board = new Board
         {
             Name = dto.Name,
@@ -278,9 +399,21 @@ public class BoardService : IBoardService
 
     public async Task<BoardMemberDto?> InviteMemberAsync(int boardId, string username, string role, int inviterId)
     {
-        // Only the owner can invite
-        var board = await _db.Boards.FindAsync(boardId);
-        if (board == null || board.OwnerId != inviterId) return null;
+        // Only the owner or an admin can invite
+        var board = await _db.Boards.Include(b => b.Members).FirstOrDefaultAsync(b => b.Id == boardId);
+        if (board == null) return null;
+
+        // Only Workspace Owners or Admins can invite to boards
+        var workspace = await _db.Workspaces
+            .Include(w => w.Members)
+            .FirstOrDefaultAsync(w => w.Id == board.WorkspaceId);
+
+        if (workspace == null) return null;
+
+        var isWsAdmin = workspace.OwnerId == inviterId || 
+                        workspace.Members.Any(m => m.UserId == inviterId && m.Role == "Admin" && m.Status == "Accepted");
+
+        if (!isWsAdmin) return null;
 
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == username);
         if (user == null) return null;
@@ -371,11 +504,20 @@ public class BoardService : IBoardService
 
     public async Task<bool> RemoveMemberAsync(int boardId, int userId, int requesterId)
     {
-        var board = await _db.Boards.FindAsync(boardId);
+        var board = await _db.Boards.Include(b => b.Members).FirstOrDefaultAsync(b => b.Id == boardId);
         if (board == null) return false;
 
-        // Only the owner can remove members
-        if (board.OwnerId != requesterId) return false;
+        // Only Workspace Owners or Admins can close a board
+        var workspace = await _db.Workspaces
+            .Include(w => w.Members)
+            .FirstOrDefaultAsync(w => w.Id == board.WorkspaceId);
+
+        if (workspace == null) return false;
+
+        var isWsAdmin = workspace.OwnerId == requesterId || 
+                        workspace.Members.Any(m => m.UserId == requesterId && m.Role == "Admin" && m.Status == "Accepted");
+
+        if (!isWsAdmin) return false;
 
         var member = await _db.BoardMembers
             .FirstOrDefaultAsync(bm => bm.BoardId == boardId && bm.UserId == userId);
@@ -388,11 +530,20 @@ public class BoardService : IBoardService
 
     public async Task<bool> UpdateBoardAsync(int boardId, UpdateBoardDto dto, int requesterId)
     {
-        var board = await _db.Boards.FindAsync(boardId);
+        var board = await _db.Boards.Include(b => b.Members).FirstOrDefaultAsync(b => b.Id == boardId);
         if (board == null) return false;
 
-        // Only the owner can update board settings
-        if (board.OwnerId != requesterId) return false;
+        // Only Workspace Owners or Admins can update board settings
+        var workspace = await _db.Workspaces
+            .Include(w => w.Members)
+            .FirstOrDefaultAsync(w => w.Id == board.WorkspaceId);
+
+        if (workspace == null) return false;
+
+        var isWsAdmin = workspace.OwnerId == requesterId || 
+                        workspace.Members.Any(m => m.UserId == requesterId && m.Role == "Admin" && m.Status == "Accepted");
+
+        if (!isWsAdmin) return false;
 
         if (!string.IsNullOrEmpty(dto.Name))
         {
@@ -410,10 +561,14 @@ public class BoardService : IBoardService
 
     public async Task<bool> CloseBoardAsync(int boardId, int requesterId)
     {
-        var board = await _db.Boards.FirstOrDefaultAsync(b => b.Id == boardId);
+        var board = await _db.Boards.Include(b => b.Members).FirstOrDefaultAsync(b => b.Id == boardId);
         
-        if (board == null || board.OwnerId != requesterId)
-            return false;
+        if (board == null) return false;
+
+        var isAuthorized = board.OwnerId == requesterId || 
+                          board.Members.Any(m => m.UserId == requesterId && m.Role == "Admin" && m.Status == "Accepted");
+
+        if (!isAuthorized) return false;
 
         board.IsClosed = true;
         await _db.SaveChangesAsync();
@@ -423,10 +578,21 @@ public class BoardService : IBoardService
 
     public async Task<bool> ReopenBoardAsync(int boardId, int requesterId)
     {
-        var board = await _db.Boards.FirstOrDefaultAsync(b => b.Id == boardId);
+        var board = await _db.Boards.Include(b => b.Members).FirstOrDefaultAsync(b => b.Id == boardId);
         
-        if (board == null || board.OwnerId != requesterId)
-            return false;
+        if (board == null) return false;
+
+        // Only Workspace Owners or Admins can reopen a board
+        var workspace = await _db.Workspaces
+            .Include(w => w.Members)
+            .FirstOrDefaultAsync(w => w.Id == board.WorkspaceId);
+
+        if (workspace == null) return false;
+
+        var isWsAdmin = workspace.OwnerId == requesterId || 
+                        workspace.Members.Any(m => m.UserId == requesterId && m.Role == "Admin" && m.Status == "Accepted");
+
+        if (!isWsAdmin) return false;
 
         board.IsClosed = false;
         await _db.SaveChangesAsync();
@@ -436,9 +602,21 @@ public class BoardService : IBoardService
 
     public async Task<bool> DeleteBoardAsync(int boardId, int requesterId)
     {
-        var board = await _db.Boards.FirstOrDefaultAsync(b => b.Id == boardId);
+        var board = await _db.Boards.Include(b => b.Members).FirstOrDefaultAsync(b => b.Id == boardId);
         
-        if (board == null || board.OwnerId != requesterId || !board.IsClosed)
+        if (board == null) return false;
+
+        // Only Workspace Owners or Admins can delete a board
+        var workspace = await _db.Workspaces
+            .Include(w => w.Members)
+            .FirstOrDefaultAsync(w => w.Id == board.WorkspaceId);
+
+        if (workspace == null) return false;
+
+        var isWsAdmin = workspace.OwnerId == requesterId || 
+                        workspace.Members.Any(m => m.UserId == requesterId && m.Role == "Admin" && m.Status == "Accepted");
+
+        if (!isWsAdmin || !board.IsClosed)
             return false;
 
         _db.Boards.Remove(board);
@@ -592,9 +770,22 @@ public class BoardService : IBoardService
 
     public async Task<BoardInviteDto> CreateBoardInviteAsync(int boardId, string role, int requesterId)
     {
-        var board = await _db.Boards.FindAsync(boardId);
-        if (board == null || board.OwnerId != requesterId)
-            throw new UnauthorizedAccessException("Only the board owner can create invite links.");
+        var board = await _db.Boards.Include(b => b.Members).FirstOrDefaultAsync(b => b.Id == boardId);
+        
+        if (board == null) throw new KeyNotFoundException("Board not found");
+
+        // Only Workspace Owners or Admins can create board invites
+        var workspace = await _db.Workspaces
+            .Include(w => w.Members)
+            .FirstOrDefaultAsync(w => w.Id == board.WorkspaceId);
+
+        if (workspace == null) throw new KeyNotFoundException("Workspace not found");
+
+        var isWsAdmin = workspace.OwnerId == requesterId || 
+                        workspace.Members.Any(m => m.UserId == requesterId && m.Role == "Admin" && m.Status == "Accepted");
+
+        if (!isWsAdmin)
+            throw new UnauthorizedAccessException("Only workspace admins can create invite links for boards.");
 
         var invite = new BoardInvite
         {

@@ -11,7 +11,8 @@ import {
     IconCalendarEvent, IconCreditCard, IconBell
 } from '@tabler/icons-react';
 import { getMyTasks, type MyTask } from '../api/users';
-import { getBoards, getBoardDetail, type BoardSummary, type TaskCard, type Column } from '../api/boards';
+import { getBoards, getBoardDetail, getPendingInvitations, type BoardSummary, type TaskCard, type Column } from '../api/boards';
+import { getWorkspaceInvitations } from '../api/workspaces';
 import { getNotifications } from '../api/notifications';
 import NotificationDrawer from './NotificationDrawer';
 import { useSignalR } from '../hooks/useSignalR';
@@ -55,6 +56,7 @@ export default function AppNavbar() {
     // Data caches
     const [myTasks, setMyTasks] = useState<MyTask[]>([]);
     const [boards, setBoards] = useState<BoardSummary[]>([]);
+    const [invitationCount, setInvitationCount] = useState(0);
     const [boardCards, setBoardCards] = useState<SearchResult[]>([]);
     const cardsFetchedRef = useRef(false);
 
@@ -105,6 +107,9 @@ export default function AppNavbar() {
     useEffect(() => {
         getMyTasks().then(setMyTasks).catch(() => { });
         getBoards().then(setBoards).catch(() => { });
+        Promise.all([getPendingInvitations(), getWorkspaceInvitations()])
+            .then(([boardInv, wsInv]) => setInvitationCount(boardInv.length + wsInv.length))
+            .catch(() => { });
         getNotifications().then(data => {
             setUnreadNotifCount(data.filter(n => !n.isRead).length);
         }).catch(() => { });
@@ -261,8 +266,28 @@ export default function AppNavbar() {
                         size="xl"
                         radius="md"
                         onClick={() => navigate('/boards')}
+                        style={{ position: 'relative' }}
                     >
                         <IconLayoutDashboard size={20} />
+                        {invitationCount > 0 && (
+                            <Badge
+                                size="xs"
+                                color="red"
+                                variant="filled"
+                                circle
+                                style={{
+                                    position: 'absolute',
+                                    top: 4,
+                                    right: 4,
+                                    minWidth: 14,
+                                    height: 14,
+                                    padding: 0,
+                                    border: `2px solid ${computedColorScheme === 'dark' ? '#1d2125' : 'white'}`,
+                                }}
+                            >
+                                {invitationCount}
+                            </Badge>
+                        )}
                     </ActionIcon>
                 </Tooltip>
                 <Tooltip label="My Tasks" position="bottom" zIndex={2000}>

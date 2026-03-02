@@ -20,8 +20,10 @@ public class BoardSummaryDto
     public string Role { get; set; } = "Owner";
     public string ThemeColor { get; set; } = "blue";
     public int WorkspaceId { get; set; }
+    public string WorkspaceName { get; set; } = string.Empty;
     public bool IsClosed { get; set; }
     public int OpenTasksCount { get; set; }
+    public List<BoardMemberDto> Members { get; set; } = new();
 }
 
 public class ColumnDto

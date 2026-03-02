@@ -44,7 +44,7 @@ export default function BoardCalendarView({ board, onTaskClick }: BoardCalendarV
                     boxShadow: computedColorScheme === 'light' ? '0 8px 32px rgba(0,0,0,0.05)' : 'none'
                 }}
             >
-                <Title order={4} c={computedColorScheme === 'dark' ? 'white' : 'black'} mb="md">Calendário de Prazos</Title>
+                <Title order={4} c={computedColorScheme === 'dark' ? 'white' : 'black'} mb="md">Deadline Calendar</Title>
                 <DatePicker
                     value={selectedDate}
                     onChange={(val: any) => setSelectedDate(val)}
@@ -96,9 +96,9 @@ export default function BoardCalendarView({ board, onTaskClick }: BoardCalendarV
             >
                 <Group justify="space-between" mb="md">
                     <Title order={4} c={computedColorScheme === 'dark' ? 'white' : 'black'}>
-                        {selectedDate ? dayjs(selectedDate).format('DD [de] MMMM') : 'Selecione uma data'}
+                        {selectedDate ? dayjs(selectedDate).format('MMMM D, YYYY') : 'Select a date'}
                     </Title>
-                    <Badge variant="light" color="violet">{tasksForSelectedDate.length} tarefas</Badge>
+                    <Badge variant="light" color="violet">{tasksForSelectedDate.length} tasks</Badge>
                 </Group>
 
                 <Divider mb="md" opacity={0.1} />
@@ -134,7 +134,7 @@ export default function BoardCalendarView({ board, onTaskClick }: BoardCalendarV
                         ))}
                         {tasksForSelectedDate.length === 0 && (
                             <Box py="xl" ta="center">
-                                <Text c="dimmed" size="sm">Nenhuma tarefa para este dia.</Text>
+                                <Text c="dimmed" size="sm">No tasks for this day.</Text>
                             </Box>
                         )}
                     </Stack>
