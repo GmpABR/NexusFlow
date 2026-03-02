@@ -93,13 +93,22 @@ export default function AppNavbar() {
         const handleStorage = () => {
             setUser(JSON.parse(localStorage.getItem('user') ?? '{}'));
         };
+
+        // Custom event listener for invitation changes
+        const fetchInvites = () => {
+            Promise.all([getPendingInvitations(), getWorkspaceInvitations()])
+                .then(([boardInv, wsInv]) => setInvitationCount(boardInv.length + wsInv.length))
+                .catch(() => { });
+        };
+
         window.addEventListener('storage', handleStorage);
-        // Also listen for custom profile-update event if we want intra-tab sync
         window.addEventListener('profile-updated', handleStorage);
+        window.addEventListener('invitations-changed', fetchInvites);
 
         return () => {
             window.removeEventListener('storage', handleStorage);
             window.removeEventListener('profile-updated', handleStorage);
+            window.removeEventListener('invitations-changed', fetchInvites);
         };
     }, []);
 

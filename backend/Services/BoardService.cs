@@ -507,17 +507,20 @@ public class BoardService : IBoardService
         var board = await _db.Boards.Include(b => b.Members).FirstOrDefaultAsync(b => b.Id == boardId);
         if (board == null) return false;
 
-        // Only Workspace Owners or Admins can close a board
-        var workspace = await _db.Workspaces
-            .Include(w => w.Members)
-            .FirstOrDefaultAsync(w => w.Id == board.WorkspaceId);
+        // Users can always remove themselves; removing others requires Workspace Owner or Admin
+        if (userId != requesterId)
+        {
+            var workspace = await _db.Workspaces
+                .Include(w => w.Members)
+                .FirstOrDefaultAsync(w => w.Id == board.WorkspaceId);
 
-        if (workspace == null) return false;
+            if (workspace == null) return false;
 
-        var isWsAdmin = workspace.OwnerId == requesterId || 
-                        workspace.Members.Any(m => m.UserId == requesterId && m.Role == "Admin" && m.Status == "Accepted");
+            var isWsAdmin = workspace.OwnerId == requesterId ||
+                            workspace.Members.Any(m => m.UserId == requesterId && m.Role == "Admin" && m.Status == "Accepted");
 
-        if (!isWsAdmin) return false;
+            if (!isWsAdmin) return false;
+        }
 
         var member = await _db.BoardMembers
             .FirstOrDefaultAsync(bm => bm.BoardId == boardId && bm.UserId == userId);
