@@ -111,6 +111,8 @@ export default function BoardPage() {
     const [automationsModalOpen, setAutomationsModalOpen] = useState(false);
     const [closeModalOpen, setCloseModalOpen] = useState(false);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [leaveModalOpen, setLeaveModalOpen] = useState(false);
+    const [leaving, setLeaving] = useState(false);
 
     // Task Detail Modal State
     const [selectedTask, setSelectedTask] = useState<TaskCardType | null>(null);
@@ -814,6 +816,24 @@ export default function BoardPage() {
         }
     };
 
+    const handleLeaveBoard = async () => {
+        if (!boardId) return;
+        const currentUserStr = localStorage.getItem('user');
+        const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
+        if (!currentUser?.id) return;
+        setLeaving(true);
+        try {
+            await removeMember(boardId, currentUser.id);
+            notifications.show({ title: 'Left Board', message: 'You have left this board.', color: 'blue' });
+            setLeaveModalOpen(false);
+            navigate('/boards');
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to leave board.', color: 'red' });
+        } finally {
+            setLeaving(false);
+        }
+    };
+
     if (loading) {
         return (
             <Center style={{ minHeight: '100%', background: computedColorScheme === 'dark' ? '#0a0a0b' : '#f8f9fa' }}>
@@ -1057,6 +1077,19 @@ export default function BoardPage() {
                                     </Menu.Dropdown>
                                 </Menu>
                             </Group>
+                        )}
+                        {!isOwner && board.userRole !== 'Viewer' && (
+                            <Button
+                                variant="subtle"
+                                color="red"
+                                size="md"
+                                radius="md"
+                                leftSection={<IconLogout size={18} />}
+                                onClick={() => setLeaveModalOpen(true)}
+                                fw={700}
+                            >
+                                Leave Board
+                            </Button>
                         )}
                         <ActionIcon variant="subtle" c={computedColorScheme === 'dark' ? 'white' : 'dark'} size="xl" onClick={() => navigate('/boards')} title="Exit Board">
                             <IconLogout size={24} />
@@ -1696,6 +1729,27 @@ export default function BoardPage() {
                     <Group justify="flex-end">
                         <Button variant="subtle" color="gray" onClick={() => setDeleteModalOpen(false)}>Cancel</Button>
                         <Button color="red" onClick={handleDeleteBoard}>Delete Permanently</Button>
+                    </Group>
+                </Stack>
+            </Modal>
+
+            <Modal
+                opened={leaveModalOpen}
+                onClose={() => setLeaveModalOpen(false)}
+                title="Leave Board"
+                centered
+                styles={{
+                    content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                }}
+            >
+                <Stack>
+                    <Text size="sm">
+                        Are you sure you want to leave this board? You will lose access to all tasks and content in this board.
+                    </Text>
+                    <Group justify="flex-end">
+                        <Button variant="subtle" color="gray" onClick={() => setLeaveModalOpen(false)}>Cancel</Button>
+                        <Button color="red" loading={leaving} onClick={handleLeaveBoard}>Leave Board</Button>
                     </Group>
                 </Stack>
             </Modal>

@@ -59,6 +59,10 @@ export const addWorkspaceMember = async (workspaceId: number, username: string, 
 
 export const removeWorkspaceMember = async (workspaceId: number, userId: number) => {
     await api.delete(`/workspaces/${workspaceId}/members/${userId}`);
+}
+
+export const deleteWorkspace = async (workspaceId: number) => {
+    await api.delete(`/workspaces/${workspaceId}`);
 };
 
 export const updateWorkspaceMemberRole = async (workspaceId: number, userId: number, role: string) => {

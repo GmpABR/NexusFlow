@@ -196,6 +196,14 @@ export default function BoardsPage() {
     useSignalR(null, {
         onBoardCreated: () => {
             fetchData();
+        },
+        onBoardInvitationReceived: () => {
+            fetchData();
+            window.dispatchEvent(new Event('invitations-changed'));
+        },
+        onWorkspaceInvitationReceived: () => {
+            fetchData();
+            window.dispatchEvent(new Event('invitations-changed'));
         }
     });
 
@@ -329,6 +337,7 @@ export default function BoardsPage() {
                 color: accept ? 'green' : 'gray'
             });
             fetchData();
+            window.dispatchEvent(new Event('invitations-changed'));
         } catch {
             notifications.show({ title: 'Error', message: 'Failed to respond to invitation.', color: 'red' });
         }
@@ -343,6 +352,10 @@ export default function BoardsPage() {
                 color: accept ? 'green' : 'gray'
             });
             fetchData();
+            window.dispatchEvent(new Event('invitations-changed'));
+            if (accept) {
+                navigate(`/boards/${boardId}`);
+            }
         } catch {
             notifications.show({ title: 'Error', message: 'Failed to respond to invitation.', color: 'red' });
         }

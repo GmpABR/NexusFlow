@@ -1,8 +1,10 @@
 using Backend.Data;
+using Backend.Hubs;
 using Backend.DTOs;
 using Backend.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
@@ -14,10 +16,12 @@ namespace Backend.Controllers;
 public class WorkspacesController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly IHubContext<BoardHub> _hubContext;
 
-    public WorkspacesController(AppDbContext context)
+    public WorkspacesController(AppDbContext context, IHubContext<BoardHub> hubContext)
     {
         _context = context;
+        _hubContext = hubContext;
     }
 
     // GET: api/workspaces
@@ -249,6 +253,15 @@ public class WorkspacesController : ControllerBase
         _context.WorkspaceMembers.Add(newMember);
         await _context.SaveChangesAsync();
 
+        // Notify the invited user in real-time
+        await _hubContext.Clients.Group($"user_{userToAdd.Id}")
+            .SendAsync("WorkspaceInvitationReceived", new
+            {
+                workspaceId = id,
+                workspaceName = workspace.Name,
+                role = newMember.Role
+            });
+
         return Ok(new WorkspaceMemberDto
         {
             UserId = userToAdd.Id,
@@ -294,6 +307,20 @@ public class WorkspacesController : ControllerBase
         if (memberToRemove == null) return NotFound("Member not found in this workspace.");
 
         _context.WorkspaceMembers.Remove(memberToRemove);
+
+        // Also remove from all boards within this workspace
+        var workspaceBoardIds = await _context.Boards
+            .Where(b => b.WorkspaceId == id)
+            .Select(b => b.Id)
+            .ToListAsync();
+
+        if (workspaceBoardIds.Any())
+        {
+            var boardMemberships = _context.BoardMembers
+                .Where(bm => bm.UserId == userId && workspaceBoardIds.Contains(bm.BoardId));
+            _context.BoardMembers.RemoveRange(boardMemberships);
+        }
+
         await _context.SaveChangesAsync();
 
         return NoContent();
@@ -509,6 +536,98 @@ public class WorkspacesController : ControllerBase
 
         await _context.SaveChangesAsync();
         return Ok(new { message = "Successfully joined workspace.", workspaceId = invite.WorkspaceId });
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteWorkspace(int id)
+    {
+        try
+        {
+            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out int currentUserId))
+            {
+                return Unauthorized("User is not authenticated or user ID is invalid.");
+            }
+
+            var workspace = await _context.Workspaces.FindAsync(id);
+            if (workspace == null)
+            {
+                return NotFound(new { message = "Workspace not found." });
+            }
+
+            if (workspace.OwnerId != currentUserId)
+            {
+                return Forbid("Only the workspace owner can delete the workspace.");
+            }
+
+            // Get all boards in this workspace
+            var boardIds = await _context.Boards
+                .Where(b => b.WorkspaceId == id)
+                .Select(b => b.Id)
+                .ToListAsync();
+
+            if (boardIds.Any())
+            {
+                // Get all task IDs across all boards (via Column navigation)
+                var columnIds = await _context.Columns
+                    .Where(c => boardIds.Contains(c.BoardId))
+                    .Select(c => c.Id)
+                    .ToListAsync();
+
+                var taskIds = await _context.TaskCards
+                    .Where(t => columnIds.Contains(t.ColumnId))
+                    .Select(t => t.Id)
+                    .ToListAsync();
+
+                if (taskIds.Any())
+                {
+                    // Delete task assignees (NoAction cascade - must do manually)
+                    _context.TaskAssignees.RemoveRange(
+                        _context.TaskAssignees.Where(a => taskIds.Contains(a.TaskCardId)));
+
+                    // Delete attachments (NoAction cascade on UploadedBy - must do manually)
+                    _context.Attachments.RemoveRange(
+                        _context.Attachments.Where(a => taskIds.Contains(a.TaskCardId)));
+
+                    await _context.SaveChangesAsync();
+                }
+
+                // Delete board members (NoAction cascade - must do manually)
+                _context.BoardMembers.RemoveRange(
+                    _context.BoardMembers.Where(bm => boardIds.Contains(bm.BoardId)));
+
+                // Delete board invites (cascade on Board, but NoAction on Creator - do manually)
+                _context.BoardInvites.RemoveRange(
+                    _context.BoardInvites.Where(bi => boardIds.Contains(bi.BoardId)));
+
+                await _context.SaveChangesAsync();
+
+                // Delete boards (TaskCards, Columns, TaskActivities, TimeLogs, Labels, TaskLabels,
+                // BoardAutomations all have Cascade on Board/Column/TaskCard so they delete automatically)
+                _context.Boards.RemoveRange(
+                    _context.Boards.Where(b => boardIds.Contains(b.Id)));
+
+                await _context.SaveChangesAsync();
+            }
+
+            // WorkspaceMembers and WorkspaceInvites have Cascade on WorkspaceId, 
+            // but let's be explicit for safety
+            _context.WorkspaceMembers.RemoveRange(
+                _context.WorkspaceMembers.Where(m => m.WorkspaceId == id));
+            _context.WorkspaceInvites.RemoveRange(
+                _context.WorkspaceInvites.Where(i => i.WorkspaceId == id));
+
+            await _context.SaveChangesAsync();
+
+            _context.Workspaces.Remove(workspace);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = $"An error occurred while deleting the workspace: {ex.Message}" });
+        }
     }
 }
 

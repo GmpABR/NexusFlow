@@ -26,10 +26,10 @@ import {
     useComputedColorScheme,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconLayoutBoard, IconUsers, IconPlus, IconArrowLeft, IconCheck, IconPalette, IconChartBar, IconSettings, IconLock, IconTrash, IconLink, IconCopy } from '@tabler/icons-react';
+import { IconLayoutBoard, IconUsers, IconPlus, IconArrowLeft, IconCheck, IconPalette, IconChartBar, IconSettings, IconLock, IconTrash, IconLink, IconCopy, IconLogout, IconDotsVertical } from '@tabler/icons-react';
 import WorkspaceOverview from '../components/WorkspaceOverview';
 import { useDebouncedValue, useClipboard } from '@mantine/hooks';
-import { getWorkspace, getWorkspaceBoards, addWorkspaceMember, removeWorkspaceMember, createWorkspaceInvite, updateWorkspaceMemberRole, type Workspace } from '../api/workspaces';
+import { getWorkspace, getWorkspaceBoards, addWorkspaceMember, removeWorkspaceMember, createWorkspaceInvite, updateWorkspaceMemberRole, deleteWorkspace, type Workspace } from '../api/workspaces';
 import { updateBoard, closeBoard, deleteBoard, type BoardSummary } from '../api/boards';
 import { searchUsers, type UserSummary } from '../api/users';
 import { BOARD_THEMES, type ThemeColor } from '../constants/themes';
@@ -67,6 +67,12 @@ export default function WorkspaceDetailsPage() {
     const currentUserStr = localStorage.getItem('user');
     const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
 
+    // Leave/Delete Workspace State
+    const [leaveWorkspaceModalOpen, setLeaveWorkspaceModalOpen] = useState(false);
+    const [deleteWorkspaceModalOpen, setDeleteWorkspaceModalOpen] = useState(false);
+    const [leavingWorkspace, setLeavingWorkspace] = useState(false);
+    const [deletingWorkspace, setDeletingWorkspace] = useState(false);
+
     const isWorkspaceOwner = workspace?.ownerId === currentUser?.id;
     const isWorkspaceAdmin = isWorkspaceOwner ||
         workspace?.members.some(m => m.userId === currentUser?.id && m.role === 'Admin');
@@ -95,7 +101,7 @@ export default function WorkspaceDetailsPage() {
         } catch (error) {
             console.error("Remove failed", error);
         } finally {
-            setRemoving(false);
+            setSearchLoading(false);
         }
     };
 
@@ -244,6 +250,36 @@ export default function WorkspaceDetailsPage() {
         }
     };
 
+    const handleLeaveWorkspace = async () => {
+        if (!workspace || !currentUser?.id) return;
+        setLeavingWorkspace(true);
+        try {
+            await removeWorkspaceMember(workspace.id, currentUser.id);
+            notifications.show({ title: 'Left Workspace', message: 'You have left this workspace.', color: 'blue' });
+            setLeaveWorkspaceModalOpen(false);
+            navigate('/boards');
+        } catch (error: any) {
+            notifications.show({ title: 'Error', message: error.response?.data?.message || 'Failed to leave workspace.', color: 'red' });
+        } finally {
+            setLeavingWorkspace(false);
+        }
+    };
+
+    const handleDeleteWorkspace = async () => {
+        if (!workspace) return;
+        setDeletingWorkspace(true);
+        try {
+            await deleteWorkspace(workspace.id);
+            notifications.show({ title: 'Workspace Deleted', message: 'Your workspace has been deleted.', color: 'blue' });
+            setDeleteWorkspaceModalOpen(false);
+            navigate('/boards');
+        } catch (error: any) {
+            notifications.show({ title: 'Error', message: error.response?.data?.message || 'Failed to delete workspace.', color: 'red' });
+        } finally {
+            setDeletingWorkspace(false);
+        }
+    };
+
     if (loading) return <Center h="100%"><Loader color="violet" /></Center>;
     if (!workspace) return null;
 
@@ -260,11 +296,46 @@ export default function WorkspaceDetailsPage() {
                     Back to Boards
                 </Button>
 
-                <Group justify="space-between" mb="xl">
+                <Group justify="space-between" align="flex-start" mb="xl">
                     <div>
                         <Title c={computedColorScheme === 'dark' ? 'white' : 'black'}>{workspace.name}</Title>
                         <Text c="dimmed">{workspace.description}</Text>
                     </div>
+                    <Menu shadow="md" width={200} position="bottom-end">
+                        <Menu.Target>
+                            <ActionIcon
+                                variant="subtle"
+                                color="gray"
+                                size="lg"
+                                radius="md"
+                                style={{
+                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)'}`,
+                                }}
+                            >
+                                <IconDotsVertical size={18} />
+                            </ActionIcon>
+                        </Menu.Target>
+                        <Menu.Dropdown>
+                            {!isWorkspaceOwner && (
+                                <Menu.Item
+                                    color="red"
+                                    leftSection={<IconLogout size={14} />}
+                                    onClick={() => setLeaveWorkspaceModalOpen(true)}
+                                >
+                                    Leave Workspace
+                                </Menu.Item>
+                            )}
+                            {isWorkspaceOwner && (
+                                <Menu.Item
+                                    color="red"
+                                    leftSection={<IconTrash size={14} />}
+                                    onClick={() => setDeleteWorkspaceModalOpen(true)}
+                                >
+                                    Delete Workspace
+                                </Menu.Item>
+                            )}
+                        </Menu.Dropdown>
+                    </Menu>
                 </Group>
 
                 <Tabs
@@ -675,6 +746,50 @@ export default function WorkspaceDetailsPage() {
                         <Group justify="flex-end">
                             <Button variant="subtle" color="gray" onClick={() => setDeleteBoardTarget(null)}>Cancel</Button>
                             <Button color="red" onClick={handleDeleteBoard}>Delete Permanently</Button>
+                        </Group>
+                    </Stack>
+                </Modal>
+
+                {/* Leave Workspace Confirmation Modal */}
+                <Modal
+                    opened={leaveWorkspaceModalOpen}
+                    onClose={() => setLeaveWorkspaceModalOpen(false)}
+                    title="Leave Workspace"
+                    centered
+                    styles={{
+                        content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                        header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    }}
+                >
+                    <Stack>
+                        <Text size="sm">
+                            Are you sure you want to leave this workspace? You will lose access to all boards in this workspace.
+                        </Text>
+                        <Group justify="flex-end">
+                            <Button variant="subtle" color="gray" onClick={() => setLeaveWorkspaceModalOpen(false)}>Cancel</Button>
+                            <Button color="red" loading={leavingWorkspace} onClick={handleLeaveWorkspace}>Leave Workspace</Button>
+                        </Group>
+                    </Stack>
+                </Modal>
+
+                {/* Delete Workspace Confirmation Modal */}
+                <Modal
+                    opened={deleteWorkspaceModalOpen}
+                    onClose={() => setDeleteWorkspaceModalOpen(false)}
+                    title="Delete Workspace"
+                    centered
+                    styles={{
+                        content: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                        header: { background: computedColorScheme === 'dark' ? '#1a1b1e' : 'white', color: computedColorScheme === 'dark' ? 'white' : 'black' },
+                    }}
+                >
+                    <Stack>
+                        <Text size="sm">
+                            Are you sure you want to permanently delete this workspace? <b>All boards and tasks will be deleted. This action cannot be undone.</b>
+                        </Text>
+                        <Group justify="flex-end">
+                            <Button variant="subtle" color="gray" onClick={() => setDeleteWorkspaceModalOpen(false)}>Cancel</Button>
+                            <Button color="red" loading={deletingWorkspace} onClick={handleDeleteWorkspace}>Delete Workspace</Button>
                         </Group>
                     </Stack>
                 </Modal>

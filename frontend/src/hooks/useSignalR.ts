@@ -28,6 +28,8 @@ export function useSignalR(boardId: number | null, callbacks: {
     onColumnMoved?: (event: { columnId: number, newOrder: number }) => void;
     onColumnUpdated?: (column: import('../api/boards').Column) => void;
     onColumnDeleted?: (columnId: number) => void;
+    onBoardInvitationReceived?: () => void;
+    onWorkspaceInvitationReceived?: (data: { workspaceId: number; workspaceName: string; role: string }) => void;
 }) {
     const connectionRef = useRef<HubConnection | null>(null);
     const callbacksRef = useRef(callbacks);
@@ -133,6 +135,14 @@ export function useSignalR(boardId: number | null, callbacks: {
 
         connection.on('ColumnDeleted', (columnId: number) => {
             callbacksRef.current.onColumnDeleted?.(columnId);
+        });
+
+        connection.on('BoardInvitationReceived', () => {
+            callbacksRef.current.onBoardInvitationReceived?.();
+        });
+
+        connection.on('WorkspaceInvitationReceived', (data: { workspaceId: number; workspaceName: string; role: string }) => {
+            callbacksRef.current.onWorkspaceInvitationReceived?.(data);
         });
 
         connection

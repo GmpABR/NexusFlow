@@ -100,8 +100,8 @@ public class BoardsController : ControllerBase
             return BadRequest(new { message = "Could not invite user. They may not exist or you are not the owner." });
 
         // Notify that specific user if online
-        await _hubContext.Clients.Group($"board_{id}")
-            .SendAsync("MemberJoined", member);
+        await _hubContext.Clients.Group($"user_{member.UserId}")
+            .SendAsync("BoardInvitationReceived", member);
 
         return Ok(member);
     }
