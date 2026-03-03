@@ -4,7 +4,7 @@
   <br>
 </h1>
 
-<h4 align="center">A real-time, full-stack Agile collaboration platform built with <a href="https://dotnet.microsoft.com/" target="_blank">.NET 9</a> and <a href="https://react.dev/" target="_blank">React 19</a> — with deep AI integration powered by OpenRouter.</h4>
+<h4 align="center">A real-time, full-stack Agile collaboration platform built with <a href="https://dotnet.microsoft.com/" target="_blank">.NET 9</a> and <a href="https://react.dev/" target="_blank">React 19</a> - with deep AI integration powered by OpenRouter.</h4>
 
 <p align="center">
   <img src="https://img.shields.io/badge/.NET-9.0-512BD4?style=for-the-badge&logo=dotnet" alt=".NET 9" />
@@ -16,19 +16,38 @@
 
 <p align="center">
   <a href="#-features">Features</a> •
-  <a href="#-ai-features-openrouter-integration">AI Features</a> •
   <a href="#-architecture">Architecture</a> •
   <a href="#-tech-stack">Tech Stack</a> •
   <a href="#-getting-started">Getting Started</a> •
-  <a href="#-diagrams">Diagrams</a> •
-  <a href="#-project-structure">Project Structure</a>
+  <a href="#-project-structure">Project Structure</a> •
+  <a href="#-issues--feedback">Issues & Feedback</a>
 </p>
 
 ---
 
-## ✨ Features
+## 📖 About
 
-NexusFlow is a production-grade project management tool inspired by Trello and Jira, built from the ground up.
+NexusFlow is a production-grade project management tool inspired by Trello and Jira, built from the ground up as a full-stack portfolio project. It features real-time collaboration via SignalR WebSockets, a rich Kanban board with drag-and-drop, multiple view modes, and a deep AI layer powered by the OpenRouter API.
+
+---
+
+## 🎬 Demo
+
+### Kanban Board & Drag-and-Drop
+<!-- Add video/GIF here -->
+
+### Real-Time Collaboration (SignalR)
+<!-- Add video/GIF here -->
+
+### AI Features
+<!-- Add video/GIF here -->
+
+### Board Views (Table, Calendar, Timeline, Dashboard)
+<!-- Add video/GIF here -->
+
+---
+
+## ✨ Features
 
 ### 🗂️ Board & Task Management
 - **Drag-and-Drop Kanban boards** — Move tasks and columns with optimistic UI updates (no lag, instant feedback, server-sync with automatic rollback on failure)
@@ -55,8 +74,8 @@ NexusFlow is a production-grade project management tool inspired by Trello and J
 
 NexusFlow includes a deep AI layer powered by the **OpenRouter API** — a unified gateway to models like `stepfun/step-3.5-flash` with automatic fallback to `google/gemini-2.0-flash`. Users configure their own API key in their profile, validated live before it is ever saved.
 
-- **AI Board & Task Generation** — When creating a new board, describe your project idea and choose a template type (Kanban, Scrum, Sales/CRM, Bug Tracking). The AI generates a complete ready-to-use board: all columns and 6–10 pre-seeded tasks, each with a unique title, detailed description, and priority level, all contextually scoped to your project.
-- **AI Task Injection per Column** — Inside any board, click the ✨ AI button on a column and type a plain-language instruction (e.g. *"set up CI/CD pipeline"*). The AI intelligently breaks it down into 3–5 distinct, non-duplicate actionable tasks with detailed descriptions and priorities, aware of what tasks already exist in that column.
+- **AI Board & Task Generation** — Describe your project idea and choose a template type (Kanban, Scrum, Sales/CRM, Bug Tracking). The AI generates a complete ready-to-use board: all columns and 6–10 pre-seeded tasks, each with a unique title, detailed description, and priority level.
+- **AI Task Injection per Column** — Inside any board, click the ✨ AI button on a column and type a plain-language instruction (e.g. *"set up CI/CD pipeline"*). The AI intelligently breaks it down into 3–5 distinct, actionable tasks.
 - **Rich Text AI Writing Assistant** — The task description editor (TipTap) has a built-in AI toolbar with **6 modes**:
   - 🔁 **Enhance** — Improve clarity and structure of existing text
   - ✏️ **Fix Grammar** — Correct grammar and spelling
@@ -64,10 +83,10 @@ NexusFlow includes a deep AI layer powered by the **OpenRouter API** — a unifi
   - 💼 **Make Professional** — Rewrite in a formal, professional tone
   - 💬 **Custom Instruction** — Type any natural-language instruction for the AI to follow
   - ✍️ **Write from Title** — Auto-generate a full task description just from the task title
-- **AI Subtask Generation** — Inside the task detail modal, click ✨ and the AI reads the task title and description to generate 3–7 concrete, actionable subtask checklist items automatically.
-- **AI Diagram Generation (ER Diagrams)** — Inside any task, the AI can generate a PlantUML Entity-Relationship or architectural diagram based on context you describe, rendered inline in the task modal — useful for technical planning tasks.
-- **Smart model fallback** — Requests go to the primary model first; if it fails (rate limit, error, quota), the system automatically retries with the fallback model transparently.
-- **Per-user key management** — Each user stores their own OpenRouter key (encrypted at rest in the database), validated by a real API call before ever being persisted — invalid keys are rejected with clear error feedback.
+- **AI Subtask Generation** — Inside the task detail modal, the AI reads the task title and description to generate 3–7 concrete, actionable subtask checklist items automatically.
+- **AI Diagram Generation** — The AI can generate a PlantUML Entity-Relationship or architectural diagram based on context you describe, rendered inline in the task modal.
+- **Smart model fallback** — Requests go to the primary model first; if it fails, the system automatically retries with the fallback model transparently.
+- **Per-user key management** — Each user stores their own OpenRouter key (encrypted at rest), validated by a real API call before ever being persisted.
 
 ### 👤 User Profiles & Appearance
 - **Rich profile page** — Edit full name, job title, department, organization, location, bio, and avatar (URL or file upload)
@@ -89,30 +108,61 @@ NexusFlow includes a deep AI layer powered by the **OpenRouter API** — a unifi
 
 ## 🏗️ Architecture
 
-```
-┌─────────────────────┐      HTTP/REST      ┌──────────────────────────┐
-│   React 19 Frontend │ ◄────────────────► │  ASP.NET Core Web API    │
-│  (Vite + TypeScript)│                     │  (.NET 9 / C#)           │
-│                     │      SignalR WS     │                          │
-│  - Mantine 7 UI     │ ◄────────────────► │  - BoardHub (SignalR)     │
-│  - @hello-pangea/dnd│                     │  - JWT Auth              │
-│  - React Router 6   │                     │  - EF Core (Code-First)  │
-└─────────────────────┘                     │  - Service Layer (DI)    │
-                                            └──────────┬───────────────┘
-                                                       │
-                                                       ▼
-                                          ┌────────────────────────┐
-                                          │  PostgreSQL (Supabase) │
-                                          │  • Local Docker dev    │
-                                          │  • Cloud production    │
-                                          └────────────────────────┘
+NexusFlow is structured as three loosely coupled layers communicating over HTTP REST and WebSockets.
+
+### Overview
+
+The **React 19 frontend** (Vite + TypeScript) communicates with the **ASP.NET Core Web API** (.NET 9) over two channels:
+- **HTTP/REST** with JWT Bearer tokens for standard CRUD operations
+- **SignalR WebSockets** for real-time push events (task moves, presence updates, notifications)
+
+The API is organized into a **thin controller → scoped service → EF Core** pipeline. Business logic lives entirely in injectable service classes (`IBoardService`, `ITaskService`, etc.), keeping controllers as simple request routers. A singleton `PresenceTracker` service maintains an in-memory map of which users are online on which boards, without any database polling.
+
+The **PostgreSQL database** (provisioned via Supabase — local Docker for development, cloud for production) is fully managed by **EF Core code-first migrations**, making the schema reproducible on any machine.
+
+AI requests are made **directly from the frontend** using the user's own OpenRouter API key, so AI credentials never transit the backend server.
+
+### System Architecture Diagram
+
+```mermaid
+flowchart TB
+    subgraph Browser["Browser"]
+        FE["React 19 Frontend\n(Vite + TypeScript)"]
+    end
+
+    subgraph API["ASP.NET Core Web API (.NET 9)"]
+        CTRL["Controllers\n(Auth, Boards, Tasks, Workspaces...)"]
+        SVC["Service Layer\n(IBoardService, ITaskService...)"]
+        HUB["BoardHub\n(SignalR)"]
+        PT["PresenceTracker\n(Singleton DI)"]
+        EF["EF Core DbContext"]
+    end
+
+    subgraph DB["PostgreSQL (Supabase)"]
+        TABLES["Tables: Users, Boards, Columns,\nTaskCards, Labels, Automations..."]
+    end
+
+    AI["OpenRouter API\n(AI Gateway)"]
+
+    FE -- "HTTP/REST (JWT Bearer)" --> CTRL
+    FE <-- "WebSocket (SignalR)" --> HUB
+    HUB --> PT
+    CTRL --> SVC
+    SVC --> EF
+    EF --> TABLES
+    FE -- "AI requests\n(user's own key)" --> AI
 ```
 
 ### Key Design Decisions
-- **Optimistic UI** — All mutations (task move, rename, etc.) update the UI instantly and roll back automatically if the server returns an error, providing a seamless UX.
-- **SignalR presence tracking** — A singleton `PresenceTracker` service tracks which users are connected to which boards, enabling live online indicators without polling.
-- **Service layer pattern** — Business logic lives in scoped services (`IBoardService`, `ITaskService`, etc.) injected via ASP.NET Core DI, keeping controllers thin.
-- **Code-First migrations** — The entire database schema is defined in C# and managed via EF Core migrations, making it fully reproducible from any machine.
+
+| Decision | Rationale |
+|---|---|
+| **Optimistic UI** | All mutations update the UI instantly and roll back automatically if the server returns an error, providing seamless UX with no perceived latency. |
+| **SignalR presence tracking** | A singleton `PresenceTracker` maps `ConnectionId`s to `UserId`s and `BoardId`s, enabling live online indicators without polling. |
+| **Service layer pattern** | Business logic lives in scoped services injected via ASP.NET Core DI, keeping controllers thin and testable. |
+| **Code-First migrations** | The entire database schema is defined in C# and managed via EF Core migrations, making it fully reproducible from any machine. |
+| **Drag-and-drop conflict guard** | When a user is mid-drag, incoming SignalR `TaskMoved` events are silently queued via an `isDraggingRef` guard and applied after the drag ends, preventing ghost-card artifacts. |
+| **Per-user AI key validation** | The OpenRouter API key is validated by making a real test call before being persisted, ensuring no broken keys are ever stored. |
 
 ---
 
@@ -210,40 +260,7 @@ npm run dev
 
 > These diagrams use **Mermaid.js** which is natively rendered by GitHub — no plugins needed.
 
-### 1. System Architecture
-
-```mermaid
-flowchart TB
-    subgraph Browser["Browser"]
-        FE["React 19 Frontend\n(Vite + TypeScript)"]
-    end
-
-    subgraph API["ASP.NET Core Web API (.NET 9)"]
-        CTRL["Controllers\n(Auth, Boards, Tasks, Workspaces...)"]
-        SVC["Service Layer\n(IBoardService, ITaskService...)"]
-        HUB["BoardHub\n(SignalR)"]
-        PT["PresenceTracker\n(Singleton DI)"]
-        EF["EF Core DbContext"]
-    end
-
-    subgraph DB["PostgreSQL (Supabase)"]
-        TABLES["Tables: Users, Boards, Columns,\nTaskCards, Labels, Automations..."]
-    end
-
-    AI["OpenRouter API\n(AI Gateway)"]
-
-    FE -- "HTTP/REST (JWT Bearer)" --> CTRL
-    FE <-- "WebSocket (SignalR)" --> HUB
-    HUB --> PT
-    CTRL --> SVC
-    SVC --> EF
-    EF --> TABLES
-    FE -- "AI requests\n(user's own key)" --> AI
-```
-
----
-
-### 2. Database Entity-Relationship Diagram
+### Database Entity-Relationship Diagram
 
 ```mermaid
 erDiagram
@@ -368,9 +385,7 @@ erDiagram
     Users ||--o{ Notifications : "receives"
 ```
 
----
-
-### 3. SignalR Real-Time Event Flow
+### SignalR Real-Time Event Flow
 
 ```mermaid
 sequenceDiagram
@@ -423,7 +438,6 @@ sequenceDiagram
 ---
 
 ## 📁 Project Structure
-
 
 ```
 NexusFlow/
@@ -490,26 +504,38 @@ NexusFlow/
 ├── supabase/                        # Supabase local config
 ├── init-dev.ps1                     # First-time dev environment setup script
 ├── start-dev.ps1                    # Daily dev startup script (all services)
-└── SETUP.md                         # Detailed setup documentation
+├── SETUP.md                         # Detailed setup documentation
+└── README.md
 ```
 
 ---
 
-## 🔑 Key Technical Highlights
+## 🤝 Issues & Feedback
 
-These are the engineering decisions worth discussing in a technical interview:
+This is a solo portfolio project — pull requests are not accepted, but **bug reports and feature suggestions are very welcome!**
 
-- **Real-time conflict resolution** — When a user is mid-drag, incoming SignalR `TaskMoved` events are silently queued via a `isDraggingRef` guard and applied after the drag ends, preventing ghost-card artifacts.
-- **Optimistic updates with rollback** — Every mutation applies a local state change first and reverts to a saved `previousState` snapshot on API failure, giving an instant UI with data safety.
-- **Presence Tracker (Singleton DI)** — An in-memory singleton service maps connected `ConnectionId`s to `UserId`s and `BoardId`s. When a user joins a SignalR group, all board members immediately receive an updated online user list.
-- **Automation engine** — When a task is moved to a column, the backend checks the board's automation rules and can automatically trigger actions (e.g., change priority, assign a label), returning the updated task to trigger a cascade UI update.
-- **Per-user AI key validation** — The OpenRouter API key is validated by making a test call before being persisted, ensuring no broken keys are ever stored.
+If you find a bug or have an idea, please [open an issue](../../issues) with as much detail as possible (steps to reproduce, expected vs actual behavior, screenshots if relevant).
+
+---
+
+---
+
+## ❓ FAQ
+
+**Q: Do I need to pay for OpenRouter to use the AI features?**  
+A: OpenRouter has a free tier with rate limits that is sufficient for personal use. Some models may require credits. Each user supplies their own key, so costs are individual.
+
+**Q: Can I use this without Docker?**  
+A: Yes — see [Option B in Getting Started](#option-b--cloud-supabase) to connect to a free cloud Supabase project instead.
+
+**Q: Is the OpenRouter key stored securely?**  
+A: Yes. Keys are encrypted at rest in the database and validated before being saved, so invalid keys are never persisted.
 
 ---
 
 ## 📄 License
 
-This project is licensed under a **Custom Proprietary License** (Non-Commercial, No-Derivatives). 
+This project is licensed under a **Custom Proprietary License** (Non-Commercial, No-Derivatives).
 
 - ✅ **Allowed**: Personal use, educational testing, and private forks.
 - ❌ **Forbidden**: Commercial use, selling as a product, or redistributing modified versions as your own.
