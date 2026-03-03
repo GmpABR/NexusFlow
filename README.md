@@ -39,7 +39,7 @@ NexusFlow is a production-grade project management tool inspired by Trello and J
 ### AI Features (Generation, Breakdown, Enhancements)
 
 ### AI Architect
-<video src="https://github.com/user-attachments/assets/2c5ed54c-4019-4aed-9fef-63546845abb4" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/02251b06-92b8-4b4c-9444-c141f329667f" controls width="100%"></video>
 
 #### Board & Task Generation
 <video src="https://github.com/user-attachments/assets/0a81f09f-61c6-495e-b391-52a46a19e607" controls width="100%"></video>
@@ -54,7 +54,8 @@ NexusFlow is a production-grade project management tool inspired by Trello and J
 <video src="https://github.com/user-attachments/assets/c6ca44fe-ba7f-42f2-a5de-06bd37ca84ca" controls width="100%"></video>
 
 ### Board Views (Table, Calendar, Timeline, Dashboard)
-<video src="https://github.com/user-attachments/assets/04e75cf5-f3a5-418d-96b1-71680c37b8c1" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/ed3accd7-0889-41cd-b3da-932623f3356e" controls width="100%"></video>
+
 ---
 
 ## ✨ Features
