@@ -4,7 +4,7 @@ public class BoardMember
 {
     public int Id { get; set; }
     public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
-    public string Role { get; set; } = "Member"; // "Owner" | "Member"
+    public string Role { get; set; } = "Member"; // "Owner" | "Admin" | "Member"
     public string Status { get; set; } = "Pending"; // "Pending" | "Accepted" | "Rejected"
 
     // Foreign Keys

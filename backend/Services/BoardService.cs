@@ -66,10 +66,10 @@ public class BoardService : IBoardService
             {
                 board.Role = "Owner";
             }
-            else if (board.Role == "Owner" || board.Role == "Admin")
+            else if (board.Role == "Owner")
             {
-                // Demote if they aren't workspace admin
-                board.Role = "Member";
+                // Demote if they aren't workspace admin, but keep as Admin
+                board.Role = "Admin";
             }
 
             if (b.Owner != null && !board.Members.Any(m => m.UserId == b.OwnerId))
@@ -265,10 +265,10 @@ public class BoardService : IBoardService
                 
                 boardDto.UserRole = boardMember?.Role ?? (boardDto.OwnerId == userId ? "Member" : "Viewer");
                 
-                // Ensure they can't be Owner/Admin at board level if they aren't workspace admin
-                if (boardDto.UserRole == "Owner" || boardDto.UserRole == "Admin")
+                // Ensure they can't be Owner at board level if they aren't workspace admin, but keep as Admin
+                if (boardDto.UserRole == "Owner")
                 {
-                    boardDto.UserRole = "Member";
+                    boardDto.UserRole = "Admin";
                 }
             }
 
@@ -413,7 +413,10 @@ public class BoardService : IBoardService
         var isWsAdmin = workspace.OwnerId == inviterId || 
                         workspace.Members.Any(m => m.UserId == inviterId && m.Role == "Admin" && m.Status == "Accepted");
 
-        if (!isWsAdmin) return null;
+        var isBoardAdmin = board.OwnerId == inviterId || 
+                          board.Members.Any(m => m.UserId == inviterId && m.Role == "Admin" && m.Status == "Accepted");
+
+        if (!isWsAdmin && !isBoardAdmin) return null;
 
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == username);
         if (user == null) return null;

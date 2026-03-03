@@ -1503,6 +1503,7 @@ export default function BoardPage() {
                                     <Select
                                         label="Role"
                                         data={[
+                                            { value: 'Admin', label: 'Admin' },
                                             { value: 'Member', label: 'Member' },
                                             { value: 'Viewer', label: 'Viewer' }
                                         ]}
@@ -1536,6 +1537,7 @@ export default function BoardPage() {
                                     <Group grow gap="xs">
                                         <Select
                                             data={[
+                                                { value: 'Admin', label: 'Admin (full access)' },
                                                 { value: 'Member', label: 'Member (can edit)' },
                                                 { value: 'Viewer', label: 'Viewer (read-only)' }
                                             ]}
