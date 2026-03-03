@@ -98,11 +98,19 @@ public class BoardAutomationService : IAutomationService
         if (board == null) throw new KeyNotFoundException("Board not found.");
 
         bool isOwner = board.OwnerId == userId;
-        bool isAdmin = board.Members.Any(m => m.UserId == userId && m.Role == "Admin" && m.Status == "Accepted");
+        bool isBoardAdmin = board.Members.Any(m => m.UserId == userId && m.Role == "Admin" && m.Status == "Accepted");
+        
+        // Workspace Admin check
+        var isWsAdmin = await _db.WorkspaceMembers.AnyAsync(wm => 
+            wm.WorkspaceId == board.WorkspaceId && 
+            wm.UserId == userId && 
+            wm.Role == "Admin" && 
+            wm.Status == "Accepted") 
+            || await _db.Workspaces.AnyAsync(w => w.Id == board.WorkspaceId && w.OwnerId == userId);
 
-        if (!isOwner && !isAdmin)
+        if (!isOwner && !isBoardAdmin && !isWsAdmin)
         {
-            throw new UnauthorizedAccessException("Only board owners and admins can manage automations.");
+            throw new UnauthorizedAccessException("Only board owners, admins or workspace admins can manage automations.");
         }
     }
 

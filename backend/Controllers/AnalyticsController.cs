@@ -25,9 +25,12 @@ public class AnalyticsController : ControllerBase
     {
         // 1. Verify User has access to the board
         var userId = GetUserId();
-        var hasAccess = await _db.Boards
-            .Where(b => b.Id == boardId)
-            .AnyAsync(b => b.OwnerId == userId || b.Members.Any(m => m.UserId == userId));
+        var board = await _db.Boards.FindAsync(boardId);
+        if (board == null) return NotFound();
+
+        var hasAccess = board.OwnerId == userId || 
+                        await _db.BoardMembers.AnyAsync(m => m.BoardId == boardId && m.UserId == userId && m.Status == "Accepted") ||
+                        await _db.WorkspaceMembers.AnyAsync(wm => wm.WorkspaceId == board.WorkspaceId && wm.UserId == userId && wm.Status == "Accepted");
 
         if (!hasAccess) return Forbid();
 
