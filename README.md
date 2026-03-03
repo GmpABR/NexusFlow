@@ -34,25 +34,27 @@ NexusFlow is a production-grade project management tool inspired by Trello and J
 ### 🎬 Demo
 
 ### Real-Time Collaboration (SignalR)
-<video src="https://github.com/user-attachments/assets/c3b9c2ac-31c2-4c55-8f8e-e8cc5c98de0b" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/1ed8b99b-13d9-4231-b8c6-ae2073e50988" controls width="100%"></video>
 
 ### AI Features (Generation, Breakdown, Enhancements)
 
+### AI Architect
+<video src="https://github.com/user-attachments/assets/2c5ed54c-4019-4aed-9fef-63546845abb4" controls width="100%"></video>
+
 #### Board & Task Generation
-<video src="https://github.com/user-attachments/assets/04e75cf5-f3a5-418d-96b1-71680c37b8c1" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/0a81f09f-61c6-495e-b391-52a46a19e607" controls width="100%"></video>
 
 #### Task Breakdown & Subtasks
 <video src="https://github.com/user-attachments/assets/6a977cfa-6429-4a88-98bc-d1a1c54dbf1a" controls width="100%"></video>
 
 #### Diagram Generation
-<video src="https://github.com/user-attachments/assets/1ed8b99b-13d9-4231-b8c6-ae2073e50988" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/c3b9c2ac-31c2-4c55-8f8e-e8cc5c98de0b" controls width="100%"></video>
 
 #### Text Enhancements & Writing Assistant
-<video src="https://github.com/user-attachments/assets/2c5ed54c-4019-4aed-9fef-63546845abb4" controls width="100%"></video>
 <video src="https://github.com/user-attachments/assets/c6ca44fe-ba7f-42f2-a5de-06bd37ca84ca" controls width="100%"></video>
 
 ### Board Views (Table, Calendar, Timeline, Dashboard)
-<video src="https://github.com/user-attachments/assets/0a81f09f-61c6-495e-b391-52a46a19e607" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/04e75cf5-f3a5-418d-96b1-71680c37b8c1" controls width="100%"></video>
 ---
 
 ## ✨ Features
