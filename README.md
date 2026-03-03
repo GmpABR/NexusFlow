@@ -15,10 +15,13 @@
 </p>
 
 <p align="center">
+  <a href="#about">About</a> •
+  <a href="#demo">Demo</a> •
   <a href="#features">Features</a> •
   <a href="#architecture">Architecture</a> •
   <a href="#tech-stack">Tech Stack</a> •
   <a href="#getting-started">Getting Started</a> •
+  <a href="#diagrams">Diagrams</a> •
   <a href="#project-structure">Project Structure</a> •
   <a href="#issues--feedback">Issues & Feedback</a>
 </p>
@@ -29,7 +32,8 @@
 NexusFlow is a production-grade project management tool inspired by Trello and Jira, built from the ground up as a full-stack portfolio project. It features real-time collaboration via SignalR WebSockets, a rich Kanban board with drag-and-drop, multiple view modes, and a deep AI layer powered by the OpenRouter API.
 
 
-### Demo
+
+## Demo
 
 ### Real-Time Collaboration (SignalR)
 <video src="https://github.com/user-attachments/assets/1ed8b99b-13d9-4231-b8c6-ae2073e50988" controls width="100%"></video>
