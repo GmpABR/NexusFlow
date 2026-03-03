@@ -15,23 +15,21 @@
 </p>
 
 <p align="center">
-  <a href="#-features">Features</a> •
-  <a href="#-architecture">Architecture</a> •
-  <a href="#-tech-stack">Tech Stack</a> •
-  <a href="#-getting-started">Getting Started</a> •
-  <a href="#-project-structure">Project Structure</a> •
-  <a href="#-issues--feedback">Issues & Feedback</a>
+  <a href="#features">Features</a> •
+  <a href="#architecture">Architecture</a> •
+  <a href="#tech-stack">Tech Stack</a> •
+  <a href="#getting-started">Getting Started</a> •
+  <a href="#project-structure">Project Structure</a> •
+  <a href="#issues--feedback">Issues & Feedback</a>
 </p>
 
----
 
-## 📖 About
+## About
 
 NexusFlow is a production-grade project management tool inspired by Trello and Jira, built from the ground up as a full-stack portfolio project. It features real-time collaboration via SignalR WebSockets, a rich Kanban board with drag-and-drop, multiple view modes, and a deep AI layer powered by the OpenRouter API.
 
----
 
-### 🎬 Demo
+### Demo
 
 ### Real-Time Collaboration (SignalR)
 <video src="https://github.com/user-attachments/assets/1ed8b99b-13d9-4231-b8c6-ae2073e50988" controls width="100%"></video>
@@ -56,11 +54,11 @@ NexusFlow is a production-grade project management tool inspired by Trello and J
 ### Board Views (Table, Calendar, Timeline, Dashboard)
 <video src="https://github.com/user-attachments/assets/ed3accd7-0889-41cd-b3da-932623f3356e" controls width="100%"></video>
 
----
 
-## ✨ Features
+## Features
 
-### 🗂️ Board & Task Management
+
+### Board & Task Management
 - **Drag-and-Drop Kanban boards** — Move tasks and columns with optimistic UI updates (no lag, instant feedback, server-sync with automatic rollback on failure)
 - **Multiple View Modes** — Switch between Board, Table, Calendar, Timeline, and Dashboard analytics views on any board
 - **Rich Task Cards** — Tasks support assignees, labels, due dates, priorities, attachments, checklists (subtasks), time logging, and a **rich-text description editor**
@@ -68,20 +66,23 @@ NexusFlow is a production-grade project management tool inspired by Trello and J
 - **Board Lifecycle** — Boards can be closed (read-only) and reopened; permanently deleted by admins
 - **Trash Zone** — Drag a card to the trash drop zone to delete it instantly
 
-### 👥 Workspaces & Teams
+
+### Workspaces & Teams
 - **Workspace Management** — Organize multiple boards under a workspace with member management
 - **Role-Based Access Control** — Owner, Admin, Member, and Viewer roles scoped to both workspaces and individual boards
 - **Invite System** — Invite members by username search or generate shareable invite links with configurable roles
 - **My Tasks Page** — A personal cross-board view of all tasks assigned to you
 
-### ⚡ Real-Time Collaboration (SignalR)
+
+### Real-Time Collaboration (SignalR)
 - **Live board updates** — Every task creation, move, update, and delete is broadcast via SignalR to all connected members — no page refresh needed
 - **Live column management** — Column creation, rename, reorder, and deletion synced in real time
 - **Presence Tracking** — See green online indicators for each board member who is currently viewing the board
 - **Live Notifications** — In-app notification drawer with real-time delivery for board events
 - **Conflict-safe drag-and-drop** — Server updates from other users are silently queued while you're dragging to prevent UI conflicts
 
-### 🤖 AI Features (OpenRouter Integration)
+
+### AI Features (OpenRouter Integration)
 
 NexusFlow includes a deep AI layer powered by the **OpenRouter API** — a unified gateway to models like `stepfun/step-3.5-flash` with automatic fallback to `google/gemini-2.0-flash`. Users configure their own API key in their profile, validated live before it is ever saved.
 
@@ -99,25 +100,27 @@ NexusFlow includes a deep AI layer powered by the **OpenRouter API** — a unifi
 - **Smart model fallback** — Requests go to the primary model first; if it fails, the system automatically retries with the fallback model transparently.
 - **Per-user key management** — Each user stores their own OpenRouter key (encrypted at rest), validated by a real API call before ever being persisted.
 
-### 👤 User Profiles & Appearance
+
+### User Profiles & Appearance
 - **Rich profile page** — Edit full name, job title, department, organization, location, bio, and avatar (URL or file upload)
 - **Username customization** — Change your display username with real-time validation
 - **Theme preference** — Light/Dark mode toggle, persisted server-side per user
 - **Privacy mode** — "Appear offline always" toggle to hide your online presence from teammates
 
-### 🔔 Notifications & Activity
+
+### Notifications & Activity
 - **In-app notification drawer** — Real-time notification feed powered by SignalR
 - **Activity log** — Per-card activity feed tracking all changes (moves, edits, comments, status changes)
 - **Emoji reactions** — React to activity log entries
 
-### 📊 Analytics & Automations
+
+### Analytics & Automations
 - **Board Analytics Modal** — Visual charts for task completion rates, priority distribution, and member workload
 - **Board Automations** — Rule-based automations (e.g., auto-assign a label or change priority when a card moves to a specific column)
 - **Time Logging** — Track time spent on individual tasks; per-task time logs
 
----
 
-## 🏗️ Architecture
+## Architecture
 
 NexusFlow is structured as three loosely coupled layers communicating over HTTP REST and WebSockets.
 
@@ -175,9 +178,8 @@ flowchart TB
 | **Drag-and-drop conflict guard** | When a user is mid-drag, incoming SignalR `TaskMoved` events are silently queued via an `isDraggingRef` guard and applied after the drag ends, preventing ghost-card artifacts. |
 | **Per-user AI key validation** | The OpenRouter API key is validated by making a real test call before being persisted, ensuring no broken keys are ever stored. |
 
----
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -194,9 +196,8 @@ flowchart TB
 | **HTTP Client** | Axios |
 | **AI** | OpenRouter API (user-supplied key) |
 
----
 
-## 🚀 Getting Started
+## Getting Started
 
 > **Full setup guide:** See [SETUP.md](./SETUP.md) for detailed instructions.
 
@@ -265,9 +266,8 @@ npm run dev
 # → App running at http://localhost:5173
 ```
 
----
 
-## 📐 Diagrams
+## Diagrams
 
 > These diagrams use **Mermaid.js** which is natively rendered by GitHub — no plugins needed.
 
@@ -446,9 +446,8 @@ sequenceDiagram
     end
 ```
 
----
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 NexusFlow/
@@ -519,19 +518,15 @@ NexusFlow/
 └── README.md
 ```
 
----
 
-## 🤝 Issues & Feedback
+## Issues & Feedback
 
 This is a solo portfolio project — pull requests are not accepted, but **bug reports and feature suggestions are very welcome!**
 
 If you find a bug or have an idea, please [open an issue](../../issues) with as much detail as possible (steps to reproduce, expected vs actual behavior, screenshots if relevant).
 
----
 
----
-
-## ❓ FAQ
+## FAQ
 
 **Q: Do I need to pay for OpenRouter to use the AI features?**  
 A: OpenRouter has a free tier with rate limits that is sufficient for personal use. Some models may require credits. Each user supplies their own key, so costs are individual.
@@ -542,9 +537,8 @@ A: Yes — see [Option B in Getting Started](#option-b--cloud-supabase) to conne
 **Q: Is the OpenRouter key stored securely?**  
 A: Yes. Keys are encrypted at rest in the database and validated before being saved, so invalid keys are never persisted.
 
----
 
-## 📄 License
+## License
 
 This project is licensed under a **Custom Proprietary License** (Non-Commercial, No-Derivatives).
 
@@ -553,7 +547,6 @@ This project is licensed under a **Custom Proprietary License** (Non-Commercial,
 
 See the [LICENSE](LICENSE) file for the full legal text.
 
----
 
 <p align="center">
   Built with ❤️ as a full-stack portfolio project — <strong>NexusFlow</strong>
