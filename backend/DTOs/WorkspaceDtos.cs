@@ -10,6 +10,7 @@ public class WorkspaceDto
     public int OwnerId { get; set; }
     public string OwnerName { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
+    public string? LogoUrl { get; set; }
     public List<WorkspaceMemberDto> Members { get; set; } = new();
 }
 
@@ -21,6 +22,8 @@ public class CreateWorkspaceDto
 
     [MaxLength(500)]
     public string Description { get; set; } = string.Empty;
+
+    public string? LogoUrl { get; set; }
 }
 
 public class UpdateWorkspaceDto
@@ -31,6 +34,8 @@ public class UpdateWorkspaceDto
 
     [MaxLength(500)]
     public string Description { get; set; } = string.Empty;
+
+    public string? LogoUrl { get; set; }
 }
 
 public class WorkspaceMemberDto

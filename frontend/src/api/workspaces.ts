@@ -7,6 +7,7 @@ export interface Workspace {
     ownerId: number;
     ownerName: string;
     createdAt: string;
+    logoUrl?: string;
     members: WorkspaceMember[];
 }
 
@@ -30,6 +31,13 @@ export interface WorkspaceInvite {
 export interface CreateWorkspaceDto {
     name: string;
     description: string;
+    logoUrl?: string;
+}
+
+export interface UpdateWorkspaceDto {
+    name: string;
+    description: string;
+    logoUrl?: string;
 }
 
 export const getMyWorkspaces = async () => {
@@ -63,6 +71,11 @@ export const removeWorkspaceMember = async (workspaceId: number, userId: number)
 
 export const deleteWorkspace = async (workspaceId: number) => {
     await api.delete(`/workspaces/${workspaceId}`);
+};
+
+export const updateWorkspace = async (workspaceId: number, data: UpdateWorkspaceDto) => {
+    const response = await api.put<Workspace>(`/workspaces/${workspaceId}`, data);
+    return response.data;
 };
 
 export const updateWorkspaceMemberRole = async (workspaceId: number, userId: number, role: string) => {

@@ -38,6 +38,7 @@ public class WorkspacesController : ControllerBase
                 Id = w.Id,
                 Name = w.Name,
                 Description = w.Description,
+                LogoUrl = w.LogoUrl,
                 OwnerId = w.OwnerId,
                 OwnerName = w.Owner.Username,
                 CreatedAt = w.CreatedAt,
@@ -68,7 +69,7 @@ public class WorkspacesController : ControllerBase
             .AsNoTracking()
             .Where(w => w.Id == id)
             .Select(w => new {
-                w.Id, w.Name, w.Description, w.OwnerId, w.Owner.Username, w.CreatedAt,
+                w.Id, w.Name, w.Description, w.LogoUrl, w.OwnerId, w.Owner.Username, w.CreatedAt,
                 Members = w.Members.Select(m => new { m.UserId, m.User.Username, m.Role, m.Status, m.JoinedAt }).ToList()
             })
             .FirstOrDefaultAsync();
@@ -88,6 +89,7 @@ public class WorkspacesController : ControllerBase
             Id = workspace.Id,
             Name = workspace.Name,
             Description = workspace.Description,
+            LogoUrl = workspace.LogoUrl,
             OwnerId = workspace.OwnerId,
             OwnerName = workspace.Username,
             CreatedAt = workspace.CreatedAt,
@@ -112,6 +114,7 @@ public class WorkspacesController : ControllerBase
         {
             Name = dto.Name,
             Description = dto.Description,
+            LogoUrl = dto.LogoUrl,
             OwnerId = userId
         };
 
@@ -135,6 +138,7 @@ public class WorkspacesController : ControllerBase
             Id = workspace.Id,
             Name = workspace.Name,
             Description = workspace.Description,
+            LogoUrl = workspace.LogoUrl,
             OwnerId = workspace.OwnerId,
             OwnerName = owner?.Username ?? "Unknown",
             CreatedAt = workspace.CreatedAt,
@@ -370,6 +374,46 @@ public class WorkspacesController : ControllerBase
 
         await _context.SaveChangesAsync();
         return Ok();
+    }
+
+    // PUT: api/workspaces/{id}
+    [HttpPut("{id}")]
+    public async Task<ActionResult<WorkspaceDto>> UpdateWorkspace(int id, [FromBody] UpdateWorkspaceDto dto)
+    {
+        var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
+
+        var workspace = await _context.Workspaces
+            .Include(w => w.Members)
+            .FirstOrDefaultAsync(w => w.Id == id);
+
+        if (workspace == null) return NotFound();
+
+        // Check if requester is Owner or Admin
+        var requesterMember = workspace.Members.FirstOrDefault(m => m.UserId == userId && m.Status == "Accepted");
+        bool isAdmin = workspace.OwnerId == userId || (requesterMember != null && requesterMember.Role == "Admin");
+
+        if (!isAdmin) return Forbid();
+
+        workspace.Name = dto.Name;
+        workspace.Description = dto.Description;
+        workspace.LogoUrl = dto.LogoUrl;
+        workspace.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+
+        // Reload owner name for the response
+        var owner = await _context.Users.FindAsync(workspace.OwnerId);
+
+        return Ok(new WorkspaceDto
+        {
+            Id = workspace.Id,
+            Name = workspace.Name,
+            Description = workspace.Description,
+            LogoUrl = workspace.LogoUrl,
+            OwnerId = workspace.OwnerId,
+            OwnerName = owner?.Username ?? "Unknown",
+            CreatedAt = workspace.CreatedAt
+        });
     }
 
     // GET: api/workspaces/invitations

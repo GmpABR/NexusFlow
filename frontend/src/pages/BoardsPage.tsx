@@ -21,7 +21,8 @@ import {
     Divider,
     useComputedColorScheme,
     Menu,
-    Avatar
+    Avatar,
+    FileButton
 } from '@mantine/core';
 import {
     IconPlus,
@@ -169,6 +170,7 @@ export default function BoardsPage() {
     // Workspace Creation State
     const [workspaceName, setWorkspaceName] = useState('');
     const [workspaceDesc, setWorkspaceDesc] = useState('');
+    const [workspaceLogo, setWorkspaceLogo] = useState<string | undefined>(undefined);
     const [creatingWorkspace, setCreatingWorkspace] = useState(false);
 
     // Board Action State
@@ -236,6 +238,37 @@ export default function BoardsPage() {
         }
     };
 
+    const handleLogoUpload = (file: File | null) => {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            setWorkspaceLogo(e.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleCreateWorkspace = async () => {
+        if (!workspaceName.trim()) return;
+        setCreatingWorkspace(true);
+        try {
+            await createWorkspace({
+                name: workspaceName,
+                description: workspaceDesc,
+                logoUrl: workspaceLogo
+            });
+            notifications.show({ title: 'Success', message: 'Workspace created successfully!', color: 'green' });
+            setWorkspaceName('');
+            setWorkspaceDesc('');
+            setWorkspaceLogo(undefined);
+            setOpenedWorkspaceModal(false);
+            fetchData();
+        } catch {
+            notifications.show({ title: 'Error', message: 'Failed to create workspace.', color: 'red' });
+        } finally {
+            setCreatingWorkspace(false);
+        }
+    };
+
     const handleCreate = async () => {
         if (!newBoardName.trim()) return;
         setCreating(true);
@@ -274,23 +307,6 @@ export default function BoardsPage() {
             notifications.show({ title: 'Error', message: 'Failed to create board.', color: 'red' });
         } finally {
             setCreating(false);
-        }
-    };
-
-    const handleCreateWorkspace = async () => {
-        if (!workspaceName.trim()) return;
-        setCreatingWorkspace(true);
-        try {
-            await createWorkspace({ name: workspaceName, description: workspaceDesc });
-            notifications.show({ title: 'Success', message: 'Workspace created!', color: 'green' });
-            setOpenedWorkspaceModal(false);
-            setWorkspaceName('');
-            setWorkspaceDesc('');
-            fetchData();
-        } catch {
-            notifications.show({ title: 'Error', message: 'Failed to create workspace.', color: 'red' });
-        } finally {
-            setCreatingWorkspace(false);
         }
     };
 
@@ -469,7 +485,6 @@ export default function BoardsPage() {
                     }}
                 >
 
-                    <Divider my="md" color={computedColorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'} />
 
                     <Group justify="space-between" mb="md" px={4}>
                         <Text size="sm" fw={800} c={computedColorScheme === 'dark' ? 'gray.4' : 'gray.6'} tt="uppercase" lts={1}>
@@ -491,9 +506,15 @@ export default function BoardsPage() {
                                 key={w.id}
                                 label={w.name}
                                 leftSection={
-                                    <ThemeIcon variant="gradient" gradient={{ from: 'violet', to: 'indigo' }} size="md" radius="sm">
-                                        <Text size="sm" fw={700}>{w.name[0]}</Text>
-                                    </ThemeIcon>
+                                    <Avatar
+                                        src={w.logoUrl}
+                                        size={24}
+                                        radius="sm"
+                                        color="violet"
+                                        variant="filled"
+                                    >
+                                        {w.name[0].toUpperCase()}
+                                    </Avatar>
                                 }
                                 childrenOffset={28}
                                 style={{ borderRadius: 8, fontWeight: 600, fontSize: '16px', marginBottom: 4 }}
@@ -821,9 +842,19 @@ export default function BoardsPage() {
                                                     <Box key={ws.id}>
                                                         <Group mb="lg" justify="space-between">
                                                             <Group>
-                                                                <ThemeIcon size="lg" radius="md" variant="light" color="violet">
-                                                                    <Text fw={700} size="sm">{ws.name?.[0] || 'W'}</Text>
-                                                                </ThemeIcon>
+                                                                <Avatar
+                                                                    src={ws.logoUrl}
+                                                                    size="lg"
+                                                                    radius="md"
+                                                                    color="violet"
+                                                                    variant="light"
+                                                                    style={{
+                                                                        border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+                                                                        background: computedColorScheme === 'dark' ? 'rgba(124, 58, 237, 0.1)' : 'rgba(124, 58, 237, 0.05)'
+                                                                    }}
+                                                                >
+                                                                    {ws.name?.[0]?.toUpperCase() || 'W'}
+                                                                </Avatar>
                                                                 <Box>
                                                                     <Text fw={700} size="xl">{ws.name}</Text>
                                                                     <Text size="xs" c="dimmed">{ws.description || 'No description'}</Text>
@@ -1015,8 +1046,26 @@ export default function BoardsPage() {
                     placeholder="Optional description"
                     value={workspaceDesc}
                     onChange={(e) => setWorkspaceDesc(e.currentTarget.value)}
-                    mb="lg"
+                    mb="md"
                 />
+                <Box mb="lg">
+                    <Text size="sm" fw={500} mb={8}>Workspace Logo</Text>
+                    <Group>
+                        <Avatar src={workspaceLogo} size={60} radius="md" color="violet">
+                            {workspaceName[0]?.toUpperCase() || 'W'}
+                        </Avatar>
+                        <Stack gap={4}>
+                            <FileButton onChange={handleLogoUpload} accept="image/png,image/jpeg">
+                                {(props) => <Button {...props} variant="light" size="xs">Upload Logo</Button>}
+                            </FileButton>
+                            {workspaceLogo && (
+                                <Button variant="subtle" color="red" size="xs" onClick={() => setWorkspaceLogo(undefined)}>
+                                    Remove
+                                </Button>
+                            )}
+                        </Stack>
+                    </Group>
+                </Box>
                 <Group justify="flex-end">
                     <Button variant="subtle" color="gray" onClick={() => setOpenedWorkspaceModal(false)}>
                         Cancel

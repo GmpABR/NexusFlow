@@ -24,12 +24,14 @@ import {
     TextInput,
     Select,
     useComputedColorScheme,
+    FileButton,
+    Tooltip,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconLayoutBoard, IconUsers, IconPlus, IconArrowLeft, IconCheck, IconPalette, IconChartBar, IconSettings, IconLock, IconTrash, IconLink, IconCopy, IconLogout, IconDotsVertical } from '@tabler/icons-react';
+import { IconLayoutBoard, IconUsers, IconPlus, IconArrowLeft, IconCheck, IconPalette, IconChartBar, IconSettings, IconLock, IconTrash, IconLink, IconCopy, IconPhoto, IconPencil, IconX, IconLogout } from '@tabler/icons-react';
 import WorkspaceOverview from '../components/WorkspaceOverview';
 import { useDebouncedValue, useClipboard } from '@mantine/hooks';
-import { getWorkspace, getWorkspaceBoards, addWorkspaceMember, removeWorkspaceMember, createWorkspaceInvite, updateWorkspaceMemberRole, deleteWorkspace, type Workspace } from '../api/workspaces';
+import { getWorkspace, getWorkspaceBoards, addWorkspaceMember, removeWorkspaceMember, createWorkspaceInvite, updateWorkspaceMemberRole, deleteWorkspace, updateWorkspace, type Workspace } from '../api/workspaces';
 import { updateBoard, closeBoard, deleteBoard, type BoardSummary } from '../api/boards';
 import { searchUsers, type UserSummary } from '../api/users';
 import { BOARD_THEMES, type ThemeColor } from '../constants/themes';
@@ -72,6 +74,11 @@ export default function WorkspaceDetailsPage() {
     const [deleteWorkspaceModalOpen, setDeleteWorkspaceModalOpen] = useState(false);
     const [leavingWorkspace, setLeavingWorkspace] = useState(false);
     const [deletingWorkspace, setDeletingWorkspace] = useState(false);
+    const [savingSettings, setSavingSettings] = useState(false);
+    const [editMode, setEditMode] = useState(false);
+    const [editName, setEditName] = useState('');
+    const [editDescription, setEditDescription] = useState('');
+    const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
     const isWorkspaceOwner = workspace?.ownerId === currentUser?.id;
     const isWorkspaceAdmin = isWorkspaceOwner ||
@@ -188,6 +195,10 @@ export default function WorkspaceDetailsPage() {
             ]);
             setWorkspace(wsData);
             setBoards(boardsData);
+            // Initialize edit state
+            setEditName(wsData.name);
+            setEditDescription(wsData.description || '');
+            setLogoPreview(wsData.logoUrl || null);
         } catch {
             notifications.show({ title: 'Error', message: 'Failed to load workspace.', color: 'red' });
             navigate('/boards');
@@ -279,6 +290,43 @@ export default function WorkspaceDetailsPage() {
             setDeletingWorkspace(false);
         }
     };
+    const handleSaveSettings = async () => {
+        if (!workspace) return;
+        setSavingSettings(true);
+        try {
+            const updated = await updateWorkspace(workspace.id, {
+                name: editName,
+                description: editDescription,
+                logoUrl: logoPreview || undefined
+            });
+            setWorkspace(updated);
+            setEditMode(false);
+            notifications.show({
+                title: 'Success',
+                message: 'Workspace settings updated successfully',
+                color: 'green',
+                icon: <IconCheck size={16} />
+            });
+        } catch (error) {
+            console.error("Failed to update workspace", error);
+            notifications.show({
+                title: 'Error',
+                message: 'Failed to update workspace settings',
+                color: 'red'
+            });
+        } finally {
+            setSavingSettings(false);
+        }
+    };
+
+    const handleLogoUpload = (file: File | null) => {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            setLogoPreview(e.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
 
     if (loading) return <Center h="100%"><Loader color="violet" /></Center>;
     if (!workspace) return null;
@@ -296,46 +344,21 @@ export default function WorkspaceDetailsPage() {
                     Back to Boards
                 </Button>
 
-                <Group justify="space-between" align="flex-start" mb="xl">
-                    <div>
-                        <Title c={computedColorScheme === 'dark' ? 'white' : 'black'}>{workspace.name}</Title>
-                        <Text c="dimmed">{workspace.description}</Text>
-                    </div>
-                    <Menu shadow="md" width={200} position="bottom-end">
-                        <Menu.Target>
-                            <ActionIcon
-                                variant="subtle"
-                                color="gray"
-                                size="lg"
-                                radius="md"
-                                style={{
-                                    border: `1px solid ${computedColorScheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)'}`,
-                                }}
-                            >
-                                <IconDotsVertical size={18} />
-                            </ActionIcon>
-                        </Menu.Target>
-                        <Menu.Dropdown>
-                            {!isWorkspaceOwner && (
-                                <Menu.Item
-                                    color="red"
-                                    leftSection={<IconLogout size={14} />}
-                                    onClick={() => setLeaveWorkspaceModalOpen(true)}
-                                >
-                                    Leave Workspace
-                                </Menu.Item>
-                            )}
-                            {isWorkspaceOwner && (
-                                <Menu.Item
-                                    color="red"
-                                    leftSection={<IconTrash size={14} />}
-                                    onClick={() => setDeleteWorkspaceModalOpen(true)}
-                                >
-                                    Delete Workspace
-                                </Menu.Item>
-                            )}
-                        </Menu.Dropdown>
-                    </Menu>
+                <Group justify="space-between" align="center" mb="xl">
+                    <Group align="center">
+                        <Avatar
+                            src={workspace.logoUrl}
+                            size={64}
+                            radius="md"
+                            color="violet"
+                        >
+                            {workspace.name.slice(0, 2).toUpperCase()}
+                        </Avatar>
+                        <div>
+                            <Title c={computedColorScheme === 'dark' ? 'white' : 'black'}>{workspace.name}</Title>
+                            <Text c="dimmed">{workspace.description}</Text>
+                        </div>
+                    </Group>
                 </Group>
 
                 <Tabs
@@ -355,6 +378,7 @@ export default function WorkspaceDetailsPage() {
                         <Tabs.Tab value="overview" leftSection={<IconChartBar size={16} />}>Overview</Tabs.Tab>
                         <Tabs.Tab value="boards" leftSection={<IconLayoutBoard size={16} />}>Boards</Tabs.Tab>
                         <Tabs.Tab value="members" leftSection={<IconUsers size={16} />}>Members</Tabs.Tab>
+                        {isWorkspaceAdmin && <Tabs.Tab value="settings" leftSection={<IconSettings size={16} />}>Settings</Tabs.Tab>}
                     </Tabs.List>
 
                     <Tabs.Panel value="overview">
@@ -634,11 +658,193 @@ export default function WorkspaceDetailsPage() {
                                                     Remove
                                                 </Button>
                                             )}
+                                            {member.userId === currentUser?.id && member.role !== 'Owner' && (
+                                                <Button
+                                                    variant="subtle"
+                                                    color="red"
+                                                    size="xs"
+                                                    leftSection={<IconLogout size={14} />}
+                                                    onClick={() => setLeaveWorkspaceModalOpen(true)}
+                                                >
+                                                    Leave Workspace
+                                                </Button>
+                                            )}
                                         </Group>
                                     </Group>
                                 </Paper>
                             ))}
                         </Stack>
+                    </Tabs.Panel>
+
+                    <Tabs.Panel value="settings">
+                        {isWorkspaceAdmin && (
+                            <Paper
+                                p="xl"
+                                radius="md"
+                                withBorder
+                                style={{
+                                    background: computedColorScheme === 'dark' ? '#25262b' : 'white',
+                                    borderColor: computedColorScheme === 'dark' ? '#373A40' : '#dee2e6'
+                                }}
+                            >
+                                <Stack gap="xl">
+                                    <Group justify="space-between" align="center">
+                                        <Title order={3} c={computedColorScheme === 'dark' ? 'white' : 'black'}>Workspace Settings</Title>
+                                        {!editMode ? (
+                                            <Button
+                                                leftSection={<IconPencil size={16} />}
+                                                variant="light"
+                                                color="violet"
+                                                onClick={() => setEditMode(true)}
+                                            >
+                                                Edit Settings
+                                            </Button>
+                                        ) : (
+                                            <Group gap="sm">
+                                                <Button
+                                                    variant="subtle"
+                                                    color="gray"
+                                                    onClick={() => {
+                                                        setEditMode(false);
+                                                        setEditName(workspace.name);
+                                                        setEditDescription(workspace.description || '');
+                                                        setLogoPreview(workspace.logoUrl || null);
+                                                    }}
+                                                >
+                                                    Cancel
+                                                </Button>
+                                                <Button
+                                                    color="violet"
+                                                    loading={savingSettings}
+                                                    onClick={handleSaveSettings}
+                                                >
+                                                    Save Changes
+                                                </Button>
+                                            </Group>
+                                        )}
+                                    </Group>
+
+                                    <Group align="flex-start" gap="xl">
+                                        <Box>
+                                            <Text fw={500} size="sm" mb={4}>Workspace Logo</Text>
+                                            <Paper withBorder radius="md" p={4} style={{ position: 'relative' }}>
+                                                <Avatar
+                                                    src={logoPreview}
+                                                    size={120}
+                                                    radius="md"
+                                                    color="violet"
+                                                >
+                                                    {editName.slice(0, 2).toUpperCase()}
+                                                </Avatar>
+                                                {editMode && (
+                                                    <Box style={{ position: 'absolute', bottom: 8, right: 8 }}>
+                                                        <FileButton onChange={handleLogoUpload} accept="image/png,image/jpeg">
+                                                            {(props) => (
+                                                                <Tooltip label="Change Logo">
+                                                                    <ActionIcon
+                                                                        {...props}
+                                                                        color="violet"
+                                                                        variant="filled"
+                                                                        radius="xl"
+                                                                        size="lg"
+                                                                    >
+                                                                        <IconPhoto size={18} />
+                                                                    </ActionIcon>
+                                                                </Tooltip>
+                                                            )}
+                                                        </FileButton>
+                                                    </Box>
+                                                )}
+                                                {editMode && logoPreview && (
+                                                    <Box style={{ position: 'absolute', top: 8, right: 8 }}>
+                                                        <Tooltip label="Remove Logo">
+                                                            <ActionIcon
+                                                                color="red"
+                                                                variant="filled"
+                                                                radius="xl"
+                                                                size="sm"
+                                                                onClick={() => setLogoPreview(null)}
+                                                            >
+                                                                <IconX size={14} />
+                                                            </ActionIcon>
+                                                        </Tooltip>
+                                                    </Box>
+                                                )}
+                                            </Paper>
+                                        </Box>
+
+                                        <Stack style={{ flex: 1 }}>
+                                            <TextInput
+                                                label="Workspace Name"
+                                                placeholder="Enter workspace name"
+                                                value={editName}
+                                                onChange={(e) => setEditName(e.target.value)}
+                                                readOnly={!editMode}
+                                                variant={!editMode ? "unstyled" : "default"}
+                                                styles={{
+                                                    input: {
+                                                        fontSize: '1.2rem',
+                                                        fontWeight: 600,
+                                                        color: computedColorScheme === 'dark' ? 'white' : 'black'
+                                                    }
+                                                }}
+                                            />
+                                            <TextInput
+                                                label="Description"
+                                                placeholder="Optional workspace description"
+                                                value={editDescription}
+                                                onChange={(e) => setEditDescription(e.target.value)}
+                                                readOnly={!editMode}
+                                                variant={!editMode ? "unstyled" : "default"}
+                                            />
+                                        </Stack>
+                                    </Group>
+
+                                    <Stack gap="xs" mt="xl">
+                                        <Text fw={500} size="sm" color="red">Danger Zone</Text>
+                                        <Paper
+                                            p="md"
+                                            radius="md"
+                                            withBorder
+                                            style={{ borderColor: 'rgba(250, 82, 82, 0.2)', background: 'rgba(250, 82, 82, 0.02)' }}
+                                        >
+                                            <Group justify="space-between" align="center">
+                                                <div>
+                                                    <Text fw={600} size="sm" c="red">Delete Workspace</Text>
+                                                    <Text size="xs" c="dimmed">Once deleted, all boards and data will be permanently removed.</Text>
+                                                </div>
+                                                <Button
+                                                    variant="outline"
+                                                    color="red"
+                                                    size="xs"
+                                                    leftSection={<IconTrash size={14} />}
+                                                    onClick={() => setDeleteWorkspaceModalOpen(true)}
+                                                >
+                                                    Delete Workspace
+                                                </Button>
+                                            </Group>
+                                            {!isWorkspaceOwner && (
+                                                <Group justify="space-between" align="center" mt="md" pt="md" style={{ borderTop: '1px solid rgba(250, 82, 82, 0.1)' }}>
+                                                    <div>
+                                                        <Text fw={600} size="sm" c="red">Leave Workspace</Text>
+                                                        <Text size="xs" c="dimmed">You will lose access to all boards in this workspace.</Text>
+                                                    </div>
+                                                    <Button
+                                                        variant="outline"
+                                                        color="red"
+                                                        size="xs"
+                                                        leftSection={<IconLogout size={14} />}
+                                                        onClick={() => setLeaveWorkspaceModalOpen(true)}
+                                                    >
+                                                        Leave Workspace
+                                                    </Button>
+                                                </Group>
+                                            )}
+                                        </Paper>
+                                    </Stack>
+                                </Stack>
+                            </Paper>
+                        )}
                     </Tabs.Panel>
                 </Tabs>
 
