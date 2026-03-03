@@ -12,14 +12,16 @@ import {
     Group,
     Loader,
     Stack,
-
     ThemeIcon,
+    Avatar,
+    Box,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconPlus, IconBriefcase, IconLayoutBoard } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { getMyWorkspaces, createWorkspace, type Workspace } from '../api/workspaces';
 import { notifications } from '@mantine/notifications';
+import { FileButton } from '@mantine/core';
 
 export default function WorkspaceDashboard() {
     const navigate = useNavigate();
@@ -30,6 +32,7 @@ export default function WorkspaceDashboard() {
     // Form state
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
+    const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
     const [creating, setCreating] = useState(false);
 
     useEffect(() => {
@@ -51,12 +54,21 @@ export default function WorkspaceDashboard() {
         }
     };
 
+    const handleLogoUpload = (file: File | null) => {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            setLogoUrl(e.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
+
     const handleCreate = async () => {
         if (!name.trim()) return;
 
         setCreating(true);
         try {
-            await createWorkspace({ name, description });
+            await createWorkspace({ name, description, logoUrl });
             notifications.show({
                 title: 'Success',
                 message: 'Workspace created successfully',
@@ -65,6 +77,7 @@ export default function WorkspaceDashboard() {
             close();
             setName('');
             setDescription('');
+            setLogoUrl(undefined);
             loadWorkspaces();
         } catch (error) {
             notifications.show({
@@ -124,9 +137,15 @@ export default function WorkspaceDashboard() {
                             >
                                 <Group justify="space-between" mb="xs">
                                     <Group gap="xs">
-                                        <ThemeIcon color="blue" variant="light">
-                                            <IconBriefcase size={16} />
-                                        </ThemeIcon>
+                                        <Avatar
+                                            src={workspace.logoUrl}
+                                            size={24}
+                                            radius="sm"
+                                            color="blue"
+                                            variant="light"
+                                        >
+                                            {workspace.name[0].toUpperCase()}
+                                        </Avatar>
                                         <Text fw={600} size="lg">
                                             {workspace.name}
                                         </Text>
@@ -166,7 +185,26 @@ export default function WorkspaceDashboard() {
                         minRows={3}
                         value={description}
                         onChange={(e) => setDescription(e.currentTarget.value)}
+                        mb="md"
                     />
+                    <Box mb="md">
+                        <Text size="sm" fw={500} mb={8}>Workspace Logo</Text>
+                        <Group>
+                            <Avatar src={logoUrl} size={60} radius="md" color="blue">
+                                {name[0]?.toUpperCase() || 'W'}
+                            </Avatar>
+                            <Stack gap={4}>
+                                <FileButton onChange={handleLogoUpload} accept="image/png,image/jpeg">
+                                    {(props) => <Button {...props} variant="light" size="xs">Upload Logo</Button>}
+                                </FileButton>
+                                {logoUrl && (
+                                    <Button variant="subtle" color="red" size="xs" onClick={() => setLogoUrl(undefined)}>
+                                        Remove
+                                    </Button>
+                                )}
+                            </Stack>
+                        </Group>
+                    </Box>
                     <Group justify="flex-end" mt="md">
                         <Button variant="subtle" onClick={close}>Cancel</Button>
                         <Button onClick={handleCreate} loading={creating}>Create Workspace</Button>

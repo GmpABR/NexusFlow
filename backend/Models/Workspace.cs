@@ -14,6 +14,8 @@ public class Workspace
     [MaxLength(500)]
     public string Description { get; set; } = string.Empty;
     
+    public string? LogoUrl { get; set; }
+    
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
