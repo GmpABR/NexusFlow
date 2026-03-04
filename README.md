@@ -530,16 +530,42 @@ This is a solo portfolio project — pull requests are not accepted, but **bug r
 If you find a bug or have an idea, please [open an issue](../../issues) with as much detail as possible (steps to reproduce, expected vs actual behavior, screenshots if relevant).
 
 
-## FAQ
+### 🛠️ Script Quick Reference
 
-**Q: Do I need to pay for OpenRouter to use the AI features?**  
-A: OpenRouter has a free tier with rate limits that is sufficient for personal use. Some models may require credits. Each user supplies their own key, so costs are individual.
+| Command | Purpose | When to Use |
+| :--- | :--- | :--- |
+| `.\init-dev.ps1` | **Full Environment Initialization** | Run once after fresh clone or to reset a broken DB. |
+| `.\start-dev.ps1` | **Standard Startup** | Run every time you code. Starts DB + Backend + Frontend. |
+
+---
+
+## ❓ FAQ & Troubleshooting
+
+### **General Setup**
+
+**Q: `init-dev.ps1` or `start-dev.ps1` is failing. What should I do?**  
+A: Most issues are solved by:
+1.  **Running as Admin**: Open PowerShell as Administrator.
+2.  **Checking Docker**: Ensure Docker Desktop is running and initialized.
+3.  **Port Conflicts**: Ensure port `54322`, `5145`, and `5173` are not in use by other apps.
+4.  See [SETUP.md](./SETUP.md#troubleshooting--faq) for a more detailed deep dive.
 
 **Q: Can I use this without Docker?**  
 A: Yes — see [Option B in Getting Started](#option-b--cloud-supabase) to connect to a free cloud Supabase project instead.
 
-**Q: Is the OpenRouter key stored securely?**  
-A: Yes. Keys are encrypted at rest in the database and validated before being saved, so invalid keys are never persisted.
+**Q: `dotnet ef` command is not recognized.**  
+A: Run `dotnet tool install --global dotnet-ef` to install the Entity Framework Core tools globally.
+
+### **AI Features**
+
+**Q: Do I need to pay for OpenRouter to use the AI features?**  
+A: OpenRouter has a free tier with rate limits that is sufficient for personal use. Each user supplies their own key, so costs are individual.
+
+**Q: Error: "Missing Authentication header" when using AI?**  
+A: This means your OpenRouter key is either invalid or missing. Go to your **Profile** page in NexusFlow and save your key in the **AI Configuration** section.
+
+**Q: Is my OpenRouter key safe?**  
+A: Your key is stored in your private local database and is only sent directly to OpenRouter from your browser when you use the feature. It is never logged or shared.
 
 
 ## License

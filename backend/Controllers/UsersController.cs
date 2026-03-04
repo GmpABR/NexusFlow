@@ -76,12 +76,7 @@ public class UsersController : ControllerBase
         });
     }
 
-    private string? MaskApiKey(string? key)
-    {
-        if (string.IsNullOrEmpty(key)) return key;
-        if (key.Length <= 8) return "****";
-        return key.Substring(0, 8) + "********" + key.Substring(key.Length - 4);
-    }
+
 
     // ── PUT /api/users/me ────────────────────────────────────────────────
     [HttpPut("me")]

@@ -88,11 +88,6 @@ if (Get-Command "supabase" -ErrorAction SilentlyContinue) {
     # If not globally installed, anyone with Node can run it via npx
     $SupabaseCmd = "npx -y supabase"
 } else {
-    # Fallback to your specific machine's setup just in case they don't have it in PATH
-    $CustomPath = Join-Path $env:USERPROFILE "Desktop\supabase.exe"
-    if (Test-Path $CustomPath) {
-        $SupabaseCmd = $CustomPath
-    }
 }
 
 if ($SupabaseCmd -ne $null) {

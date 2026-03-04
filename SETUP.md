@@ -111,6 +111,37 @@ cd frontend && npm install && npm run dev
 
 ---
 
+## 🚀 Development Workflow
+
+| Script | Purpose | When to run |
+| :--- | :--- | :--- |
+| `.\init-dev.ps1` | **Initial Setup** | Only once after cloning or if you delete your Docker volumes. |
+| `.\start-dev.ps1` | **Daily Run** | Every time you start working. Boots the DB, Backend, and Frontend. |
+
+---
+
+## ❓ Troubleshooting & FAQ
+
+### 1. Docker issues
+*   **"Docker is not running"**: Ensure [Docker Desktop](https://www.docker.com/products/docker-desktop/) is open and the engine has started (the whale icon in the tray should be solid).
+*   **"Access Denied" (Permission issues)**: Run your PowerShell terminal as **Administrator**.
+*   **Port 54322 is busy**: Another service is using the Supabase Postgres port. Stop any other local Postgres instances or Docker containers using that port.
+
+### 2. Database & Migrations
+*   **"dotnet ef command not found"**: `init-dev.ps1` tries to install this automatically, but you can also run:  
+    `dotnet tool install --global dotnet-ef`
+*   **Migration failed**: Ensure Docker is running. If the database state is corrupt, you can reset everything by running:  
+    `npx supabase stop --no-backup` and then `.\init-dev.ps1` again.
+
+### 3. Backend/Frontend Failures
+*   **Backend doesn't start**: Check `backend/appsettings.Development.json`. Ensure the `DefaultConnection` matches the port shown in `npx supabase status`.
+*   **Node/NPM errors**: Ensure you are using a modern Node version (v18 or v20 recommended). Try deleting `node_modules` and running `npm install` inside the `frontend` folder.
+
+### 4. AI Features (401 Unauthorized)
+*   **Error: Missing Authentication header**: This means your OpenRouter API key is missing or invalid. Check your **Profile** page in the app and ensure the key is saved correctly.
+
+---
+
 ## Optional: AI Features (OpenRouter)
 
 NexusFlow supports AI-powered board generation. To enable it:
