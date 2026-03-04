@@ -1,8 +1,12 @@
 {
     "rewrites": [
         {
-            "source": "/(.*)",
-            "destination": "/index.html"
+            "source": "/assets/(.*)",
+            "destination": "/frontend/dist/assets/$1"
+        },
+        {
+            "source": "/((?!api/).*)",
+            "destination": "/frontend/dist/index.html"
         }
     ]
 }
