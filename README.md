@@ -35,6 +35,12 @@ NexusFlow is a production-grade project management tool inspired by Trello and J
 
 ## Demo
 
+### 🌐 Live Demo
+
+> **Try it out:** [https://nexusflow123.vercel.app/boards](https://nexusflow123.vercel.app/boards)
+>
+> ⚠️ The live demo runs on free-tier infrastructure (Vercel + Render + Supabase). The backend may be **slow to respond on the first request** (cold start ~30s) and could occasionally be unavailable. Performance will improve after the first request wakes the server up.
+
 ### Real-Time Collaboration (SignalR)
 <video src="https://github.com/user-attachments/assets/1ed8b99b-13d9-4231-b8c6-ae2073e50988" controls width="100%"></video>
 
