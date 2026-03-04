@@ -80,7 +80,8 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins(allowedOrigin.Split(',', StringSplitOptions.TrimEntries))
+        var origins = allowedOrigin.Split(',', StringSplitOptions.TrimEntries);
+        policy.WithOrigins(origins)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
