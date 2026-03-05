@@ -4,7 +4,8 @@ import type { TaskCard, BoardMember } from '../api/boards';
 import type { Label } from '../api/labels';
 import type { Notification } from '../api/notifications';
 
-const HUB_URL = 'http://localhost:5145/hubs/board';
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5145/api').replace(/\/api$/, '');
+const HUB_URL = `${API_BASE}/hubs/board`;
 
 export function useSignalR(boardId: number | null, callbacks: {
     onTaskCreated?: (task: TaskCard) => void;
