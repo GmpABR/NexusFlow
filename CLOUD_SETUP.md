@@ -60,9 +60,11 @@ A step-by-step walkthrough of how this app was deployed to the cloud using **Sup
 4. Configure the service:
    - **Name:** `nexusflow-backend` (or anything you like)
    - **Root Directory:** `backend`
-   - **Build Command:** `dotnet publish -c Release -o out`
-   - **Start Command:** `dotnet out/backend.dll`
+   - **Environment:** `Docker`
+   - **Dockerfile Path:** `Dockerfile`  *(this is relative to Root Directory, so it points to `backend/Dockerfile`)*
    - **Instance Type:** Free
+
+   > ℹ️ The project includes a `backend/Dockerfile` that handles the full build and runtime. Render will automatically detect and use it.
 
 5. Under **Environment Variables**, add the following (⚠️ never hardcode these in code):
 
@@ -84,7 +86,7 @@ A step-by-step walkthrough of how this app was deployed to the cloud using **Sup
    > Without them, EF Core's prepared statements are incompatible with Supabase's PgBouncer
    > in transaction mode — writes (INSERT/UPDATE) will fail with a "transient failure" error.
 
-7. Click **Create Web Service** and wait for the first build to complete.
+7. Click **Create Web Service** and wait for the first Docker build to complete (~3-5 min on first build).
 
 ---
 
