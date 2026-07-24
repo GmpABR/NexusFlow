@@ -33,31 +33,27 @@ VITE_API_URL=http://localhost:5145/api
 
 ---
 
-## Option 1: Local Docker (Recommended)
+## Option 1: Full Docker Compose (Recommended - Single Command)
 
-Run the entire Supabase stack (PostgreSQL, Auth, Storage) on your machine.
+Run the entire application stack (PostgreSQL 16, .NET 9 Backend, React Frontend) in Docker with zero host dependencies (no .NET SDK or Node.js required locally).
 
 ### Prerequisites
-1. [Docker Desktop](https://www.docker.com/products/docker-desktop/) — must be running
-2. [Node.js](https://nodejs.org/) (for the frontend)
-3. [.NET 9.0 SDK](https://dotnet.microsoft.com/download) (for the C# backend)
+1. [Docker Desktop](https://www.docker.com/products/docker-desktop/) — installed and running.
 
-### First-Time Setup
-Only needed once after cloning:
-1. Make sure [Docker Desktop](https://www.docker.com/products/docker-desktop/) is installed.
-2. Open PowerShell in the project root.
-3. Run the initialization script:
-   ```powershell
-   .\init-dev.ps1
-   ```
-   This automatically:
-   - Checks that Docker is running (and starts it if needed)
-   - Downloads and starts the local Supabase containers (PostgreSQL + Auth + Storage)
-   - Restores .NET backend packages (`dotnet restore`)
-   - Applies all database migrations (`dotnet ef database update`)
+### Quick Start
+Open terminal in the project root and run:
+```bash
+docker compose up --build
+```
+This automatically:
+- Starts PostgreSQL 16 container on port `54322`
+- Builds and starts the .NET 9 Backend on `http://localhost:5145` (and automatically applies database migrations)
+- Builds and starts the React Frontend on `http://localhost:5173` with hot-reload enabled
 
-### Daily Development
-Once setup is complete, just run this every time you want to code:
+To stop the containers, press `Ctrl+C` or run:
+```bash
+docker compose down
+```
 1. Open PowerShell in the project root.
 2. Run:
    ```powershell

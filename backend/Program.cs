@@ -115,4 +115,21 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<BoardHub>("/hubs/board");
 
+// ── Automatic Database Migration ───────────────────────────────────────────
+using (var scope = app.Services.CreateScope())
+{
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        logger.LogInformation("Applying database migrations...");
+        db.Database.Migrate();
+        logger.LogInformation("Database migrations applied successfully.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "An error occurred while applying database migrations.");
+    }
+}
+
 app.Run();

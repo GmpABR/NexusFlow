@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,8 +12,6 @@ namespace Backend.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            /* 
-            // Tables already exist
             migrationBuilder.CreateTable(
                 name: "Users",
                 columns: table => new
@@ -159,7 +157,6 @@ namespace Backend.Migrations
                 table: "Users",
                 column: "Username",
                 unique: true);
-            */
         }
 
         /// <inheritdoc />

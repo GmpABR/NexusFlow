@@ -1,4 +1,4 @@
-﻿<h1 align="center">
+<h1 align="center">
   <br>
   🚀 NexusFlow
   <br>
@@ -213,9 +213,18 @@ flowchart TB
 | [Node.js](https://nodejs.org/) | 18+ |
 | [Docker Desktop](https://www.docker.com/products/docker-desktop/) | Latest |
 
-### Option A — Local Docker (Recommended)
+### Option A — Full Docker Compose (Recommended)
 
-This spins up a full local Supabase (PostgreSQL) environment automatically.
+Run the entire stack (PostgreSQL, Backend, Frontend) with a single command — zero host SDK dependencies required:
+
+```bash
+docker compose up --build
+```
+This automatically boots PostgreSQL 16, applies database migrations, and serves the app at `http://localhost:5173`.
+
+### Option B — Local PowerShell Scripts
+
+If you prefer running services directly on your host machine:
 
 **First-time setup** (run once after cloning):
 ```powershell
@@ -227,9 +236,7 @@ This spins up a full local Supabase (PostgreSQL) environment automatically.
 .\start-dev.ps1
 ```
 
-The script automatically starts Supabase, applies migrations, and launches both the backend (`localhost:5145`) and frontend (`localhost:5173`).
-
-### Option B — Cloud Supabase
+### Option C — Cloud Supabase
 
 If you prefer not to use Docker, point the app to a cloud Supabase project.
 

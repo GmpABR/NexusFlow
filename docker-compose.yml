@@ -1,0 +1,59 @@
+name: nexusflow
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: nexusflow-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-nexusflow}
+    ports:
+      - "${POSTGRES_PORT:-54322}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-nexusflow}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nexusflow-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "5145:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=${POSTGRES_DB:-nexusflow};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+      - JwtSettings__SecretKey=${JWT_SECRET_KEY:-nexusflow_dev_secret_key_must_be_at_least_32_chars_long}
+      - JwtSettings__Issuer=${JWT_ISSUER:-NexusFlowBackend}
+      - JwtSettings__Audience=${JWT_AUDIENCE:-NexusFlowFrontend}
+      - AllowedOrigins=${ALLOWED_ORIGINS:-http://localhost:5173}
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nexusflow-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:5145/api}
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - /app/node_modules
+
+volumes:
+  postgres_data:
