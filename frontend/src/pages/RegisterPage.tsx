@@ -28,11 +28,12 @@ export default function RegisterPage() {
         try {
             const res = await registerUser(username, email, password);
             localStorage.setItem('token', res.token);
-            localStorage.setItem('user', JSON.stringify({ username: res.username, userId: res.userId }));
+            localStorage.setItem('user', JSON.stringify({ username: res.username, id: res.userId }));
             notifications.show({ title: 'Account created!', message: `Welcome, ${res.username}`, color: 'green' });
             navigate('/boards');
-        } catch {
-            notifications.show({ title: 'Registration failed', message: 'Username or email already exists.', color: 'red' });
+        } catch (error: any) {
+            const message = error.response?.data?.message || 'Username or email already exists or a server error occurred.';
+            notifications.show({ title: 'Registration failed', message, color: 'red' });
         } finally {
             setLoading(false);
         }
