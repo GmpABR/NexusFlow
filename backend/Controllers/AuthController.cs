@@ -25,7 +25,7 @@ public class AuthController : ControllerBase
             var result = await _authService.RegisterAsync(dto);
             // Result shouldn't be null if no exception thrown with new logic, 
             // but keeping check just in case legacy returns null (though we changed it)
-            if (result == null) 
+            if (result == null)
                 return BadRequest(new { message = "Registration failed." });
 
             return Ok(result);

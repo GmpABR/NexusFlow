@@ -5,13 +5,13 @@ namespace Backend.Models;
 public class WorkspaceInvite
 {
     public int Id { get; set; }
-    
+
     [Required]
     public string Token { get; set; } = string.Empty;
-    
+
     [Required]
     public string Role { get; set; } = "Member"; // "Member" | "Admin"
-    
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ExpiresAt { get; set; }
     public bool IsActive { get; set; } = true;

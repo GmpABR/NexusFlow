@@ -82,7 +82,7 @@ public class TaskService : ITaskService
             .Include(t => t.TimeLogs)
             .Include(t => t.Column)
             .FirstOrDefaultAsync(t => t.Id == taskId);
-            
+
         if (task == null) return null;
 
         if (!await VerifyTaskAccessAsync(taskId, userId))
@@ -96,7 +96,7 @@ public class TaskService : ITaskService
         task.Title = dto.Title;
         task.Description = dto.Description;
         task.Priority = dto.Priority;
-        
+
         if (dto.DueDate.HasValue)
             task.DueDate = DateTime.SpecifyKind(dto.DueDate.Value, DateTimeKind.Utc);
         else
@@ -132,16 +132,16 @@ public class TaskService : ITaskService
             }
             await _db.SaveChangesAsync();
         }
-        
+
         if (changes.Any())
         {
-             await LogActivity(taskId, userId, "Updated", string.Join(", ", changes));
+            await LogActivity(taskId, userId, "Updated", string.Join(", ", changes));
         }
 
         // Notify new assignee if changed
         if (dto.AssigneeId.HasValue && dto.AssigneeId != userId && dto.AssigneeId != task.AssigneeId)
         {
-             await _notificationService.CreateNotificationAsync(dto.AssigneeId.Value, $"Você foi atribuído à tarefa: {task.Title}", "Assignment", taskId);
+            await _notificationService.CreateNotificationAsync(dto.AssigneeId.Value, $"Você foi atribuído à tarefa: {task.Title}", "Assignment", taskId);
         }
 
         // Reload to get assignee info if changed
@@ -164,14 +164,14 @@ public class TaskService : ITaskService
             .Include(t => t.Attachments).ThenInclude(a => a.UploadedBy)
             .Include(t => t.TimeLogs)
             .FirstOrDefaultAsync(t => t.Id == taskId);
-            
+
         if (task == null) return null;
 
         if (!await VerifyTaskAccessAsync(taskId, userId))
             throw new UnauthorizedAccessException("User does not have access to this task.");
 
         int oldColumnId = task.ColumnId;
-        
+
         // 1. Get all tasks in the target column (excluding the moved task)
         var targetColumnTasks = await _db.TaskCards
             .Where(t => t.ColumnId == dto.TargetColumnId && t.Id != taskId)
@@ -180,9 +180,9 @@ public class TaskService : ITaskService
 
         // 2. Insert the moved task at the new position
         int newIndex = Math.Max(0, Math.Min(dto.NewOrder, targetColumnTasks.Count));
-        
+
         task.ColumnId = dto.TargetColumnId;
-        
+
         targetColumnTasks.Insert(newIndex, task);
 
         // 3. Update Order for all tasks in the target column
@@ -195,11 +195,11 @@ public class TaskService : ITaskService
 
         if (oldColumnId != dto.TargetColumnId)
         {
-             await LogActivity(taskId, userId, "Moved", $"Moved to column {dto.TargetColumnId}");
+            await LogActivity(taskId, userId, "Moved", $"Moved to column {dto.TargetColumnId}");
         }
         else
         {
-             await LogActivity(taskId, userId, "Reordered", "Reordered within same column");
+            await LogActivity(taskId, userId, "Reordered", "Reordered within same column");
         }
 
         return await MapToDto(task);
@@ -210,14 +210,14 @@ public class TaskService : ITaskService
         var task = await _db.TaskCards
             .Include(t => t.Column)
             .FirstOrDefaultAsync(t => t.Id == taskId);
-            
+
         if (task == null) return null;
 
         if (!await VerifyTaskAccessAsync(taskId, userId))
             throw new UnauthorizedAccessException("User does not have access to this task.");
 
         int boardId = task.Column.BoardId;
-        
+
         // Log before delete? Or just delete. 
         // If we delete the task, cascade deletes activities. 
         // So logging a delete on a deleted task is pointless unless we have a BoardActivity log.
@@ -243,7 +243,7 @@ public class TaskService : ITaskService
 
         _db.Subtasks.Add(subtask);
         await _db.SaveChangesAsync();
-        
+
         await LogActivity(taskId, userId, "Subtask Added", $"Added subtask: {dto.Title}");
 
         return new SubtaskDto { Id = subtask.Id, Title = subtask.Title, IsCompleted = subtask.IsCompleted, TaskCardId = subtask.TaskCardId };
@@ -258,7 +258,7 @@ public class TaskService : ITaskService
         if (subtask == null) return null;
 
         if (dto.Title != null) subtask.Title = dto.Title;
-        
+
         bool statusChanged = false;
         if (dto.IsCompleted.HasValue && dto.IsCompleted != subtask.IsCompleted)
         {
@@ -267,7 +267,7 @@ public class TaskService : ITaskService
         }
 
         await _db.SaveChangesAsync();
-        
+
         if (statusChanged)
         {
             string status = subtask.IsCompleted ? "completed" : "uncompleted";
@@ -286,15 +286,15 @@ public class TaskService : ITaskService
     {
         var subtask = await _db.Subtasks.FindAsync(subtaskId);
         if (subtask == null) return false;
-        
+
         int taskId = subtask.TaskCardId;
         string title = subtask.Title;
 
         _db.Subtasks.Remove(subtask);
         await _db.SaveChangesAsync();
-        
+
         await LogActivity(taskId, userId, "Subtask Deleted", $"Deleted subtask: {title}");
-        
+
         return true;
     }
 
@@ -339,17 +339,17 @@ public class TaskService : ITaskService
                     FileSizeBytes = a.FileSizeBytes,
                     UploadedAt = a.UploadedAt
                 }).ToList(),
-                Subtasks = t.Subtasks.OrderBy(s => s.Id).Select(s => new SubtaskDto 
-                { 
-                    Id = s.Id, 
-                    Title = s.Title, 
+                Subtasks = t.Subtasks.OrderBy(s => s.Id).Select(s => new SubtaskDto
+                {
+                    Id = s.Id,
+                    Title = s.Title,
                     IsCompleted = s.IsCompleted,
                     TaskCardId = s.TaskCardId
                 }).ToList()
             })
             .FirstOrDefaultAsync();
     }
-    
+
     public async Task<List<TaskActivityDto>> GetTaskActivitiesAsync(int taskId, int userId)
     {
         if (!await VerifyTaskAccessAsync(taskId, userId)) return new List<TaskActivityDto>();
@@ -359,7 +359,7 @@ public class TaskService : ITaskService
             .AsNoTracking()
             .Where(a => a.TaskCardId == taskId)
             .OrderByDescending(a => a.Timestamp)
-            .Select(a => new 
+            .Select(a => new
             {
                 a.Id,
                 a.TaskCardId,
@@ -377,7 +377,7 @@ public class TaskService : ITaskService
         var reactionsData = await _db.TaskActivityReactions
             .AsNoTracking()
             .Where(r => activityIds.Contains(r.TaskActivityId))
-            .Select(r => new 
+            .Select(r => new
             {
                 r.Id,
                 r.TaskActivityId,
@@ -402,7 +402,7 @@ public class TaskService : ITaskService
             .ToDictionaryAsync(u => u.Id, u => new { u.Username, u.AvatarUrl });
 
         // 4. Map to DTO in memory 
-        var dtos = activitiesData.Select(a => 
+        var dtos = activitiesData.Select(a =>
         {
             users.TryGetValue(a.UserId, out var actUser);
             return new TaskActivityDto
@@ -415,8 +415,8 @@ public class TaskService : ITaskService
                 Action = a.Action,
                 Details = a.Details,
                 Timestamp = a.Timestamp,
-                Reactions = reactionsByActivity.TryGetValue(a.Id, out var rels) 
-                    ? rels.Select(r => 
+                Reactions = reactionsByActivity.TryGetValue(a.Id, out var rels)
+                    ? rels.Select(r =>
                     {
                         users.TryGetValue(r.UserId, out var reacUser);
                         return new ActivityReactionDto
@@ -426,7 +426,7 @@ public class TaskService : ITaskService
                             UserId = r.UserId,
                             Username = reacUser?.Username ?? "Unknown"
                         };
-                    }).ToList() 
+                    }).ToList()
                     : new List<ActivityReactionDto>()
             };
         }).ToList();
@@ -447,7 +447,7 @@ public class TaskService : ITaskService
             Details = text,
             Timestamp = DateTime.UtcNow
         };
-        
+
         _db.TaskActivities.Add(activity);
         await _db.SaveChangesAsync();
 
@@ -459,11 +459,11 @@ public class TaskService : ITaskService
         // Load user info for the DTO
         var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
 
-        if (user == null) 
+        if (user == null)
         {
             Console.WriteLine($"[TaskService] WARNING: User not found in database for userId: {userId}");
         }
-        else 
+        else
         {
             Console.WriteLine($"[TaskService] User found: {user.Username} (ID: {user.Id})");
         }
@@ -602,7 +602,7 @@ public class TaskService : ITaskService
         {
             var username = match.Groups[1].Value;
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Username.ToLower() == username.ToLower());
-            
+
             if (user != null && user.Id != senderId)
             {
                 await _notificationService.CreateNotificationAsync(user.Id, $"{sender?.Username} mencionou você na tarefa: {task?.Title}", "Mention", taskId);
@@ -740,7 +740,7 @@ public class TaskService : ITaskService
             DurationMinutes = timeLog.DurationMinutes
         };
     }
-    
+
     private async Task LogActivity(int taskId, int userId, string action, string details)
     {
         if (userId == 0) return; // System action or unauthenticated?
@@ -753,22 +753,22 @@ public class TaskService : ITaskService
             Details = details,
             Timestamp = DateTime.UtcNow
         };
-        
+
         _db.TaskActivities.Add(activity);
         await _db.SaveChangesAsync();
     }
 
     private async Task<TaskCardDto> MapToDto(TaskCard task)
     {
-        if (task.Assignee == null && task.AssigneeId.HasValue) 
+        if (task.Assignee == null && task.AssigneeId.HasValue)
         {
-             await _db.Entry(task).Reference(t => t.Assignee).LoadAsync();
+            await _db.Entry(task).Reference(t => t.Assignee).LoadAsync();
         }
         if (task.Column == null)
         {
             await _db.Entry(task).Reference(t => t.Column).LoadAsync();
         }
-        if (!_db.Entry(task).Collection(t => t.Subtasks).IsLoaded) 
+        if (!_db.Entry(task).Collection(t => t.Subtasks).IsLoaded)
         {
             await _db.Entry(task).Collection(t => t.Subtasks).LoadAsync();
         }
@@ -833,10 +833,10 @@ public class TaskService : ITaskService
                 FileSizeBytes = a.FileSizeBytes,
                 UploadedAt = a.UploadedAt
             }).ToList(),
-            Subtasks = (task.Subtasks ?? new List<Subtask>()).Select(s => new SubtaskDto 
-            { 
-                Id = s.Id, 
-                Title = s.Title, 
+            Subtasks = (task.Subtasks ?? new List<Subtask>()).Select(s => new SubtaskDto
+            {
+                Id = s.Id,
+                Title = s.Title,
                 IsCompleted = s.IsCompleted,
                 TaskCardId = s.TaskCardId
             }).OrderBy(s => s.Id).ToList(),
@@ -1013,8 +1013,8 @@ public class TaskService : ITaskService
         // Check if user has access to the board this task belongs to
         return await _db.TaskCards
             .Where(t => t.Id == taskId)
-            .AnyAsync(t => t.Column.Board.OwnerId == userId 
-                     || t.Column.Board.Members.Any(m => m.UserId == userId && m.Status == "Accepted") 
+            .AnyAsync(t => t.Column.Board.OwnerId == userId
+                     || t.Column.Board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
                      || (t.Column.Board.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted")));
     }
 
@@ -1022,8 +1022,8 @@ public class TaskService : ITaskService
     {
         return await _db.Columns
             .Where(c => c.Id == columnId)
-            .AnyAsync(c => c.Board.OwnerId == userId 
-                     || c.Board.Members.Any(m => m.UserId == userId && m.Status == "Accepted") 
+            .AnyAsync(c => c.Board.OwnerId == userId
+                     || c.Board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
                      || (c.Board.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted")));
     }
 
@@ -1031,8 +1031,8 @@ public class TaskService : ITaskService
     {
         return await _db.Subtasks
             .Where(s => s.Id == subtaskId)
-            .AnyAsync(s => s.TaskCard.Column.Board.OwnerId == userId 
-                     || s.TaskCard.Column.Board.Members.Any(m => m.UserId == userId && m.Status == "Accepted") 
+            .AnyAsync(s => s.TaskCard.Column.Board.OwnerId == userId
+                     || s.TaskCard.Column.Board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
                      || (s.TaskCard.Column.Board.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted")));
     }
 }

@@ -2,43 +2,71 @@ name: NexusFlow CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, develop ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, develop ]
 
 jobs:
-  backend-test:
-    name: Backend Tests
+  backend-ci:
+    name: Backend (Build, Test, Format & Security)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup .NET
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
-      - name: Restore dependencies
-        run: dotnet restore
-      - name: Build
-        run: dotnet build --no-restore
-      - name: Test
-        run: dotnet test --no-build --verbosity normal
 
-  frontend-build:
-    name: Frontend Build
+      - name: Restore Dependencies
+        run: dotnet restore backend/Backend.csproj
+
+      - name: Verify C# Code Formatting & Indentation
+        run: dotnet format backend/Backend.csproj --verify-no-changes
+        continue-on-error: true
+
+      - name: Build Backend API
+        run: dotnet build backend/Backend.csproj --no-restore -c Release
+
+      - name: Run Unit & Security Tests
+        run: dotnet test Backend.Tests/Backend.Tests.csproj --verbosity normal
+
+      - name: Check Package Security Vulnerabilities
+        run: dotnet list backend/Backend.csproj package --vulnerable --include-transitive
+
+  frontend-ci:
+    name: Frontend (Build, Lint & Security)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
-      - name: Install dependencies
+
+      - name: Install Dependencies
         run: |
           cd frontend
-          npm install
-      - name: Build
+          npm ci
+
+      - name: Lint Code & Check Indentation
+        run: |
+          cd frontend
+          npm run lint
+        continue-on-error: true
+
+      - name: Build Production Frontend Bundle
         run: |
           cd frontend
           npm run build
+
+      - name: Check Package Security Audit
+        run: |
+          cd frontend
+          npm audit --audit-level=high
+        continue-on-error: true

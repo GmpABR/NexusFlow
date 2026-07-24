@@ -42,10 +42,10 @@ public class NotificationsController : ControllerBase
 
     private int GetUserId()
     {
-        var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
-                      ?? User.FindFirst("sub")?.Value 
+        var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                      ?? User.FindFirst("sub")?.Value
                       ?? User.FindFirst("id")?.Value;
-                      
+
         if (int.TryParse(idClaim, out int userId))
         {
             return userId;

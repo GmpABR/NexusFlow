@@ -3,7 +3,7 @@ namespace Backend.Models;
 public class TimeLog
 {
     public int Id { get; set; }
-    
+
     // The task this time log belongs to
     public int TaskCardId { get; set; }
     public TaskCard TaskCard { get; set; } = null!;
@@ -14,7 +14,7 @@ public class TimeLog
 
     public DateTime StartedAt { get; set; } = DateTime.UtcNow;
     public DateTime? StoppedAt { get; set; }
-    
+
     // Total duration in minutes (calculated when stopped, or manually entered)
     public int? DurationMinutes { get; set; }
 }

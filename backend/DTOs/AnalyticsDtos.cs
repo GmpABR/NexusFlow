@@ -6,7 +6,7 @@ public class BoardAnalyticsDto
     public int TotalTasks { get; set; }
     public int CompletedTasks { get; set; }
     public int PendingTasks { get; set; }
-    
+
     // For Burn Down Chart: Date -> Tasks Remaining
     public Dictionary<string, int> BurnDownData { get; set; } = new Dictionary<string, int>();
 

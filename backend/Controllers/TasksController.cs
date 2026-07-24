@@ -78,10 +78,10 @@ public class TasksController : ControllerBase
                 .SendAsync("TaskMoved", task);
 
             // 2. Execute automations and check if they modified the task natively
-            try 
+            try
             {
                 bool wasModified = await _automationService.ExecuteTaskMovedAutomationsAsync(task.BoardId, task.Id, dto.TargetColumnId, userId);
-                
+
                 // 3. Since automations might have changed the task (assigned user, completed subtasks)
                 // if it was truly modified, fetch the latest task state and emit a TaskUpdated to sync clients.
                 if (wasModified)
@@ -136,7 +136,7 @@ public class TasksController : ControllerBase
             if (task != null)
             {
                 await _hubContext.Clients.Group($"board_{task.BoardId}")
-                    .SendAsync("TaskUpdated", task); 
+                    .SendAsync("TaskUpdated", task);
             }
 
             return Ok(subtask);
@@ -275,7 +275,7 @@ public class TasksController : ControllerBase
         {
             int userId = GetUserId();
             var reaction = await _taskService.ToggleReactionAsync(activityId, dto.Emoji, userId);
-            
+
             // Notify board so reactions sync in real-time
             var activity = await _taskService.GetActivityByIdAsync(activityId);
             if (activity != null)
@@ -287,7 +287,7 @@ public class TasksController : ControllerBase
                         .SendAsync("TaskUpdated", task);
                 }
             }
-            
+
             return Ok(reaction);
         }
         catch (UnauthorizedAccessException) { return Forbid(); }
@@ -361,17 +361,17 @@ public class TasksController : ControllerBase
         var claims = User.Claims.Select(c => $"{c.Type}: {c.Value}");
         Console.WriteLine($"[TasksController] User Claims: {string.Join(", ", claims)}");
 
-        var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
-                      ?? User.FindFirst("sub")?.Value 
+        var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                      ?? User.FindFirst("sub")?.Value
                       ?? User.FindFirst("id")?.Value
                       ?? User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-                      
+
         if (int.TryParse(idClaim, out int userId))
         {
             Console.WriteLine($"[TasksController] Extracted UserId: {userId}");
             return userId;
         }
-        
+
         Console.WriteLine("[TasksController] WARNING: UserId claim not found or not an integer.");
         return 0;
     }

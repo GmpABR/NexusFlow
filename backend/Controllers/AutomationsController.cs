@@ -36,7 +36,7 @@ public class AutomationsController : ControllerBase
     public async Task<IActionResult> CreateAutomation(int boardId, [FromBody] CreateAutomationDto dto)
     {
         var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0");
-        
+
         // Simple validation
         if (string.IsNullOrWhiteSpace(dto.TriggerType) || string.IsNullOrWhiteSpace(dto.ActionType))
         {

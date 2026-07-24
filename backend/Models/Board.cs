@@ -7,7 +7,7 @@ public class Board
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Theme & Settings
-    public string ThemeColor { get; set; } = "blue"; 
+    public string ThemeColor { get; set; } = "blue";
     public string? BackgroundImageUrl { get; set; }
     public bool IsPrivate { get; set; } = false;
     public bool IsClosed { get; set; } = false;

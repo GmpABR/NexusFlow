@@ -28,7 +28,7 @@ public class AnalyticsController : ControllerBase
         var board = await _db.Boards.FindAsync(boardId);
         if (board == null) return NotFound();
 
-        var hasAccess = board.OwnerId == userId || 
+        var hasAccess = board.OwnerId == userId ||
                         await _db.BoardMembers.AnyAsync(m => m.BoardId == boardId && m.UserId == userId && m.Status == "Accepted") ||
                         await _db.WorkspaceMembers.AnyAsync(wm => wm.WorkspaceId == board.WorkspaceId && wm.UserId == userId && wm.Status == "Accepted");
 
@@ -38,7 +38,8 @@ public class AnalyticsController : ControllerBase
         var taskData = await _db.TaskCards
             .AsNoTracking()
             .Where(t => t.Column.BoardId == boardId)
-            .Select(t => new {
+            .Select(t => new
+            {
                 t.Id,
                 t.ColumnId,
                 t.CreatedAt,
@@ -47,7 +48,7 @@ public class AnalyticsController : ControllerBase
             .ToListAsync();
 
         int totalTasks = taskData.Count;
-        
+
         // Let's assume the right-most column means "Done", or any column named "Done" / "Completed"
         // Since we don't have a strict strict "Done" flag on the Task itself mapping to Agile,
         // Let's find columns containing 'Done' or 'Complete'
@@ -82,7 +83,7 @@ public class AnalyticsController : ControllerBase
         for (int i = 6; i >= 0; i--)
         {
             var date = now.AddDays(-i);
-            
+
             int pendingOnDate = 0;
             foreach (var task in taskData)
             {
@@ -191,7 +192,7 @@ public class AnalyticsController : ControllerBase
 
         int completedTasks = await workspaceTasksQuery.CountAsync(t => doneColumnIds.Contains(t.ColumnId));
         int pendingTasks = totalTasks - completedTasks;
-        
+
         int overdueTasks = await workspaceTasksQuery.CountAsync(t =>
             !doneColumnIds.Contains(t.ColumnId) &&
             t.DueDate.HasValue &&
@@ -255,10 +256,10 @@ public class AnalyticsController : ControllerBase
 
     private int GetUserId()
     {
-        var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
-                      ?? User.FindFirst("sub")?.Value 
+        var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                      ?? User.FindFirst("sub")?.Value
                       ?? User.FindFirst("id")?.Value;
-                      
+
         if (int.TryParse(idClaim, out int userId)) return userId;
         return 0;
     }

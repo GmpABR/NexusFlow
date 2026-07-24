@@ -18,7 +18,7 @@ public class BoardService : IBoardService
     {
         var boards = await _db.Boards
             .AsNoTracking()
-            .Where(b => b.OwnerId == userId 
+            .Where(b => b.OwnerId == userId
                      || b.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
                      || (b.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted")))
             .Select(b => new BoardSummaryDto
@@ -55,11 +55,11 @@ public class BoardService : IBoardService
                 .Include(x => x.Workspace)
                 .ThenInclude(w => w.Members)
                 .FirstOrDefaultAsync(x => x.Id == board.Id);
-            
+
             if (b == null) continue;
 
             // Determine if requester is workspace admin
-            bool isWsAdmin = b.Workspace.OwnerId == userId || 
+            bool isWsAdmin = b.Workspace.OwnerId == userId ||
                             b.Workspace.Members.Any(wm => wm.UserId == userId && wm.Role == "Admin" && wm.Status == "Accepted");
 
             if (isWsAdmin)
@@ -115,14 +115,14 @@ public class BoardService : IBoardService
                     }).ToList()
             })
             .ToListAsync();
-        
+
         foreach (var board in boards)
         {
             var b = await _db.Boards
                 .AsNoTracking()
                 .Include(x => x.Owner)
                 .FirstOrDefaultAsync(x => x.Id == board.Id);
-            
+
             if (b?.Owner != null && !board.Members.Any(m => m.UserId == b.OwnerId))
             {
                 board.Members.Insert(0, new BoardMemberDto
@@ -145,7 +145,7 @@ public class BoardService : IBoardService
             .AsNoTracking()
             .AsSplitQuery()
             .Where(b => b.Id == boardId && (
-                b.OwnerId == userId 
+                b.OwnerId == userId
                 || b.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
                 || (b.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted"))
             ))
@@ -237,7 +237,7 @@ public class BoardService : IBoardService
                     IsWorkspaceMember = false,
                     BoardId = m.BoardId
                 }).ToList(),
-                UserRole = b.OwnerId == userId ? "Owner" : (b.Members.Where(m => m.UserId == userId).Select(m => m.Role).FirstOrDefault() ?? "Member") 
+                UserRole = b.OwnerId == userId ? "Owner" : (b.Members.Where(m => m.UserId == userId).Select(m => m.Role).FirstOrDefault() ?? "Member")
                 // Handle null coalescing properly.
             })
             .FirstOrDefaultAsync();
@@ -247,9 +247,9 @@ public class BoardService : IBoardService
             // --- Determine UserRole based on Workspace Permissions ---
             var wsRequester = await _db.WorkspaceMembers
                 .FirstOrDefaultAsync(wm => wm.WorkspaceId == boardDto.WorkspaceId && wm.UserId == userId && wm.Status == "Accepted");
-                
+
             var workspace = await _db.Workspaces.FindAsync(boardDto.WorkspaceId);
-            bool isWsAdmin = (workspace != null && workspace.OwnerId == userId) || 
+            bool isWsAdmin = (workspace != null && workspace.OwnerId == userId) ||
                             (wsRequester != null && wsRequester.Role == "Admin");
 
             if (isWsAdmin)
@@ -262,9 +262,9 @@ public class BoardService : IBoardService
                 // even if they are technically the board owner (to satisfy "only admins can do that")
                 var boardMember = await _db.BoardMembers
                     .FirstOrDefaultAsync(m => m.BoardId == boardId && m.UserId == userId && m.Status == "Accepted");
-                
+
                 boardDto.UserRole = boardMember?.Role ?? (boardDto.OwnerId == userId ? "Member" : "Viewer");
-                
+
                 // Ensure they can't be Owner at board level if they aren't workspace admin, but keep as Admin
                 if (boardDto.UserRole == "Owner")
                 {
@@ -295,7 +295,7 @@ public class BoardService : IBoardService
                 .Include(wm => wm.User)
                 .Where(wm => wm.WorkspaceId == boardDto.WorkspaceId && wm.Status == "Accepted")
                 .ToListAsync();
-                
+
             foreach (var wm in wsMembers)
             {
                 if (!boardDto.Members.Any(m => m.UserId == wm.UserId))
@@ -326,8 +326,8 @@ public class BoardService : IBoardService
             .FirstOrDefaultAsync(wm => wm.WorkspaceId == dto.WorkspaceId && wm.UserId == userId && wm.Status == "Accepted");
 
         var workspace = await _db.Workspaces.FindAsync(dto.WorkspaceId);
-        
-        bool isAuthorized = (workspace != null && workspace.OwnerId == userId) || 
+
+        bool isAuthorized = (workspace != null && workspace.OwnerId == userId) ||
                           (workspaceMember != null && workspaceMember.Role == "Admin");
 
         if (!isAuthorized)
@@ -374,7 +374,7 @@ public class BoardService : IBoardService
         // Check if user has access to the board
         var hasAccess = await _db.Boards
             .Where(b => b.Id == boardId)
-            .AnyAsync(b => b.OwnerId == userId 
+            .AnyAsync(b => b.OwnerId == userId
                      || b.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
                      || (b.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted")));
 
@@ -410,10 +410,10 @@ public class BoardService : IBoardService
 
         if (workspace == null) return null;
 
-        var isWsAdmin = workspace.OwnerId == inviterId || 
+        var isWsAdmin = workspace.OwnerId == inviterId ||
                         workspace.Members.Any(m => m.UserId == inviterId && m.Role == "Admin" && m.Status == "Accepted");
 
-        var isBoardAdmin = board.OwnerId == inviterId || 
+        var isBoardAdmin = board.OwnerId == inviterId ||
                           board.Members.Any(m => m.UserId == inviterId && m.Role == "Admin" && m.Status == "Accepted");
 
         if (!isWsAdmin && !isBoardAdmin) return null;
@@ -427,7 +427,7 @@ public class BoardService : IBoardService
         // Check if already a member or invited
         var existing = await _db.BoardMembers
             .FirstOrDefaultAsync(bm => bm.BoardId == boardId && bm.UserId == user.Id);
-        
+
         if (existing != null)
         {
             // Update role and set back to Pending so they can accept/be notified
@@ -455,7 +455,7 @@ public class BoardService : IBoardService
             Role = role,
             Status = "Pending"
         };
-        
+
         _db.BoardMembers.Add(member);
         await _db.SaveChangesAsync();
 
@@ -477,14 +477,14 @@ public class BoardService : IBoardService
         var member = await _db.BoardMembers
             .Include(m => m.User)
             .FirstOrDefaultAsync(m => m.BoardId == boardId && m.UserId == userId && m.Status == "Pending");
-        
+
         if (member == null) return null;
 
         if (accept)
         {
             member.Status = "Accepted";
             await _db.SaveChangesAsync();
-            
+
             return new BoardMemberDto
             {
                 Id = member.Id,
@@ -546,7 +546,7 @@ public class BoardService : IBoardService
 
         if (workspace == null) return false;
 
-        var isWsAdmin = workspace.OwnerId == requesterId || 
+        var isWsAdmin = workspace.OwnerId == requesterId ||
                         workspace.Members.Any(m => m.UserId == requesterId && m.Role == "Admin" && m.Status == "Accepted");
 
         if (!isWsAdmin) return false;
@@ -568,10 +568,10 @@ public class BoardService : IBoardService
     public async Task<bool> CloseBoardAsync(int boardId, int requesterId)
     {
         var board = await _db.Boards.Include(b => b.Members).FirstOrDefaultAsync(b => b.Id == boardId);
-        
+
         if (board == null) return false;
 
-        var isAuthorized = board.OwnerId == requesterId || 
+        var isAuthorized = board.OwnerId == requesterId ||
                           board.Members.Any(m => m.UserId == requesterId && m.Role == "Admin" && m.Status == "Accepted");
 
         if (!isAuthorized) return false;
@@ -585,7 +585,7 @@ public class BoardService : IBoardService
     public async Task<bool> ReopenBoardAsync(int boardId, int requesterId)
     {
         var board = await _db.Boards.Include(b => b.Members).FirstOrDefaultAsync(b => b.Id == boardId);
-        
+
         if (board == null) return false;
 
         // Only Workspace Owners or Admins can reopen a board
@@ -595,7 +595,7 @@ public class BoardService : IBoardService
 
         if (workspace == null) return false;
 
-        var isWsAdmin = workspace.OwnerId == requesterId || 
+        var isWsAdmin = workspace.OwnerId == requesterId ||
                         workspace.Members.Any(m => m.UserId == requesterId && m.Role == "Admin" && m.Status == "Accepted");
 
         if (!isWsAdmin) return false;
@@ -609,7 +609,7 @@ public class BoardService : IBoardService
     public async Task<bool> DeleteBoardAsync(int boardId, int requesterId)
     {
         var board = await _db.Boards.Include(b => b.Members).FirstOrDefaultAsync(b => b.Id == boardId);
-        
+
         if (board == null) return false;
 
         // Only Workspace Owners or Admins can delete a board
@@ -619,7 +619,7 @@ public class BoardService : IBoardService
 
         if (workspace == null) return false;
 
-        var isWsAdmin = workspace.OwnerId == requesterId || 
+        var isWsAdmin = workspace.OwnerId == requesterId ||
                         workspace.Members.Any(m => m.UserId == requesterId && m.Role == "Admin" && m.Status == "Accepted");
 
         if (!isWsAdmin || !board.IsClosed)
@@ -642,7 +642,7 @@ public class BoardService : IBoardService
 
         if (board == null) throw new KeyNotFoundException("Board not found");
 
-        var isMember = board.OwnerId == userId 
+        var isMember = board.OwnerId == userId
             || board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
             || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted"));
 
@@ -681,7 +681,7 @@ public class BoardService : IBoardService
 
         if (board == null) return false;
 
-        var isMember = board.OwnerId == userId 
+        var isMember = board.OwnerId == userId
             || board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
             || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted"));
 
@@ -692,7 +692,7 @@ public class BoardService : IBoardService
 
         // Current list sorted by Order
         var columns = board.Columns.OrderBy(c => c.Order).ToList();
-        
+
         // Remove
         columns.Remove(column);
 
@@ -721,7 +721,7 @@ public class BoardService : IBoardService
 
         if (board == null) return false;
 
-        var isMember = board.OwnerId == userId 
+        var isMember = board.OwnerId == userId
             || board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
             || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted"));
 
@@ -753,7 +753,7 @@ public class BoardService : IBoardService
 
         if (board == null) return null;
 
-        var isMember = board.OwnerId == userId 
+        var isMember = board.OwnerId == userId
             || board.Members.Any(m => m.UserId == userId && m.Status == "Accepted")
             || (board.Workspace != null && board.Workspace.Members.Any(wm => wm.UserId == userId && wm.Status == "Accepted"));
 
@@ -777,7 +777,7 @@ public class BoardService : IBoardService
     public async Task<BoardInviteDto> CreateBoardInviteAsync(int boardId, string role, int requesterId)
     {
         var board = await _db.Boards.Include(b => b.Members).FirstOrDefaultAsync(b => b.Id == boardId);
-        
+
         if (board == null) throw new KeyNotFoundException("Board not found");
 
         // Only Workspace Owners or Admins can create board invites
@@ -787,7 +787,7 @@ public class BoardService : IBoardService
 
         if (workspace == null) throw new KeyNotFoundException("Workspace not found");
 
-        var isWsAdmin = workspace.OwnerId == requesterId || 
+        var isWsAdmin = workspace.OwnerId == requesterId ||
                         workspace.Members.Any(m => m.UserId == requesterId && m.Role == "Admin" && m.Status == "Accepted");
 
         if (!isWsAdmin)

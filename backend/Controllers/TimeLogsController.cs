@@ -46,7 +46,7 @@ public class TimeLogsController : ControllerBase
     public async Task<IActionResult> AddManualTimeLog([FromBody] AddManualTimeLogDto dto)
     {
         if (dto.StoppedAt <= dto.StartedAt) return BadRequest("StoppedAt must be after StartedAt.");
-        
+
         var log = await _taskService.AddManualTimeLogAsync(dto.TaskCardId, GetUserId(), dto);
         await NotifyTaskUpdated(dto.TaskCardId);
         return Ok(log);
@@ -78,10 +78,10 @@ public class TimeLogsController : ControllerBase
 
     private int GetUserId()
     {
-        var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
-                      ?? User.FindFirst("sub")?.Value 
+        var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                      ?? User.FindFirst("sub")?.Value
                       ?? User.FindFirst("id")?.Value;
-                      
+
         if (int.TryParse(idClaim, out int userId)) return userId;
         return 0;
     }

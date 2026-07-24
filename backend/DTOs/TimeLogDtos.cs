@@ -8,7 +8,7 @@ public class StartTimerDto
 public class StopTimerDto
 {
     // Optionally allow passing the Stop time manually, otherwise use UtcNow
-    public DateTime? StoppedAt { get; set; } 
+    public DateTime? StoppedAt { get; set; }
 }
 
 public class AddManualTimeLogDto

@@ -64,7 +64,7 @@ public class SystemController : ControllerBase
         foreach (var entityType in model.GetEntityTypes())
         {
             var sourceTable = entityType.GetTableName() ?? entityType.GetDefaultTableName() ?? entityType.Name;
-            
+
             foreach (var foreignKey in entityType.GetForeignKeys())
             {
                 var targetType = foreignKey.PrincipalEntityType;

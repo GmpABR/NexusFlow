@@ -13,7 +13,7 @@ public class BoardAutomationService : IAutomationService
     private readonly AppDbContext _db;
     private readonly IHubContext<Backend.Hubs.BoardHub> _hubContext;
     private readonly IServiceScopeFactory _scopeFactory;
-    
+
     public BoardAutomationService(AppDbContext db, IHubContext<Backend.Hubs.BoardHub> hubContext, IServiceScopeFactory scopeFactory)
     {
         _db = db;
@@ -24,7 +24,7 @@ public class BoardAutomationService : IAutomationService
     public async Task<List<AutomationDto>> GetAutomationsAsync(int boardId, int userId)
     {
         // Basic access check: must be a member of the board (or workspace)
-        var hasAccess = await _db.Boards.AnyAsync(b => b.Id == boardId && 
+        var hasAccess = await _db.Boards.AnyAsync(b => b.Id == boardId &&
             (b.OwnerId == userId || b.Members.Any(m => m.UserId == userId && m.Status == "Accepted") ||
              _db.WorkspaceMembers.Any(wm => wm.WorkspaceId == b.WorkspaceId && wm.UserId == userId && wm.Status == "Accepted")));
 
@@ -53,7 +53,7 @@ public class BoardAutomationService : IAutomationService
 
         var automation = new BoardAutomation
         {
-            BoardId = boardId, 
+            BoardId = boardId,
             TriggerType = dto.TriggerType,
             TriggerCondition = dto.TriggerCondition,
             ActionType = dto.ActionType,
@@ -99,13 +99,13 @@ public class BoardAutomationService : IAutomationService
 
         bool isOwner = board.OwnerId == userId;
         bool isBoardAdmin = board.Members.Any(m => m.UserId == userId && m.Role == "Admin" && m.Status == "Accepted");
-        
+
         // Workspace Admin check
-        var isWsAdmin = await _db.WorkspaceMembers.AnyAsync(wm => 
-            wm.WorkspaceId == board.WorkspaceId && 
-            wm.UserId == userId && 
-            wm.Role == "Admin" && 
-            wm.Status == "Accepted") 
+        var isWsAdmin = await _db.WorkspaceMembers.AnyAsync(wm =>
+            wm.WorkspaceId == board.WorkspaceId &&
+            wm.UserId == userId &&
+            wm.Role == "Admin" &&
+            wm.Status == "Accepted")
             || await _db.Workspaces.AnyAsync(w => w.Id == board.WorkspaceId && w.OwnerId == userId);
 
         if (!isOwner && !isBoardAdmin && !isWsAdmin)
@@ -118,8 +118,8 @@ public class BoardAutomationService : IAutomationService
     {
         // 1. Fetch matching automations for this board where a task moves to this specific column
         var automations = await _db.BoardAutomations
-            .Where(a => a.BoardId == boardId 
-                     && a.TriggerType == "TaskMovedToColumn" 
+            .Where(a => a.BoardId == boardId
+                     && a.TriggerType == "TaskMovedToColumn"
                      && a.TriggerCondition == newColumnId.ToString())
             .ToListAsync();
 
@@ -161,13 +161,13 @@ public class BoardAutomationService : IAutomationService
                                 task.AssigneeId = targetUserId;
                                 taskModified = true;
                             }
-                            
+
                             if (task.Assignees != null && !task.Assignees.Any(a => a.UserId == targetUserId))
                             {
                                 task.Assignees.Add(new TaskAssignee { TaskCardId = taskId, UserId = targetUserId });
                                 taskModified = true;
                             }
-                            
+
                             if (taskModified)
                             {
                                 await LogActivity(taskId, userId, "Automation", $"Automatically assigned task to User ID {targetUserId} based on a board rule.");
@@ -244,8 +244,10 @@ public class BoardAutomationService : IAutomationService
                     case "AiSummary":
                         Console.WriteLine($"[Automation] Triggered AiSummary for Task {taskId} in Board {boardId}");
                         // AI Summary is slow, handle it in background to keep UI instant
-                        _ = Task.Run(async () => {
-                            try {
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
                                 using var scope = _scopeFactory.CreateScope();
                                 var scopedContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                                 var scopedHub = scope.ServiceProvider.GetRequiredService<IHubContext<Backend.Hubs.BoardHub>>();
@@ -259,7 +261,8 @@ public class BoardAutomationService : IAutomationService
                                     .Include(t => t.Assignees).ThenInclude(ta => ta.User)
                                     .Include(t => t.Labels).ThenInclude(tl => tl.Label)
                                     .FirstOrDefaultAsync(t => t.Id == taskId);
-                                if (bTask == null) {
+                                if (bTask == null)
+                                {
                                     Console.WriteLine($"[Automation] Task {taskId} not found in scope.");
                                     return;
                                 }
@@ -272,7 +275,7 @@ public class BoardAutomationService : IAutomationService
                                     .ToListAsync();
 
                                 string aiContext = $"Title: {bTask.Title}\nDescription: {bTask.Description}\nComments:\n{string.Join("\n", comments)}";
-                                
+
                                 // Fallback: if current user has no key, try the board owner
                                 int targetKeyUserId = userId;
                                 var triggeringUser = await scopedContext.Users.FindAsync(userId);
@@ -289,22 +292,22 @@ public class BoardAutomationService : IAutomationService
                                 if (keyUser == null || string.IsNullOrEmpty(keyUser.OpenRouterApiKey))
                                 {
                                     Console.WriteLine($"[Automation] AI Summary failed: No API key found for User {userId} or Board Owner.");
-                                    await scopedNotifService.CreateNotificationAsync(userId == 0 ? 1 : userId, 
-                                        $"AI Summary failed for '{bTask.Title}': No OpenRouter API key configured for you or the board owner.", 
+                                    await scopedNotifService.CreateNotificationAsync(userId == 0 ? 1 : userId,
+                                        $"AI Summary failed for '{bTask.Title}': No OpenRouter API key configured for you or the board owner.",
                                         "Error", taskId);
                                     return;
                                 }
 
                                 string summary = await GenerateAiSummaryInternal(aiContext, targetKeyUserId, scopedContext);
-                                
+
                                 if (!string.IsNullOrEmpty(summary))
                                 {
                                     Console.WriteLine($"[Automation] Summary generated, length: {summary.Length}. Creating attachment...");
-                                    
+
                                     // Build dynamic metadata section
                                     var metadataEntries = new List<string>();
                                     if (!string.IsNullOrEmpty(bTask.Priority)) metadataEntries.Add($"**Priority:** {bTask.Priority}");
-                                    
+
                                     var assignees = bTask.Assignees?.Select(a => a.User?.FullName ?? a.User?.Username).Where(n => n != null).ToList();
                                     if (assignees != null && assignees.Any()) metadataEntries.Add($"**Assignees:** {string.Join(", ", assignees)}");
                                     else if (bTask.Assignee != null) metadataEntries.Add($"**Assignee:** {bTask.Assignee.FullName ?? bTask.Assignee.Username}");
@@ -319,7 +322,8 @@ public class BoardAutomationService : IAutomationService
                                     var base64Content = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(markdownContent));
                                     var dataUrl = $"data:text/markdown;base64,{base64Content}";
 
-                                    var attDto = new CreateAttachmentDto {
+                                    var attDto = new CreateAttachmentDto
+                                    {
                                         FileName = $"AI-Summary-{DateTime.UtcNow:yyyy-MM-dd-HHmm}.md",
                                         PublicUrl = dataUrl,
                                         StoragePath = "internal/ai-summary",
@@ -331,18 +335,22 @@ public class BoardAutomationService : IAutomationService
 
                                     // Broadcast update to sync new attachment on frontend
                                     var updatedDto = await scopedTaskService.GetTaskByIdAsync(taskId, userId == 0 ? 1 : userId);
-                                    if (updatedDto != null) {
+                                    if (updatedDto != null)
+                                    {
                                         await scopedHub.Clients.Group($"board_{bTask.Column.BoardId}").SendAsync("TaskUpdated", updatedDto);
                                         Console.WriteLine($"[Automation] AI Summary attachment created and broadcasted for Task {taskId}");
                                     }
                                 }
-                                else {
+                                else
+                                {
                                     Console.WriteLine($"[Automation] AI Summary generation returned empty for Task {taskId}. Check API key.");
-                                    await scopedNotifService.CreateNotificationAsync(userId == 0 ? 1 : userId, 
-                                        $"AI Summary failed for '{bTask.Title}': The AI returned an empty response. Your OpenRouter API key might be invalid. Please check your Profile Settings.", 
+                                    await scopedNotifService.CreateNotificationAsync(userId == 0 ? 1 : userId,
+                                        $"AI Summary failed for '{bTask.Title}': The AI returned an empty response. Your OpenRouter API key might be invalid. Please check your Profile Settings.",
                                         "Error", taskId);
                                 }
-                            } catch (Exception ex) {
+                            }
+                            catch (Exception ex)
+                            {
                                 Console.WriteLine($"[Automation] Async AI Summary failed: {ex.Message}");
                             }
                         });
@@ -375,7 +383,7 @@ public class BoardAutomationService : IAutomationService
             Details = details,
             Timestamp = DateTime.UtcNow
         };
-        
+
         _db.TaskActivities.Add(activity);
         await _db.SaveChangesAsync();
     }
@@ -385,7 +393,7 @@ public class BoardAutomationService : IAutomationService
         var user = await db.Users.FindAsync(userId);
         if (user == null || string.IsNullOrEmpty(user.OpenRouterApiKey)) return string.Empty;
 
-        try 
+        try
         {
             using var client = new HttpClient();
             client.DefaultRequestHeaders.Add("Authorization", $"Bearer {user.OpenRouterApiKey}");

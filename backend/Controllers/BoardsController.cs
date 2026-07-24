@@ -51,7 +51,7 @@ public class BoardsController : ControllerBase
             .Where(w => w.Id == dto.WorkspaceId)
             .Select(w => w.OwnerId)
             .FirstOrDefaultAsync();
-            
+
         var usersToNotify = new HashSet<int>(workspaceMembers);
         usersToNotify.Add(workspaceOwnerId);
 
@@ -111,7 +111,7 @@ public class BoardsController : ControllerBase
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var member = await _boardService.RespondToInvitationAsync(id, userId, dto.Accept);
-        
+
         if (member == null && dto.Accept) return NotFound("Invitation not found or already processed.");
 
         if (member != null)
@@ -122,7 +122,7 @@ public class BoardsController : ControllerBase
 
         return Ok(new { message = dto.Accept ? "Invitation accepted" : "Invitation declined" });
     }
-    
+
 
     [HttpDelete("{id}/members/{userId}")]
     public async Task<IActionResult> RemoveMember(int id, int userId)
@@ -143,7 +143,7 @@ public class BoardsController : ControllerBase
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var result = await _boardService.UpdateBoardAsync(id, dto, userId);
-        
+
         if (!result) return BadRequest(new { message = "Could not update board. You may not be the owner." });
 
         // Fetch updated details to broadcast
@@ -162,7 +162,7 @@ public class BoardsController : ControllerBase
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var result = await _boardService.CloseBoardAsync(id, userId);
-        
+
         if (!result) return BadRequest(new { message = "Could not close board. You may not be the owner." });
 
         await _hubContext.Clients.Group($"board_{id}")
@@ -176,7 +176,7 @@ public class BoardsController : ControllerBase
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var result = await _boardService.ReopenBoardAsync(id, userId);
-        
+
         if (!result) return BadRequest(new { message = "Could not reopen board. You may not be the owner." });
 
         await _hubContext.Clients.Group($"board_{id}")
@@ -190,7 +190,7 @@ public class BoardsController : ControllerBase
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var result = await _boardService.DeleteBoardAsync(id, userId);
-        
+
         if (!result) return BadRequest(new { message = "Could not delete board. It must be closed first and you must be the owner." });
 
         await _hubContext.Clients.Group($"board_{id}")
@@ -203,10 +203,10 @@ public class BoardsController : ControllerBase
     public async Task<IActionResult> CreateColumn(int id, [FromBody] CreateColumnDto dto)
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        try 
+        try
         {
             var column = await _boardService.CreateColumnAsync(id, dto, userId);
-            
+
             // Broadcast to other users
             await _hubContext.Clients.Group($"board_{id}")
                 .SendAsync("ColumnCreated", column);
@@ -228,7 +228,7 @@ public class BoardsController : ControllerBase
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var result = await _boardService.MoveColumnAsync(id, columnId, dto.NewOrder, userId);
-        
+
         if (!result) return BadRequest("Could not move column");
 
         await _hubContext.Clients.Group($"board_{id}")
@@ -294,13 +294,13 @@ public class BoardsController : ControllerBase
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         var member = await _boardService.AcceptBoardInviteAsync(token, userId);
-        
+
         if (member == null) return BadRequest("Could not join board.");
 
         // Notify other board members that someone has joined
         await _hubContext.Clients.Group($"board_{member.BoardId}")
             .SendAsync("MemberJoined", member);
-        
+
         return Ok(member);
     }
 }

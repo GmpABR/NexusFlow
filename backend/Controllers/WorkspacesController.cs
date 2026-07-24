@@ -68,8 +68,15 @@ public class WorkspacesController : ControllerBase
         var workspace = await _context.Workspaces
             .AsNoTracking()
             .Where(w => w.Id == id)
-            .Select(w => new {
-                w.Id, w.Name, w.Description, w.LogoUrl, w.OwnerId, w.Owner.Username, w.CreatedAt,
+            .Select(w => new
+            {
+                w.Id,
+                w.Name,
+                w.Description,
+                w.LogoUrl,
+                w.OwnerId,
+                w.Owner.Username,
+                w.CreatedAt,
                 Members = w.Members.Select(m => new { m.UserId, m.User.Username, m.Role, m.Status, m.JoinedAt }).ToList()
             })
             .FirstOrDefaultAsync();
@@ -77,7 +84,7 @@ public class WorkspacesController : ControllerBase
         if (workspace == null) return NotFound();
 
         // Check access
-         var isMember = workspace.OwnerId == userId || workspace.Members.Any(m => m.UserId == userId && m.Status == "Accepted");
+        var isMember = workspace.OwnerId == userId || workspace.Members.Any(m => m.UserId == userId && m.Status == "Accepted");
 
         if (!isMember)
         {
@@ -161,7 +168,7 @@ public class WorkspacesController : ControllerBase
     public async Task<ActionResult<IEnumerable<BoardSummaryDto>>> GetWorkspaceBoards(int id)
     {
         var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "0");
-        
+
         // Check access
         var hasAccess = await _context.Workspaces
             .AnyAsync(w => w.Id == id && (w.OwnerId == userId || w.Members.Any(m => m.UserId == userId && m.Status == "Accepted")));
@@ -177,7 +184,7 @@ public class WorkspacesController : ControllerBase
 
         if (workspace == null) return NotFound();
 
-        var isWsAdmin = workspace.OwnerId == userId || 
+        var isWsAdmin = workspace.OwnerId == userId ||
                         workspace.Members.Any(m => m.UserId == userId && m.Role == "Admin" && m.Status == "Accepted");
 
         var boards = await _context.Boards
@@ -191,7 +198,8 @@ public class WorkspacesController : ControllerBase
                 ThemeColor = b.ThemeColor,
                 WorkspaceId = b.WorkspaceId,
                 IsClosed = b.IsClosed,
-                Members = b.Members.Where(m => m.Status == "Accepted").Select(m => new BoardMemberDto {
+                Members = b.Members.Where(m => m.Status == "Accepted").Select(m => new BoardMemberDto
+                {
                     UserId = m.UserId,
                     Username = m.User.Username,
                     AvatarUrl = m.User.AvatarUrl,
@@ -355,9 +363,9 @@ public class WorkspacesController : ControllerBase
         // Rule: Owner can change any member's role
         if (isOwner)
         {
-            if (userId == requesterId) 
+            if (userId == requesterId)
                 return BadRequest(new { message = "Owner cannot change their own role here. Transfer ownership instead." });
-            
+
             targetMember.Role = dto.Role;
         }
         // Rule: Admin can only change roles to Viewer or Member, and cannot target the Owner

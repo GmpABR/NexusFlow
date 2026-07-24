@@ -128,7 +128,7 @@ public class AppDbContext : DbContext
             entity.HasOne(b => b.Workspace)
                   .WithMany(w => w.Boards)
                   .HasForeignKey(b => b.WorkspaceId)
-                  .OnDelete(DeleteBehavior.SetNull); 
+                  .OnDelete(DeleteBehavior.SetNull);
         });
 
         // BoardAutomation -> Board
